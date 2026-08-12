@@ -1,0 +1,20 @@
+{
+  "entity": {
+    "kafka": {
+      "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+      "schema_version": 1,
+      "topic": "bronze.imported_rapid7_routes.sites__history"
+    },
+    "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+    "schema_version": 1
+  },
+  "id": "2e80052f-a680-4a57-84d8-1929f40b626c",
+  "name": "sites",
+  "routes": [
+    {
+      "child_stream_id": "72f41c1a-2c16-464d-96c0-5413b2c1be47",
+      "id": "route-old",
+      "ordinal": 1
+    }
+  ]
+}

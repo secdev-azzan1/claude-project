@@ -1,0 +1,526 @@
+NIF Abstractor Frontend UI Feedback and Required Corrections
+General Frontend Behavior
+
+Even though this is currently a demo/mock frontend, several buttons and UI actions should still behave dynamically within the frontend.
+
+The UI does not need real backend integration yet, but user interactions should update the visible UI state. For example, clicking a button should open a modal, show a form, change the form fields, update local fake state, or display a success/error message where appropriate.
+
+Required correction:
+
+Make important buttons functional at the frontend/mock-state level.
+Do not connect to real NiFi, Kafka, Apicurio, SMB, databases, or APIs.
+Use fake/demo state changes to simulate the intended user journey.
+The goal is to make the UI testable as a realistic prototype.
+Phase 1: Dashboard
+Current Feedback
+
+The Dashboard section looks good.
+
+Required Changes
+
+No changes required for the Dashboard at this stage.
+
+Phase 2: Connections Page
+2.1 Add Connection Button Is Not Working
+Current Issue
+
+On the /Connections page, clicking the Add Connection button does not open any form, modal, drawer, or visible UI.
+
+Expected Behavior
+
+Clicking Add Connection should open a frontend form that allows the user to create a new service connection.
+
+The form should allow the user to choose the connection type and then show the correct fields for that type.
+
+Supported service connection types should be:
+
+Apache Kafka
+Apicurio Schema Registry
+Apache NiFi
+
+The form can use fake/local state only.
+
+2.2 Remove SMB From Connections Page
+Current Issue
+
+SMB is currently shown as part of the Connections page.
+
+Expected Behavior
+
+Remove SMB from the service-level Connections page.
+
+SMB should be handled as part of source configuration because, in the current intended flow, SMB is treated as a source type rather than a shared infrastructure service connection.
+
+The Connections page should focus only on platform/service connections required by the application:
+
+Kafka
+Apicurio
+NiFi
+2.3 Authentication Mode Does Not Dynamically Change Form Fields
+Current Issue
+
+When editing a connection and changing the authentication mode, the form fields do not update.
+
+Examples:
+
+Changing Apicurio authentication from Bearer Token to Basic does not change the form from token input to username/password inputs.
+Changing NiFi authentication from Bearer Token to Basic does not update the form fields.
+The UI keeps showing the old fields even though the selected authentication type has changed.
+Expected Behavior
+
+Authentication forms must be dynamic.
+
+When the user changes the authentication type, the visible fields should immediately update.
+
+Expected behavior:
+
+Auth Type	Fields to Show
+None	No credential fields
+Bearer Token	Token field
+Basic / Username + Password	Username field and Password field
+Client Certificate, if supported	Certificate/key related fields
+
+This should work in both:
+
+Add connection form
+Edit connection form
+2.4 Remove Target Process Group ID From NiFi Connection Form
+Current Issue
+
+The NiFi connection form includes a Target Process Group ID field.
+
+Expected Behavior
+
+Remove the Target Process Group ID field from the NiFi connection form.
+
+For this use case, the user should not decide the target process group from the UI. The application should manage this internally or use a default/root deployment strategy later.
+
+2.5 Remove SMB Version Selection
+Current Issue
+
+The UI includes an SMB version selector.
+
+Expected Behavior
+
+Remove the SMB version selector.
+
+SMB version selection is not important for the intended UI at this stage and should not be exposed to the user.
+
+Phase 3: Sources / Flow Designer
+
+The Sources section requires the most changes because this is the core authoring flow of the product. The PRD expects the user to define sources, configure streams, set stream-level pagination, extract attributes, define fan-out, configure routing, and then publish to Kafka.
+
+Stage 1: Source Type
+3.1 Source Type Forms Use the Same Fields for Every Source
+Current Issue
+
+When opening different source types, the forms appear to show mostly the same fields.
+
+Fields like rate limiting and timeout appear across source types without clear source-specific reasoning.
+
+Expected Behavior
+
+Each source type should show only fields relevant to that source type.
+
+Before keeping fields like rate limiting and timeout, confirm whether they map to actual NiFi-supported processor configuration. For REST APIs, NiFi InvokeHTTP supports timeout-related settings such as connection timeout, socket read timeout, socket write timeout, and socket idle timeout, so timeout fields can stay if they are mapped clearly to those concepts.
+
+Required correction:
+
+REST API source should show REST/API-specific fields.
+Database source should show database-specific fields.
+SMB source should show SMB/file-specific fields.
+Do not show generic fields unless they are actually meaningful for the selected source type.
+Any field shown in the UI should eventually map to something the generated NiFi flow can use.
+Stage 2: Configure Source
+3.2 Authentication Type Does Not Change the Source Form
+Current Issue
+
+When changing the authentication type during source configuration, the form does not update.
+
+For example:
+
+Token/Bearer auth should ask for a token.
+Basic auth should ask for username and password.
+API Key auth should ask for key name, key value, and location if needed.
+
+Currently, the form does not visibly change based on the selected authentication type.
+
+Expected Behavior
+
+Source authentication fields must be dynamic.
+
+Expected behavior:
+
+Auth Type	Fields to Show
+None	No auth fields
+Bearer Token	Token value
+Basic Auth	Username and password
+API Key	Key name, key value, and location such as header/query param
+
+This behavior should apply to all relevant source configuration forms.
+
+Stage 3: Streams
+3.3 Add Stream Button Is Not Working
+Current Issue
+
+The Add Stream button does not work.
+
+The user cannot add a new stream from the UI.
+
+Expected Behavior
+
+Clicking Add Stream should open a form, modal, drawer, or inline panel where the user can configure a new stream.
+
+The UI should allow multiple streams under a source.
+
+The user should be able to mark exactly one stream as the Primary Stream.
+
+3.4 Missing Field Extraction Configuration
+Current Issue
+
+There is no clear place in the stream form where the user can define fields to extract from a stream.
+
+Expected Behavior
+
+Each stream should include an Attribute Extraction section.
+
+The user should be able to add any number of extraction rules.
+
+Each extraction rule should include:
+
+Field	Purpose
+Attribute Name	Name of the extracted value inside the generated flow
+JSONPath / Path Expression	Path used to extract the value from the response
+Default Value	Optional fallback value if extraction fails
+
+The PRD defines this as stream-level attribute extraction, where values from payloads are promoted so they can be reused downstream.
+
+3.5 Missing Ability to Push Extracted Values Into Payload
+Current Issue
+
+The UI does not show any option for pushing an extracted value back into the payload.
+
+Expected Behavior
+
+The stream configuration should allow the user to define whether an extracted value should be:
+
+Stored as a flow attribute only
+Inserted into the payload
+Renamed before being inserted
+Used later in another stream
+Used in headers, query params, path params, or request body templates
+
+The user should be able to decide what to do with extracted values instead of only extracting them silently.
+
+Airbyte’s Connector Builder supports record transformations such as adding and removing fields, which is a useful reference point for how this kind of UI can be represented.
+
+3.6 Missing Data Manipulation Options
+Current Issue
+
+There is no clear UI for defining simple transformations or manipulations on extracted data.
+
+Expected Behavior
+
+The stream configuration should include a simple transformation/manipulation section.
+
+This section should allow the user to define actions such as:
+
+Add field
+Remove field
+Rename field
+Copy extracted value into payload
+Set static value
+Set value from extracted attribute
+
+This does not need real backend logic yet, but the UI should represent the intended configuration clearly.
+
+Airbyte’s low-code configuration supports Add Field and Remove Field style transformations, which can be used as inspiration for this part of the UI.
+
+3.7 Missing Parent-to-Child Stream Value Passing
+Current Issue
+
+The UI does not clearly show how a value from a parent stream can be passed into a child stream.
+
+Example intended behavior:
+
+A sites stream extracts site_id.
+The agents stream uses that site_id as a query parameter, path parameter, header, or request body value.
+Expected Behavior
+
+Each stream should support parent-child configuration where applicable.
+
+The user should be able to define:
+
+Field	Purpose
+Parent Stream	Which stream provides the value
+Parent Field / Extracted Attribute	Which value is taken from the parent stream
+Inject As	Query param, path param, header, or body value
+Inject Field Name	Name of the parameter/header/body field in the child request
+Optional Template	How the value should be inserted
+
+This should be part of the stream configuration, not a separate unrelated section.
+
+Airbyte handles this idea through stream partitioning/substreams, where a child stream depends on records from a parent stream and sends parent-derived values in outgoing requests.
+
+3.8 Remove Stream Relationship Section
+Current Issue
+
+The current UI has a separate Stream Relationship section.
+
+Expected Behavior
+
+Remove the standalone Stream Relationship section.
+
+Parent-child/fan-out behavior should be configured inside each stream itself.
+
+This keeps the configuration closer to the stream that actually uses the parent value.
+
+3.9 Pagination Is Incorrectly Designed as a Separate Stage
+Current Issue
+
+Pagination is currently shown as Stage 4, separate from streams.
+
+This is incorrect for the intended product flow.
+
+Expected Behavior
+
+Pagination should be configured per stream.
+
+Each stream should have its own pagination configuration because different streams may use different pagination methods or may not need pagination at all.
+
+The PRD defines pagination as stream-level configuration for REST API streams.
+
+Required correction:
+
+Remove pagination as a separate global wizard step.
+Move pagination configuration inside each stream form.
+Each stream should allow pagination to be enabled or disabled.
+Each stream should allow the user to select the pagination strategy.
+
+Supported pagination types:
+
+No pagination
+Page increment
+Cursor-based
+Offset/limit
+Stage 4: Pagination and Fan-Out
+4.1 Remove Pagination as a Separate Global Step
+Current Issue
+
+Pagination and fan-out are currently treated as a separate flow-design step.
+
+This does not match the desired design.
+
+Expected Behavior
+
+Pagination and fan-out should be configured inside each stream.
+
+Each stream should include collapsible or tabbed sections such as:
+
+Request configuration
+Response extraction
+Attribute extraction
+Pagination
+Fan-out / parent stream input
+Transformations
+Routing rules
+
+This makes the stream self-contained and easier to understand.
+
+4.2 Pagination Type Does Not Change the Form
+Current Issue
+
+When changing the pagination type, the form does not update.
+
+For example:
+
+Page increment pagination should show page parameter, page size, first page number, and stop condition fields.
+Cursor pagination should show cursor parameter, cursor JSONPath, and stop condition fields.
+Offset/limit pagination should show offset parameter, limit parameter, limit value, and stop condition fields.
+
+Currently, changing the pagination type does not update the visible fields.
+
+Expected Behavior
+
+Pagination forms must be dynamic.
+
+Expected behavior:
+
+Pagination Type	Fields to Show
+None	No pagination fields
+Page Increment	Page parameter name, page size parameter, page size value, first page number, stop condition
+Cursor-Based	Cursor parameter name, cursor value JSONPath, stop condition JSONPath, optional page size
+Offset/Limit	Offset parameter name, limit parameter name, limit value, stop condition
+
+Airbyte’s Connector Builder treats partitioning and pagination-like behavior as part of stream-level configuration, which is the design direction this UI should follow.
+
+Stage 5: Kafka Output
+Current Feedback
+
+The Kafka Output stage seems correct.
+
+Required Changes
+
+No major changes required at this stage.
+
+Keep Kafka output as source-level configuration that applies to the primary stream.
+
+Stage 6: Review
+6.1 Rename “Continue to Schema” Button
+Current Issue
+
+The final Review step currently has a button named Continue to Schema.
+
+Expected Behavior
+
+Rename this button to something that better represents the action.
+
+Preferred options:
+
+Publish Flow
+Post Flow
+Save Flow
+Save & Continue to Schema
+
+Best recommended label:
+
+Save & Continue to Schema
+
+This is clearer because the user is saving the flow configuration before moving to schema generation/review.
+
+Phase 4: Schema Manager
+
+The Schema Manager should let the user generate a schema, edit it, save it, and approve it. The PRD says schema generation is based on the primary stream, then the schema is reviewed in a structured editor and can be previewed as raw Avro JSON.
+
+4.1 Merge Register and Verify/Approve Actions
+Current Issue
+
+The Schema Manager currently shows three separate buttons:
+
+Generate Schema
+Register
+Verify and Approve
+
+This makes the flow feel more complicated than needed.
+
+Expected Behavior
+
+Keep Generate Schema as a separate action.
+
+But combine registration and verification into one final approval action.
+
+Expected button flow:
+
+Generate Schema
+Verify & Register Schema
+
+When the user verifies and approves the schema, the UI should treat it as registered automatically.
+
+The user should not need to click separate Register and Verify & Approve buttons.
+
+4.2 Remove Sampled Records Text
+Current Issue
+
+The UI displays this text:
+
+“Sampled 50 records from primary stream agents to infer schema.”
+
+Expected Behavior
+
+Remove this text from the visible UI.
+
+The schema generation process can still be implied, but this exact text should not be shown in the UI.
+
+4.3 Raw Avro JSON Editor Is Not Editable
+Current Issue
+
+The Schema Manager has two views:
+
+Structured Editor
+Raw Avro JSON
+
+However, the Raw Avro JSON view does not allow the user to edit the JSON text.
+
+Expected Behavior
+
+The Raw Avro JSON view should be editable.
+
+The user should be able to directly edit the Avro schema JSON.
+
+4.4 Structured Editor and Raw Avro JSON Must Stay in Sync
+Current Issue
+
+The Structured Editor and Raw Avro JSON editor are not synchronized.
+
+Expected Behavior
+
+Changes made in either editor should be reflected in the other.
+
+Expected behavior:
+
+If the user adds a field in the Structured Editor, the Raw Avro JSON should update.
+If the user removes a field in the Structured Editor, the Raw Avro JSON should update.
+If the user changes a type/nullability/doc value in the Structured Editor, the Raw Avro JSON should update.
+If the user edits valid Avro JSON in the Raw Avro JSON editor, the Structured Editor should update.
+If the Raw Avro JSON is invalid, show a validation error and do not overwrite the structured view until the JSON becomes valid.
+4.5 Add Save Draft / Return Later Option
+Current Issue
+
+There is no clear way for the user to save a schema or flow draft and return later.
+
+Expected Behavior
+
+Add a Save Draft or Save & Return Later button.
+
+This should exist in:
+
+Flow Designer
+Schema Manager
+
+Expected frontend behavior:
+
+Save the current mock state locally.
+Show a confirmation message.
+Allow the user to return later within the same mock/demo session if possible.
+
+No real backend persistence is required yet.
+
+Phase 5: Flow Runner
+Current Feedback
+
+The Flow Runner section looks good.
+
+Required Changes
+
+No major changes required at this stage.
+
+Phase 6: Audit Log
+Current Feedback
+
+The Audit Log section looks good.
+
+Required Changes
+
+No major changes required at this stage.
+
+Summary of Main Required Corrections
+Highest Priority
+Make key buttons functional in the frontend using mock/local state.
+Fix Add Connection behavior.
+Remove SMB from the Connections page.
+Make authentication forms dynamic.
+Fix Add Stream behavior.
+Move pagination inside each stream.
+Add stream-level attribute extraction.
+Add parent-to-child value passing inside stream configuration.
+Add transformation/manipulation options for extracted values.
+Make pagination forms dynamic based on selected pagination type.
+Make Raw Avro JSON editable.
+Keep Structured Editor and Raw Avro JSON synchronized.
+Merge schema registration and approval into one action.
+Add Save Draft / Save & Return Later actions.
+No Change Needed
+Dashboard
+Kafka Output stage
+Flow Runner
+Audit Log

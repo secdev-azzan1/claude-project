@@ -1,0 +1,10 @@
+{
+  "id": "d2ed4f53-ded4-4c06-ba7d-87e02d1dea4f",
+  "kafka_topic": "bronze.imported_rapid7_hydrated.sites__history",
+  "name": "Imported Rapid7 Hydrated",
+  "primary_stream_id": "20d3fd3a-6f4a-4282-b80a-2efc887c9306",
+  "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+  "schema_version": 1,
+  "source_id": "16eae713-8ceb-4c29-ab57-2a41a7d501e8",
+  "source_type": "REST API"
+}

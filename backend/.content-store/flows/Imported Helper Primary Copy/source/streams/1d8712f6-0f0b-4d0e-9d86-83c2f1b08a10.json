@@ -1,0 +1,13 @@
+{
+  "endpoint_path": "/login",
+  "extraction_rules": [
+    {
+      "attribute_name": "access_token",
+      "path": "$.access_token"
+    }
+  ],
+  "id": "1d8712f6-0f0b-4d0e-9d86-83c2f1b08a10",
+  "is_primary": true,
+  "method": "POST",
+  "name": "login"
+}

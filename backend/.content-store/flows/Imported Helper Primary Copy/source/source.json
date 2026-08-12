@@ -1,0 +1,8 @@
+{
+  "application_service_id": "483eca40-22e3-4f1c-ae69-436069149f65",
+  "connection_setup_mode": "application_service",
+  "id": "a40b2c89-c36c-466a-aa0f-b59e67297a9b",
+  "name": "Imported Helper Primary Copy",
+  "openapi_spec_id": "915eb20e-34bb-4b20-b975-c79c62206746",
+  "type": "REST API"
+}

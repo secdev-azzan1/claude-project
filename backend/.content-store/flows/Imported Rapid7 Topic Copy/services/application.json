@@ -1,0 +1,17 @@
+{
+  "services": [
+    {
+      "config": {
+        "base_url": {
+          "$secretRef": "services/application.json#services.0.config.base_url"
+        },
+        "rest_password": {
+          "$secretRef": "services/application.json#services.0.config.rest_password"
+        }
+      },
+      "id": "f139ba7c-a26d-4274-b316-380c3b935809",
+      "name": "Rapid7 HTTP",
+      "service_type": "REST API"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "schema": {
+    "fields": [],
+    "name": "SiteAsset",
+    "type": "record"
+  },
+  "status": "Verified",
+  "version": 1
+}

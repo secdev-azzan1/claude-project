@@ -1,0 +1,41 @@
+{
+  "endpoint_path": "/users",
+  "entity": {
+    "iceberg": {
+      "enabled": true
+    },
+    "kafka": {
+      "key_strategy": "primary_key",
+      "partitions": 1,
+      "replication_factor": 1,
+      "schema_artifact_id": "bronze.dummyjson.user__history-value",
+      "schema_mode": "existing",
+      "schema_version": 1,
+      "topic": "bronze.dummyjson.user__history",
+      "value_format": "avro"
+    },
+    "schema_artifact_id": "bronze.dummyjson.user__history-value",
+    "schema_version": 1
+  },
+  "extraction_rules": [
+    {
+      "attribute_name": "id",
+      "path": "$.id"
+    }
+  ],
+  "fan_out": {
+    "completion_mode": "per_record",
+    "enabled": false
+  },
+  "id": "stream-1784614002417-aafqck",
+  "is_primary": true,
+  "name": "user",
+  "pagination": {
+    "location": "query"
+  },
+  "primary_key_fields": [
+    "id"
+  ],
+  "response_data_path": "$.users",
+  "split_response_records": true
+}

@@ -1,0 +1,13 @@
+{
+  "entity": {
+    "kafka": {
+      "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+      "schema_version": 1,
+      "topic": "bronze.imported_via_router.sites__history"
+    },
+    "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+    "schema_version": 1
+  },
+  "id": "6fc87b2f-4260-412b-87e9-c866f6ae9758",
+  "name": "sites"
+}

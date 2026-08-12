@@ -1,0 +1,10 @@
+{
+  "id": "2e569c51-f503-4f86-84a3-103d0808a1b1",
+  "kafka_topic": "bronze.imported_rapid7_runtime_reset.sites__history",
+  "name": "Imported Rapid7 Runtime Reset",
+  "primary_stream_id": "57d1c1d1-6216-460c-86e8-04dcb51b86ff",
+  "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+  "schema_version": 1,
+  "source_id": "13614b9d-b262-4a57-b9dc-4317ed2ceabe",
+  "source_type": "REST API"
+}

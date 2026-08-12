@@ -1,0 +1,8 @@
+{
+  "application_service_id": "bd000f37-274e-4303-af89-45e1e046b5ab",
+  "connection_setup_mode": "application_service",
+  "id": "c1412044-31dd-4de0-a53a-afac8ab9952a",
+  "name": "Imported Rapid7 Designer Copy",
+  "openapi_spec_id": "a977a2da-8933-4328-9f26-7155b42642c3",
+  "type": "REST API"
+}

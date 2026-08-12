@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Page ground sits a step below --card so white surfaces actually separate. */
+    --background: 220 18% 96%;
+    --foreground: 222 25% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 25% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 25% 14%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 221 83% 96%;
+
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 222 25% 20%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 43%;
+
+    --accent: 221 83% 96%;
+    --accent-foreground: 221 83% 40%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-muted: 0 86% 97%;
+
+    --success: 142 71% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 142 76% 96%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 48 96% 95%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 204 94% 96%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.625rem;
+
+    /* ---- Elevation ramp -------------------------------------------------
+       Consumed by tailwind.config.ts, which OVERRIDES the stock boxShadow
+       keys (shadow-sm / shadow / shadow-md / shadow-lg / shadow-xl /
+       shadow-2xl / shadow-inner) so tailwind-merge keeps deduping them.
+       Each level is a tight contact shadow plus a wider ambient one.       */
+    --shadow-umbra: 222 30% 18%;
+    --shadow-penumbra: 222 30% 18%;
+    --shadow-hairline: 210 40% 98%;
+
+    /* e1 — flat panel / rail: barely off the page */
+    --elevation-1:
+      0 1px 1px -1px hsl(var(--shadow-umbra) / 0.06),
+      0 1px 3px -1px hsl(var(--shadow-penumbra) / 0.05);
+    /* e2 — resting card */
+    --elevation-2:
+      0 1px 2px -1px hsl(var(--shadow-umbra) / 0.08),
+      0 3px 8px -2px hsl(var(--shadow-penumbra) / 0.07);
+    /* e3 — dominant surface (the thing you are editing) */
+    --elevation-3:
+      0 1px 2px -1px hsl(var(--shadow-umbra) / 0.09),
+      0 8px 20px -6px hsl(var(--shadow-penumbra) / 0.11);
+    /* e4 — floating / sticky above content */
+    --elevation-4:
+      0 2px 4px -2px hsl(var(--shadow-umbra) / 0.10),
+      0 16px 32px -10px hsl(var(--shadow-penumbra) / 0.16);
+    /* e5 — overlays: dialogs, popovers, dropdowns */
+    --elevation-5:
+      0 2px 6px -2px hsl(var(--shadow-umbra) / 0.12),
+      0 28px 56px -14px hsl(var(--shadow-penumbra) / 0.22);
+    /* e6 — modal scrim companion / drag ghost */
+    --elevation-6:
+      0 4px 8px -3px hsl(var(--shadow-umbra) / 0.14),
+      0 40px 72px -20px hsl(var(--shadow-penumbra) / 0.28);
+    /* recessed — a canvas cut into the page, not another panel */
+    --elevation-inset:
+      inset 0 1px 3px 0 hsl(var(--shadow-umbra) / 0.09),
+      inset 0 0 0 1px hsl(var(--shadow-umbra) / 0.05);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 18% 30%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 221 83% 96%;
+    --sidebar-accent-foreground: 221 83% 40%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 221 83% 53%;
+  }
+
+  .dark {
+    --background: 222 25% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 25% 11%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 25% 11%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 221 83% 60%;
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 221 60% 18%;
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 32% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-muted: 0 45% 15%;
+
+    --success: 142 60% 52%;
+    --success-foreground: 142 70% 7%;
+    --success-muted: 142 40% 14%;
+
+    --warning: 38 92% 60%;
+    --warning-foreground: 38 80% 8%;
+    --warning-muted: 38 50% 15%;
+
+    --info: 199 88% 60%;
+    --info-foreground: 199 80% 8%;
+    --info-muted: 199 55% 15%;
+
+    --border: 217 32% 20%;
+    --input: 217 32% 20%;
+    --ring: 221 83% 60%;
+    --sidebar-background: 222 25% 11%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 221 83% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 32% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 32% 20%;
+    --sidebar-ring: 221 83% 60%;
+
+    /* ---- Elevation ramp, dark ------------------------------------------
+       A flat black shadow is invisible on --card: 222 25% 11%, which would
+       collapse every level to the same surface. So: a much darker umbra at
+       high alpha for the drop, PLUS a 1px light inset along the top edge so
+       a raised surface still reads as lit from above. The recessed level
+       inverts that — darker inside, no lit edge.                          */
+    --shadow-umbra: 222 60% 2%;
+    --shadow-penumbra: 222 50% 3%;
+    --shadow-hairline: 210 40% 98%;
+
+    --elevation-1:
+      inset 0 1px 0 0 hsl(var(--shadow-hairline) / 0.04),
+      0 1px 2px 0 hsl(var(--shadow-umbra) / 0.55),
+      0 1px 3px -1px hsl(var(--shadow-penumbra) / 0.45);
+    --elevation-2:
+      inset 0 1px 0 0 hsl(var(--shadow-hairline) / 0.05),
+      0 1px 3px 0 hsl(var(--shadow-umbra) / 0.65),
+      0 4px 10px -3px hsl(var(--shadow-penumbra) / 0.55);
+    --elevation-3:
+      inset 0 1px 0 0 hsl(var(--shadow-hairline) / 0.07),
+      0 2px 4px -1px hsl(var(--shadow-umbra) / 0.7),
+      0 10px 24px -7px hsl(var(--shadow-penumbra) / 0.65);
+    --elevation-4:
+      inset 0 1px 0 0 hsl(var(--shadow-hairline) / 0.09),
+      0 3px 6px -2px hsl(var(--shadow-umbra) / 0.75),
+      0 18px 38px -12px hsl(var(--shadow-penumbra) / 0.75);
+    --elevation-5:
+      inset 0 1px 0 0 hsl(var(--shadow-hairline) / 0.11),
+      0 4px 8px -2px hsl(var(--shadow-umbra) / 0.8),
+      0 30px 60px -16px hsl(var(--shadow-penumbra) / 0.85);
+    --elevation-6:
+      inset 0 1px 0 0 hsl(var(--shadow-hairline) / 0.13),
+      0 6px 12px -4px hsl(var(--shadow-umbra) / 0.85),
+      0 44px 80px -22px hsl(var(--shadow-penumbra) / 0.9);
+    --elevation-inset:
+      inset 0 2px 6px 0 hsl(var(--shadow-umbra) / 0.65),
+      inset 0 0 0 1px hsl(var(--shadow-hairline) / 0.03);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

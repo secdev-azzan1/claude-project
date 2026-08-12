@@ -1,0 +1,10 @@
+{
+  "id": "0610fc14-daa0-4a7f-ba62-5184e8dd29ad",
+  "kafka_topic": "bronze.imported_rapid7_topic_copy.sites__history",
+  "name": "Imported Rapid7 Topic Copy",
+  "primary_stream_id": "f09de1de-1e10-436a-a7bc-99e77d7abaa1",
+  "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+  "schema_version": 1,
+  "source_id": "bdf23fe0-8da2-48e5-93b2-d288540c42d6",
+  "source_type": "REST API"
+}

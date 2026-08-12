@@ -1,0 +1,31 @@
+{
+  "base_url": {
+    "$secretRef": "source/source.json#base_url"
+  },
+  "id": "9a345ec5-9da3-4af3-b40d-0419e9071a6f",
+  "kafka_output": {
+    "key_strategy": "none",
+    "partitions": 6,
+    "replication_factor": 3,
+    "schema_artifact_id": "bronze.dummyjson.user__history-value",
+    "schema_mode": "existing",
+    "schema_version": 1,
+    "topic": "bronze.dummyjson.user__history",
+    "value_format": "avro"
+  },
+  "name": "DummyJson",
+  "schedule": {
+    "interval_unit": "minutes",
+    "interval_value": 20,
+    "type": "interval"
+  },
+  "trino_auto_create_checkpoint_table": true,
+  "trino_bootstrap_mode": "latest_snapshot",
+  "trino_column_mode": "manual",
+  "trino_include_snapshot_metadata": true,
+  "trino_output_mode": "one_message_per_row",
+  "trino_user": "admin",
+  "type": "REST API",
+  "webhook_content_type": "auto",
+  "webhook_signature_algo": "hmac-sha256"
+}

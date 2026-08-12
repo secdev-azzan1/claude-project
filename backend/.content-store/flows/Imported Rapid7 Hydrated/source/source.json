@@ -1,0 +1,8 @@
+{
+  "application_service_id": "7df02c44-ac25-4cf5-91a6-fb65d1c4e2a3",
+  "connection_setup_mode": "application_service",
+  "id": "16eae713-8ceb-4c29-ab57-2a41a7d501e8",
+  "name": "Imported Rapid7 Hydrated",
+  "openapi_spec_id": "546e1955-37af-4499-8b32-55455a9d47df",
+  "type": "REST API"
+}

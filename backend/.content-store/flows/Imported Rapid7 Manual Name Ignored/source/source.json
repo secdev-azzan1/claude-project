@@ -1,0 +1,8 @@
+{
+  "application_service_id": "bffd6e08-6c2b-424d-8225-ff03096411a0",
+  "connection_setup_mode": "application_service",
+  "id": "dd1a560e-7302-40de-9f92-5ea4937ac095",
+  "name": "Imported Rapid7 Manual Name Ignored",
+  "openapi_spec_id": "a9a89e5c-c091-4646-bbc4-194e8e96a669",
+  "type": "REST API"
+}

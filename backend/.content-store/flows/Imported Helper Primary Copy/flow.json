@@ -1,0 +1,10 @@
+{
+  "id": "88244f28-fab3-4ddf-92ca-40ee517e0b1c",
+  "kafka_topic": "bronze.imported_helper_primary_copy.orders__history",
+  "name": "Imported Helper Primary Copy",
+  "primary_stream_id": "1d8712f6-0f0b-4d0e-9d86-83c2f1b08a10",
+  "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+  "schema_version": 1,
+  "source_id": "a40b2c89-c36c-466a-aa0f-b59e67297a9b",
+  "source_type": "REST API"
+}

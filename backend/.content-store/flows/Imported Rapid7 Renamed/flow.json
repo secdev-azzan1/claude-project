@@ -1,0 +1,10 @@
+{
+  "id": "5f46ab47-1fa1-4492-a907-c2dcdc407329",
+  "kafka_topic": "bronze.imported_rapid7_renamed.sites__history",
+  "name": "Imported Rapid7 Renamed",
+  "primary_stream_id": "3757f9d6-d94a-47bc-85d9-f01df36e1006",
+  "schema_artifact_id": "bronze.imported_rapid7_renamed.sites__history-value",
+  "schema_version": 1,
+  "source_id": "5dfda0fb-e6d4-4170-9378-862ea38c877e",
+  "source_type": "REST API"
+}

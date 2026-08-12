@@ -1,0 +1,10 @@
+{
+  "id": "52026a76-498a-4d45-b0b4-bdb750803905",
+  "kafka_topic": "bronze.imported_rapid7_linked.sites__history",
+  "name": "Imported Rapid7 Linked",
+  "primary_stream_id": "6ea06637-4874-43e4-8339-45e5dba1ef16",
+  "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+  "schema_version": 1,
+  "source_id": "b04a0efd-ae77-4e4f-af95-295b334ec7eb",
+  "source_type": "REST API"
+}

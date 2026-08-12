@@ -1,0 +1,8 @@
+{
+  "application_service_id": "f139ba7c-a26d-4274-b316-380c3b935809",
+  "connection_setup_mode": "application_service",
+  "id": "bdf23fe0-8da2-48e5-93b2-d288540c42d6",
+  "name": "Imported Rapid7 Topic Copy",
+  "openapi_spec_id": "d46e2340-e9a4-4d06-a1f7-662e13531523",
+  "type": "REST API"
+}

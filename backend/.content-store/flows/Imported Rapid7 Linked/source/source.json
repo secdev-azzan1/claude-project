@@ -1,0 +1,8 @@
+{
+  "application_service_id": "b72e4483-337d-45ef-acb0-c69da42cb739",
+  "connection_setup_mode": "application_service",
+  "id": "b04a0efd-ae77-4e4f-af95-295b334ec7eb",
+  "name": "Imported Rapid7 Linked",
+  "openapi_spec_id": "12a0da13-e514-4120-a6b0-9c57b7009ffb",
+  "type": "REST API"
+}

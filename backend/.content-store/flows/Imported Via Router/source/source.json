@@ -1,0 +1,8 @@
+{
+  "application_service_id": "a3e3a4dd-1339-4e5a-b829-c24b547e4dd1",
+  "connection_setup_mode": "application_service",
+  "id": "192d7099-c306-41f0-a1f3-bffc5af5bbb8",
+  "name": "Imported Via Router",
+  "openapi_spec_id": "ab61581a-43d4-4f2f-8c28-8c1a3adeca11",
+  "type": "REST API"
+}

@@ -1,0 +1,8 @@
+{
+  "application_service_id": "bbb64d58-cf5c-4273-ad5d-f5064df037e9",
+  "connection_setup_mode": "application_service",
+  "id": "3d4ad971-e8f6-4727-99f5-37d8517af721",
+  "name": "Imported Rapid7 Routes",
+  "openapi_spec_id": "8c2cc541-3309-4f7f-b1e1-a1a003acba17",
+  "type": "REST API"
+}

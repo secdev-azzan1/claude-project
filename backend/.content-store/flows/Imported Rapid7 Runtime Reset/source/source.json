@@ -1,0 +1,8 @@
+{
+  "application_service_id": "5df069dc-af2a-4349-a427-e0d5f394f2a2",
+  "connection_setup_mode": "application_service",
+  "id": "13614b9d-b262-4a57-b9dc-4317ed2ceabe",
+  "name": "Imported Rapid7 Runtime Reset",
+  "openapi_spec_id": "522b7b4f-c7c9-4a25-9482-6f6478a41678",
+  "type": "REST API"
+}

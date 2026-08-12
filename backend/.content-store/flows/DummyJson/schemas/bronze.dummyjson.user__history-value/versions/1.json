@@ -1,0 +1,536 @@
+{
+  "apicurio_connection_id": "e2feaf9f-f8c5-44b7-9ef8-c1c727103710",
+  "apicurio_global_id": 8,
+  "avro_schema": {
+    "fields": [
+      {
+        "default": null,
+        "name": "id",
+        "type": [
+          "null",
+          "long"
+        ]
+      },
+      {
+        "default": null,
+        "name": "firstName",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "lastName",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "maidenName",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "age",
+        "type": [
+          "null",
+          "long"
+        ]
+      },
+      {
+        "default": null,
+        "name": "gender",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "email",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "phone",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "username",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "password",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "birthDate",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "image",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "bloodGroup",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "height",
+        "type": [
+          "null",
+          "double"
+        ]
+      },
+      {
+        "default": null,
+        "name": "weight",
+        "type": [
+          "null",
+          "double"
+        ]
+      },
+      {
+        "default": null,
+        "name": "eyeColor",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "hair",
+        "type": [
+          "null",
+          {
+            "fields": [
+              {
+                "default": null,
+                "name": "color",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "type",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            ],
+            "name": "hair",
+            "type": "record"
+          }
+        ]
+      },
+      {
+        "default": null,
+        "name": "ip",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "address",
+        "type": [
+          "null",
+          {
+            "fields": [
+              {
+                "default": null,
+                "name": "address",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "city",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "state",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "stateCode",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "postalCode",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "coordinates",
+                "type": [
+                  "null",
+                  {
+                    "fields": [
+                      {
+                        "default": null,
+                        "name": "lat",
+                        "type": [
+                          "null",
+                          "double"
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "lng",
+                        "type": [
+                          "null",
+                          "double"
+                        ]
+                      }
+                    ],
+                    "name": "address_coordinates",
+                    "type": "record"
+                  }
+                ]
+              },
+              {
+                "default": null,
+                "name": "country",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            ],
+            "name": "address",
+            "type": "record"
+          }
+        ]
+      },
+      {
+        "default": null,
+        "name": "macAddress",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "university",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "bank",
+        "type": [
+          "null",
+          {
+            "fields": [
+              {
+                "default": null,
+                "name": "cardExpire",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "cardNumber",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "cardType",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "currency",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "iban",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            ],
+            "name": "bank",
+            "type": "record"
+          }
+        ]
+      },
+      {
+        "default": null,
+        "name": "company",
+        "type": [
+          "null",
+          {
+            "fields": [
+              {
+                "default": null,
+                "name": "department",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "name",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "title",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "address",
+                "type": [
+                  "null",
+                  {
+                    "fields": [
+                      {
+                        "default": null,
+                        "name": "address",
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "city",
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "state",
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "stateCode",
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "postalCode",
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "coordinates",
+                        "type": [
+                          "null",
+                          {
+                            "fields": [
+                              {
+                                "default": null,
+                                "name": "lat",
+                                "type": [
+                                  "null",
+                                  "double"
+                                ]
+                              },
+                              {
+                                "default": null,
+                                "name": "lng",
+                                "type": [
+                                  "null",
+                                  "double"
+                                ]
+                              }
+                            ],
+                            "name": "company_address_coordinates",
+                            "type": "record"
+                          }
+                        ]
+                      },
+                      {
+                        "default": null,
+                        "name": "country",
+                        "type": [
+                          "null",
+                          "string"
+                        ]
+                      }
+                    ],
+                    "name": "company_address",
+                    "type": "record"
+                  }
+                ]
+              }
+            ],
+            "name": "company",
+            "type": "record"
+          }
+        ]
+      },
+      {
+        "default": null,
+        "name": "ein",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "ssn",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "userAgent",
+        "type": [
+          "null",
+          "string"
+        ]
+      },
+      {
+        "default": null,
+        "name": "crypto",
+        "type": [
+          "null",
+          {
+            "fields": [
+              {
+                "default": null,
+                "name": "coin",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "wallet",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              {
+                "default": null,
+                "name": "network",
+                "type": [
+                  "null",
+                  "string"
+                ]
+              }
+            ],
+            "name": "crypto",
+            "type": "record"
+          }
+        ]
+      },
+      {
+        "default": null,
+        "name": "role",
+        "type": [
+          "null",
+          "string"
+        ]
+      }
+    ],
+    "name": "bronze_dummyjson_user__history",
+    "namespace": "com.nif",
+    "type": "record"
+  },
+  "raw_avro": "{\n  \"type\": \"record\",\n  \"name\": \"bronze_dummyjson_user__history\",\n  \"fields\": [\n    {\n      \"name\": \"id\",\n      \"type\": [\n        \"null\",\n        \"long\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"firstName\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"lastName\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"maidenName\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"age\",\n      \"type\": [\n        \"null\",\n        \"long\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"gender\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"email\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"phone\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"username\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"password\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"birthDate\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"image\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"bloodGroup\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"height\",\n      \"type\": [\n        \"null\",\n        \"double\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"weight\",\n      \"type\": [\n        \"null\",\n        \"double\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"eyeColor\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"hair\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"record\",\n          \"name\": \"hair\",\n          \"fields\": [\n            {\n              \"name\": \"color\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"type\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            }\n          ]\n        }\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"ip\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"address\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"record\",\n          \"name\": \"address\",\n          \"fields\": [\n            {\n              \"name\": \"address\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"city\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"state\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"stateCode\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"postalCode\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"coordinates\",\n              \"type\": [\n                \"null\",\n                {\n                  \"type\": \"record\",\n                  \"name\": \"address_coordinates\",\n                  \"fields\": [\n                    {\n                      \"name\": \"lat\",\n                      \"type\": [\n                        \"null\",\n                        \"double\"\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"lng\",\n                      \"type\": [\n                        \"null\",\n                        \"double\"\n                      ],\n                      \"default\": null\n                    }\n                  ]\n                }\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"country\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            }\n          ]\n        }\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"macAddress\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"university\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"bank\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"record\",\n          \"name\": \"bank\",\n          \"fields\": [\n            {\n              \"name\": \"cardExpire\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"cardNumber\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"cardType\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"currency\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"iban\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            }\n          ]\n        }\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"company\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"record\",\n          \"name\": \"company\",\n          \"fields\": [\n            {\n              \"name\": \"department\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"name\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"title\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"address\",\n              \"type\": [\n                \"null\",\n                {\n                  \"type\": \"record\",\n                  \"name\": \"company_address\",\n                  \"fields\": [\n                    {\n                      \"name\": \"address\",\n                      \"type\": [\n                        \"null\",\n                        \"string\"\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"city\",\n                      \"type\": [\n                        \"null\",\n                        \"string\"\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"state\",\n                      \"type\": [\n                        \"null\",\n                        \"string\"\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"stateCode\",\n                      \"type\": [\n                        \"null\",\n                        \"string\"\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"postalCode\",\n                      \"type\": [\n                        \"null\",\n                        \"string\"\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"coordinates\",\n                      \"type\": [\n                        \"null\",\n                        {\n                          \"type\": \"record\",\n                          \"name\": \"company_address_coordinates\",\n                          \"fields\": [\n                            {\n                              \"name\": \"lat\",\n                              \"type\": [\n                                \"null\",\n                                \"double\"\n                              ],\n                              \"default\": null\n                            },\n                            {\n                              \"name\": \"lng\",\n                              \"type\": [\n                                \"null\",\n                                \"double\"\n                              ],\n                              \"default\": null\n                            }\n                          ]\n                        }\n                      ],\n                      \"default\": null\n                    },\n                    {\n                      \"name\": \"country\",\n                      \"type\": [\n                        \"null\",\n                        \"string\"\n                      ],\n                      \"default\": null\n                    }\n                  ]\n                }\n              ],\n              \"default\": null\n            }\n          ]\n        }\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"ein\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"ssn\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"userAgent\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"crypto\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"record\",\n          \"name\": \"crypto\",\n          \"fields\": [\n            {\n              \"name\": \"coin\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"wallet\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            },\n            {\n              \"name\": \"network\",\n              \"type\": [\n                \"null\",\n                \"string\"\n              ],\n              \"default\": null\n            }\n          ]\n        }\n      ],\n      \"default\": null\n    },\n    {\n      \"name\": \"role\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null\n    }\n  ],\n  \"namespace\": \"com.nif\"\n}",
+  "status": "Verified",
+  "verified_at": "2026-07-21T07:10:06.641000",
+  "verified_by": "admin",
+  "version": 1
+}

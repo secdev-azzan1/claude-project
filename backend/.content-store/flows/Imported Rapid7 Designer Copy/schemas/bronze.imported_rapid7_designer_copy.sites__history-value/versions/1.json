@@ -1,0 +1,9 @@
+{
+  "schema": {
+    "fields": [],
+    "name": "Site",
+    "type": "record"
+  },
+  "status": "Needs Verification",
+  "version": 1
+}

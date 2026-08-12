@@ -1,0 +1,10 @@
+{
+  "id": "09b73482-cf5d-4889-9cbc-46c663cf2553",
+  "kafka_topic": "bronze.imported_via_router.sites__history",
+  "name": "Imported Via Router",
+  "primary_stream_id": "6fc87b2f-4260-412b-87e9-c866f6ae9758",
+  "schema_artifact_id": "bronze.imported_rapid7.sites-value",
+  "schema_version": 1,
+  "source_id": "192d7099-c306-41f0-a1f3-bffc5af5bbb8",
+  "source_type": "REST API"
+}

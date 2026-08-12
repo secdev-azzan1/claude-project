@@ -1,0 +1,13 @@
+{
+  "id": "0073411e-e6de-4242-82b9-6cbd5d1bf9ab",
+  "kafka_connection_id": "e326d0c2-fdcf-425d-9631-f4da7b07cd3e",
+  "kafka_topic": "bronze.dummyjson.user__history",
+  "name": "DummyJson",
+  "nifi_connection_id": "d2ce9332-9316-4837-b198-f9244f07ac34",
+  "nifi_instance_fingerprint": "657f40bd-019f-1000-4c4a-836ec84833cb",
+  "primary_stream_id": "stream-1784614002417-aafqck",
+  "schema_artifact_id": "bronze.dummyjson.user__history-value",
+  "schema_version": 1,
+  "source_id": "9a345ec5-9da3-4af3-b40d-0419e9071a6f",
+  "source_type": "REST API"
+}

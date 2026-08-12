@@ -1,0 +1,44 @@
+{
+  "services": [
+    {
+      "bundle": {
+        "artifact": "nifi-confluent-platform-nar",
+        "group": "org.apache.nifi",
+        "version": "2.9.0"
+      },
+      "id": "91ec4e11-6ec4-4fd3-8277-1977c0aa0ff8",
+      "is_default": true,
+      "name": "Platform Schema Registry",
+      "nifi_connection_id": "d2ce9332-9316-4837-b198-f9244f07ac34",
+      "nifi_instance_fingerprint": "657f40bd-019f-1000-4c4a-836ec84833cb",
+      "nifi_type": "org.apache.nifi.confluent.schemaregistry.ConfluentSchemaRegistry",
+      "properties": {
+        "Schema Registry URLs": {
+          "$secretRef": "services/nifi.json#services.0.properties.Schema Registry URLs"
+        }
+      },
+      "resolution": "default",
+      "service_kind": "schema_registry"
+    },
+    {
+      "bundle": {
+        "artifact": "nifi-kafka-3-service-nar",
+        "group": "org.apache.nifi",
+        "version": "2.9.0"
+      },
+      "id": "255d635f-18d4-4e9c-8535-48a2badbe22f",
+      "is_default": true,
+      "name": "Platform Kafka",
+      "nifi_connection_id": "d2ce9332-9316-4837-b198-f9244f07ac34",
+      "nifi_instance_fingerprint": "657f40bd-019f-1000-4c4a-836ec84833cb",
+      "nifi_type": "org.apache.nifi.kafka.service.Kafka3ConnectionService",
+      "properties": {
+        "bootstrap.servers": {
+          "$secretRef": "services/nifi.json#services.1.properties.bootstrap.servers"
+        }
+      },
+      "resolution": "default",
+      "service_kind": "kafka"
+    }
+  ]
+}
