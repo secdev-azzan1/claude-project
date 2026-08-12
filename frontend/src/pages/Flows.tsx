@@ -125,7 +125,7 @@ import {
   type FlowVerb,
 } from "@/prototype/api";
 import { rootBlock } from "@/prototype/legality";
-import { dlqName, tokenize } from "@/prototype/naming";
+import { deriveTopicName, dlqName, tokenize } from "@/prototype/naming";
 import type {
   AppService,
   ApprovedSchema,
@@ -133,6 +133,7 @@ import type {
   DriftFinding,
   Flow,
   FlowBlock,
+  FlowRuntime,
   NifiComponent,
   PlatformConnection,
   RuntimeOrphan,
@@ -219,6 +220,19 @@ function chainRows(flow: Flow): { block: FlowBlock; depth: number }[] {
 
 function sinkServiceId(block: FlowBlock): string | null {
   return (block.config.sinkServiceId as string | undefined) ?? block.serviceId ?? null;
+}
+
+/** Destination topic for a write/sink block: the topic it materializes, or (for
+ * kafka-family writes) the name it would derive/override to. Non-kafka writes
+ * (http/jdbc) have no topic destination. */
+function outputTopicName(flow: Flow, block: FlowBlock): string | null {
+  const owned = flow.topics.find((t) => t.writerBlockId === block.id);
+  if (owned) return owned.name;
+  if (block.adapter === "kafka" || block.adapter === "kafka_kc") {
+    const derived = deriveTopicName(flow, block);
+    return derived.value || null;
+  }
+  return null;
 }
 
 function retiredPinnedServices(flow: Flow, services: AppService[]): AppService[] {
@@ -1019,6 +1033,7 @@ function FlowDetailSheet({
   onSaveConnector: () => void;
   enableBusy: boolean;
 }) {
+  const qc = useQueryClient();
   const [tab, setTab] = useState("overview");
   const [msgTopic, setMsgTopic] = useState<string | null>(null);
 
@@ -1046,8 +1061,11 @@ function FlowDetailSheet({
 
   const issues = useMemo(() => validateFlowNow(flow), [flow]);
   const rows = useMemo(() => chainRows(flow), [flow]);
-  const root = rootBlock(flow);
+  const entityBlocks = useMemo(() => flow.blocks.filter(isWriteBlock), [flow]);
   const kcBlocks = flow.blocks.filter((b) => b.adapter === "kc");
+  // Reads the runtime cache the Runtime tab populates — never fetched from here,
+  // so the process-group reference simply doesn't render until that tab has loaded it.
+  const runtime = qc.getQueryData<FlowRuntime>(["flow-runtime", flow.id]);
   const busy = (verb: FlowVerb) => pendingVerb === verb;
   const disableReason = flow.enabled ? disableBlockReason(flow) : null;
 
@@ -1198,43 +1216,115 @@ function FlowDetailSheet({
             </Alert>
           )}
 
-          <div className="space-y-1.5">
-            {rows.length === 0 ? (
-              <div className="rounded-md border p-4 text-center text-sm text-muted-foreground">
-                The flow has no blocks yet.
+          {/* Deployment summary */}
+          <div className="rounded-md border p-3">
+            <div className="mb-2 text-xs font-medium">Deployment</div>
+            <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
+              <div>
+                <div className="text-xs text-muted-foreground">State</div>
+                <div className="mt-0.5"><StatusBadge status={flow.state} /></div>
               </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Enabled</div>
+                <div className="mt-0.5 text-sm">{flow.enabled ? "Enabled" : "Disabled"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Deployed</div>
+                <div className="mt-0.5 text-sm">{flow.deployedAt ? timeAgo(flow.deployedAt) : "never"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Last run</div>
+                <div className="mt-0.5 text-sm">{timeAgo(flow.lastRunAt)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Schedule</div>
+                <div className="mt-0.5 font-mono text-sm">
+                  {flow.cron ? `cron ${flow.cron} (UTC)` : "continuous — no trigger"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">DLQ topic</div>
+                <div className="mt-0.5 font-mono text-sm">{dlqName(flow.name)}</div>
+              </div>
+              {flow.deployedAt && runtime?.processGroupId && (
+                <div>
+                  <div className="text-xs text-muted-foreground">NiFi process group</div>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <code className="text-sm">{runtime.processGroupId}</code>
+                    <span className="text-xs text-muted-foreground">reference</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Entity outputs */}
+          <div className="rounded-md border p-3">
+            <div className="mb-2 text-xs font-medium">Entity outputs</div>
+            {entityBlocks.length === 0 ? (
+              <div className="text-xs text-muted-foreground">No write or sink blocks yet.</div>
             ) : (
-              rows.map(({ block, depth }) => {
-                const svc = services.find((s) => s.id === (block.serviceId ?? sinkServiceId(block)));
-                const isRoot = root?.id === block.id;
-                return (
-                  <div key={block.id} className="rounded-md border p-2.5" style={{ marginLeft: depth * 16 }}>
-                    <div className="flex flex-wrap items-center gap-2">
+              <div className="space-y-1.5">
+                {entityBlocks.map((block) => {
+                  const topicName = outputTopicName(flow, block);
+                  const schemaApproved = schemas.some((s) => s.flowId === flow.id && s.blockId === block.id);
+                  return (
+                    <div key={block.id} className="flex flex-wrap items-center gap-2 rounded-md border p-2">
                       <AdapterChip adapter={block.adapter} mode={block.mode} />
                       <span className="text-sm font-medium">{block.name}</span>
-                      {block.branch && (
-                        <Badge variant="outline" className="text-xs">
-                          branch: {block.branch.name}
-                        </Badge>
+                      <Badge variant="outline" className="font-mono text-xs">{block.entity || "no entity"}</Badge>
+                      {topicName ? (
+                        <code className="text-xs text-muted-foreground">{topicName}</code>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">no destination topic</span>
                       )}
-                      {block.entity && (
-                        <Badge variant="outline" className="font-mono text-xs">{block.entity}</Badge>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {svc && <span>{svc.name}</span>}
-                      <ServicePinChips flow={flow} service={svc} />
-                      {isRoot && (
-                        <span className="font-mono">
-                          {flow.cron ? `cron ${flow.cron} (UTC)` : "continuous — no trigger"}
-                        </span>
+                      {block.adapter === "kafka_kc" && (
+                        <StatusBadge status={schemaApproved ? "Schema approved" : "Schema missing"} />
                       )}
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
+
+          {/* Blocks — collapsed by default; the builder's map is the primary structure view */}
+          <DisclosureRow
+            title={<span className="text-sm font-medium">Blocks ({rows.length})</span>}
+            meta="Chain order, indented — open to inspect; the map in the builder is the primary structure view."
+          >
+            <div className="space-y-1.5">
+              {rows.length === 0 ? (
+                <div className="rounded-md border p-4 text-center text-sm text-muted-foreground">
+                  The flow has no blocks yet.
+                </div>
+              ) : (
+                rows.map(({ block, depth }) => {
+                  const svc = services.find((s) => s.id === (block.serviceId ?? sinkServiceId(block)));
+                  return (
+                    <div key={block.id} className="rounded-md border p-2.5" style={{ marginLeft: depth * 16 }}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AdapterChip adapter={block.adapter} mode={block.mode} />
+                        <span className="text-sm font-medium">{block.name}</span>
+                        {block.branch && (
+                          <Badge variant="outline" className="text-xs">
+                            branch: {block.branch.name}
+                          </Badge>
+                        )}
+                        {block.entity && (
+                          <Badge variant="outline" className="font-mono text-xs">{block.entity}</Badge>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {svc && <span>{svc.name}</span>}
+                        <ServicePinChips flow={flow} service={svc} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </DisclosureRow>
 
           <div className="rounded-md border p-3">
             <div className="mb-2 text-xs font-medium">Topics</div>
@@ -1993,16 +2083,14 @@ const Flows = () => {
                     </TableHead>
                     <TableHead className="w-[72px]">State</TableHead>
                     <TableHead className="w-[260px]">Flow Name</TableHead>
-                    <TableHead className="w-[150px]">Root</TableHead>
-                    <TableHead className="w-[140px]">Entities</TableHead>
-                    <TableHead className="w-[210px]">Topics</TableHead>
+                    <TableHead className="w-[180px]">Entities</TableHead>
+                    <TableHead className="w-[230px]">Topics</TableHead>
                     <TableHead className="w-[160px]">Schema</TableHead>
-                    <TableHead className="w-[168px] px-1 text-right">Actions</TableHead>
+                    <TableHead className="w-[196px] px-1 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredFlows.map((flow) => {
-                    const root = rootBlock(flow);
                     const entities = flowEntities(flow);
                     const topics = flow.topics.map((t) => t.name);
                     const schema = schemaStatus(flow, schemas);
@@ -2015,6 +2103,7 @@ const Flows = () => {
                         : flow.state === "Paused"
                           ? "resume"
                           : "start";
+                    const deployVerb: FlowVerb = flow.deployedAt ? "redeploy" : "deploy";
                     const editLocked =
                       flow.state === "Running" || flow.state === "Paused" || flow.state === "Degraded" || flow.state === "Deploying";
                     const disableReason = flow.enabled ? disableBlockReason(flow) : null;
@@ -2075,20 +2164,6 @@ const Flows = () => {
                           )}
                         </TableCell>
                         <TableCell className="py-3">
-                          {root ? (
-                            <div className="flex flex-wrap items-center gap-1">
-                              <AdapterChip adapter={root.adapter} mode={root.mode} />
-                              {isAdoptedRooted(flow) && (
-                                <Badge variant="outline" className="font-mono text-xs" title="Rooted on an adopted topic">
-                                  topic
-                                </Badge>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-3">
                           <span className="text-xs" title={entities.join(", ") || undefined}>
                             {summarize(entities)}
                           </span>
@@ -2134,6 +2209,13 @@ const Flows = () => {
                               spinning={pending === "stop"}
                               onClick={() => runVerb(flow, "stop")}
                             />
+                            <GuardedIconButton
+                              label={VERB_META[deployVerb].label}
+                              reason={getVerbBlockReason(flow, deployVerb)}
+                              icon={Rocket}
+                              spinning={pending === deployVerb}
+                              onClick={() => runVerb(flow, deployVerb)}
+                            />
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <span className="inline-flex">
@@ -2154,7 +2236,7 @@ const Flows = () => {
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button size="sm" variant="ghost" aria-label="More actions">
-                                  {pending && pending !== primary && pending !== "stop" ? (
+                                  {pending && pending !== primary && pending !== "stop" && pending !== deployVerb ? (
                                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                                   ) : (
                                     <MoreHorizontal className="h-3.5 w-3.5" />
@@ -2162,18 +2244,6 @@ const Flows = () => {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-56">
-                                <GuardedMenuItem
-                                  reason={getVerbBlockReason(flow, "deploy")}
-                                  onSelect={() => runVerb(flow, "deploy")}
-                                >
-                                  <Rocket className="mr-2 h-3.5 w-3.5" /> Deploy
-                                </GuardedMenuItem>
-                                <GuardedMenuItem
-                                  reason={getVerbBlockReason(flow, "redeploy")}
-                                  onSelect={() => runVerb(flow, "redeploy")}
-                                >
-                                  <RefreshCw className="mr-2 h-3.5 w-3.5" /> Redeploy
-                                </GuardedMenuItem>
                                 <GuardedMenuItem
                                   reason={getVerbBlockReason(flow, "stop_clear")}
                                   onSelect={() => runVerb(flow, "stop_clear")}

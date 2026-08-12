@@ -12,15 +12,17 @@
 //
 // There is deliberately no Draft→Verified lifecycle (the old app's banner and
 // artifact/version dialogs). Approval is registration; re-running the ceremony
-// is versioning. Two affordances make that reachable from here rather than
-// merely true:
+// is versioning. The editing experience is otherwise identical for both
+// kinds — same tabs-plus-Add-Field layout, same one Save button — regardless
+// of registration state:
 //
-//   CHECK        a template is checked in place — the same structural refusals
-//                the ceremony would raise, before walking to it.
-//   NEW VERSION  an approved schema can be EDITED here, and the edit is carried
-//                to the ceremony that registers it. The editor unlocking is not
-//                a second registration path: nothing is registered until the
-//                ceremony's Approve, which is still the only door.
+//   CHECK    a template (or an edited approved schema) is checked in place —
+//            the same structural refusals the ceremony would raise, before
+//            walking to it.
+//   SAVE     persists the edited buffer in place. For an approved schema this
+//            is a `draftAvro` on the record, NOT a new approval — nothing is
+//            registered until the ceremony's Approve, which is still the only
+//            door. "Register new version…" is what carries the buffer there.
 
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,12 +54,14 @@ import { schemaWorkspaceLayout } from "@/lib/schemaLayout";
 import { cn } from "@/lib/utils";
 import {
   createSchemaTemplate,
+  deleteApprovedSchema,
+  deleteApprovedSchemaVersion,
   deleteSchemaTemplate,
-  duplicateSchemaTemplate,
   listFlows,
   listSchemaTemplates,
   listSchemas,
   saveApprovedAsTemplate,
+  saveApprovedSchemaDraft,
   saveSchemaTemplate,
   stageCeremonyDraft,
 } from "@/prototype/api";
@@ -65,13 +69,10 @@ import type { ApprovedSchema, Flow, SchemaApproval, SchemaProvenance, SchemaTemp
 import {
   AlertTriangle,
   BookMarked,
-  Copy,
   FileJson,
   History,
   Loader2,
-  PenLine,
   Plus,
-  RotateCcw,
   Save,
   Search,
   ShieldCheck,
@@ -272,6 +273,15 @@ type Artifact =
   | { kind: "approved"; id: string; label: string; at: string; schema: ApprovedSchema }
   | { kind: "template"; id: string; label: string; at: string; template: SchemaTemplate };
 
+/**
+ * One shared delete dialog for both kinds (Change 5). A template deletes
+ * outright; an approved schema offers a granular choice between deleting the
+ * one approval currently selected and deleting the whole record.
+ */
+type DeleteTarget =
+  | { kind: "template"; template: SchemaTemplate }
+  | { kind: "approved"; schema: ApprovedSchema; approval: SchemaApproval };
+
 // ------------------------------------------------------------------ the page
 
 const Schemas = () => {
@@ -308,16 +318,10 @@ const Schemas = () => {
   const [newTemplateDescription, setNewTemplateDescription] = useState("");
   const [saveAsTemplateFor, setSaveAsTemplateFor] = useState<ApprovedSchema | null>(null);
   const [saveAsTemplateName, setSaveAsTemplateName] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<SchemaTemplate | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [ceremonyPickerFor, setCeremonyPickerFor] = useState<SchemaTemplate | null>(null);
   /** Structural check results, shown against the artifact that produced them. */
   const [checkFor, setCheckFor] = useState<{ id: string; lines: CheckLine[] } | null>(null);
-  /**
-   * Which approved schema is being edited towards a new version. An id rather
-   * than a boolean: selecting a different artifact must not carry the unlocked
-   * editor with it.
-   */
-  const [editingApprovalId, setEditingApprovalId] = useState<string | null>(null);
 
   // ─── artifact list ────────────────────────────────────────────────────
   const artifacts = useMemo<Artifact[]>(() => {
@@ -394,9 +398,14 @@ const Schemas = () => {
   const detail = useMemo(() => {
     if (!selected) return null;
     if (selected.kind === "approved") {
-      const raw = activeApproval?.rawAvro ?? selected.schema.rawAvro;
+      // A saved draft only ever applies to the CURRENT approval — history is
+      // what was actually registered, and stays exactly that.
+      const hasDraft = !isHistoricalApproval && selected.schema.draftAvro !== undefined;
+      const raw = hasDraft
+        ? JSON.stringify(selected.schema.draftAvro, null, 2)
+        : (activeApproval?.rawAvro ?? selected.schema.rawAvro);
       return {
-        key: `approved:${selected.id}:${activeApproval?.version ?? "latest"}`,
+        key: `approved:${selected.id}:${activeApproval?.version ?? "latest"}:${selected.schema.draftUpdatedAt ?? ""}`,
         raw,
         fallbackName: subjectToRecordName(selected.schema.subject),
       };
@@ -406,7 +415,7 @@ const Schemas = () => {
       raw: selected.template.rawAvro,
       fallbackName: subjectToRecordName(selected.template.name),
     };
-  }, [selected, activeApproval]);
+  }, [selected, activeApproval, isHistoricalApproval]);
 
   const parsed = useMemo(() => {
     if (!detail) return { record: null as AvroRecord | null, error: null as string | null };
@@ -438,7 +447,6 @@ const Schemas = () => {
 
   useEffect(() => {
     setApprovalVersion(null);
-    setEditingApprovalId(null);
     setCheckFor(null);
   }, [selected?.id]);
 
@@ -478,16 +486,6 @@ const Schemas = () => {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const duplicateMut = useMutation({
-    mutationFn: duplicateSchemaTemplate,
-    onSuccess: (tpl) => {
-      toast.success(`Duplicated as "${tpl.name}".`);
-      setSelectedId(tpl.id);
-      void invalidateTemplates();
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
   const deleteMut = useMutation({
     mutationFn: deleteSchemaTemplate,
     onSuccess: () => {
@@ -507,6 +505,45 @@ const Schemas = () => {
       setSaveAsTemplateFor(null);
       setSelectedId(tpl.id);
       void invalidateTemplates();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const invalidateSchemas = () => queryClient.invalidateQueries({ queryKey: ["schemas"] });
+
+  const saveApprovedDraftMut = useMutation({
+    mutationFn: ({ schemaId, avro }: { schemaId: string; avro: unknown }) => saveApprovedSchemaDraft(schemaId, avro),
+    onSuccess: () => {
+      toast.success("Draft saved — not registered.");
+      void invalidateSchemas();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const deleteApprovedVersionMut = useMutation({
+    mutationFn: ({ schemaId, version }: { schemaId: string; version: number }) =>
+      deleteApprovedSchemaVersion(schemaId, version),
+    onSuccess: (updated, variables) => {
+      toast.success(`Approval v${variables.version} deleted.`);
+      setDeleteTarget(null);
+      // Fall back the selection to the previous approval — the highest
+      // remaining version below the one just deleted, or the new oldest if
+      // the oldest one was the one removed.
+      const remaining = updated.approvals.map((a) => a.version);
+      const prior = remaining.filter((v) => v < variables.version);
+      setApprovalVersion(prior.length > 0 ? Math.max(...prior) : Math.min(...remaining));
+      void invalidateSchemas();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const deleteApprovedSchemaMut = useMutation({
+    mutationFn: (schemaId: string) => deleteApprovedSchema(schemaId),
+    onSuccess: () => {
+      toast.success("Schema deleted.");
+      setDeleteTarget(null);
+      setSelectedId("");
+      void invalidateSchemas();
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -562,11 +599,17 @@ const Schemas = () => {
     }
   };
 
-  const handleDiscard = () => {
-    if (!detail) return;
-    buffer.reset(parsed.record, parsed.error ? { rawText: detail.raw, rawError: parsed.error } : undefined);
-    setTemplateName(selectedTemplate?.name ?? "");
-    setTemplateDescription(selectedTemplate?.description ?? "");
+  const handleSaveApprovedDraft = () => {
+    if (!selectedSchema) return;
+    if (buffer.rawError) {
+      toast.error(`Cannot save: ${buffer.rawError}`);
+      return;
+    }
+    if (!buffer.record) {
+      toast.error("Cannot save: the raw Avro JSON does not describe a record.");
+      return;
+    }
+    saveApprovedDraftMut.mutate({ schemaId: selectedSchema.id, avro: buffer.record });
   };
 
   const owner = selectedSchema ? flowLabel.get(selectedSchema.id) : undefined;
@@ -584,8 +627,18 @@ const Schemas = () => {
     navigate(`/flow-builder/${flowId}?ceremony=${blockId}&prefill=${templateId}`);
   };
 
-  /** Editing an approved schema is only ever a step towards a new approval. */
-  const editingApproval = !!selectedSchema && editingApprovalId === selectedSchema.id && !isHistoricalApproval;
+  /**
+   * Flows whose kafka_kc block is this schema's own — matched by flowId +
+   * blockId, the same identity `schemaStatus` (Flows.tsx) uses to decide a
+   * block is "approved". Deleting this schema would leave that block
+   * pointing at nothing.
+   */
+  const flowsReferencingApprovedSchema = (schema: ApprovedSchema): string[] =>
+    flows
+      .filter(
+        (f) => f.id === schema.flowId && f.blocks.some((b) => b.adapter === "kafka_kc" && b.id === schema.blockId),
+      )
+      .map((f) => f.name);
 
   const runCheck = (id: string) => {
     const lines = checkAvroRecord(buffer.record, buffer.rawError ?? null);
@@ -796,6 +849,11 @@ const Schemas = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <KindBadge globalId={activeApproval?.registryGlobalId ?? selectedSchema.registryGlobalId} />
                         <ProvenanceBadge provenance={activeApproval?.provenance ?? selectedSchema.provenance} />
+                        {!isHistoricalApproval && selectedSchema.draftAvro !== undefined && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                            Draft saved {relativeTime(selectedSchema.draftUpdatedAt)} — not registered
+                          </span>
+                        )}
                       </div>
                       <CardDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span>
@@ -819,15 +877,17 @@ const Schemas = () => {
                     </div>
 
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      {editingApproval ? (
+                      {!isHistoricalApproval && (
                         <>
                           <Button
                             size="sm"
-                            disabled={!!buffer.rawError}
+                            disabled={!owner || !!buffer.rawError}
                             title={
-                              buffer.rawError
-                                ? `Fix the raw Avro JSON first: ${buffer.rawError}`
-                                : "Carry these edits into the ceremony and register them as the next version"
+                              !owner
+                                ? "The owning flow no longer exists"
+                                : buffer.rawError
+                                  ? `Fix the raw Avro JSON first: ${buffer.rawError}`
+                                  : "Carry the current buffer into the ceremony and register it as the next version"
                             }
                             onClick={() => void registerNewVersion()}
                           >
@@ -838,60 +898,56 @@ const Schemas = () => {
                           </Button>
                           <Button
                             size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingApprovalId(null);
-                              setCheckFor(null);
-                              handleDiscard();
-                            }}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" /> Discard edits
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            size="sm"
-                            disabled={!owner || isHistoricalApproval}
-                            title={
-                              !owner
-                                ? "The owning flow no longer exists"
-                                : isHistoricalApproval
-                                  ? "Switch to the current approval to edit it — history is what was registered"
-                                  : "Edit the fields here, then register the result as a new version"
-                            }
-                            onClick={() => setEditingApprovalId(selectedSchema.id)}
-                          >
-                            <PenLine className="h-3.5 w-3.5" /> Edit → new version
-                          </Button>
-                          <Button
-                            size="sm"
                             variant="outline"
-                            disabled={!owner}
-                            title={
-                              owner
-                                ? "Re-run the ceremony from evidence, pre-filled with this schema"
-                                : "The owning flow no longer exists"
-                            }
-                            onClick={() =>
-                              owner &&
-                              navigate(`/flow-builder/${owner.flow.id}?ceremony=${selectedSchema.blockId}`)
-                            }
+                            disabled={!buffer.dirty || !!buffer.rawError || saveApprovedDraftMut.isPending}
+                            title={buffer.rawError ? `Cannot save: ${buffer.rawError}` : undefined}
+                            onClick={handleSaveApprovedDraft}
                           >
-                            <Wand2 className="h-3.5 w-3.5" /> Re-run ceremony
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setSaveAsTemplateFor(selectedSchema);
-                              setSaveAsTemplateName(`${selectedSchema.entity} (from ${selectedSchema.subject})`);
-                            }}
-                          >
-                            <BookMarked className="h-3.5 w-3.5" /> Save as template
+                            {saveApprovedDraftMut.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Save className="h-3.5 w-3.5" />
+                            )}
+                            Save
                           </Button>
                         </>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!owner}
+                        title={
+                          owner
+                            ? "Re-run the ceremony from evidence, pre-filled with this schema"
+                            : "The owning flow no longer exists"
+                        }
+                        onClick={() =>
+                          owner && navigate(`/flow-builder/${owner.flow.id}?ceremony=${selectedSchema.blockId}`)
+                        }
+                      >
+                        <Wand2 className="h-3.5 w-3.5" /> Re-run ceremony
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSaveAsTemplateFor(selectedSchema);
+                          setSaveAsTemplateName(`${selectedSchema.entity} (from ${selectedSchema.subject})`);
+                        }}
+                      >
+                        <BookMarked className="h-3.5 w-3.5" /> Save as template
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!activeApproval}
+                        onClick={() =>
+                          activeApproval &&
+                          setDeleteTarget({ kind: "approved", schema: selectedSchema, approval: activeApproval })
+                        }
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                      </Button>
                     </div>
                   </div>
 
@@ -932,34 +988,32 @@ const Schemas = () => {
                 </CardHeader>
 
                 <CardContent className={cn(schemaWorkspaceLayout.detailScroll, "pt-4")}>
-                  {editingApproval ? (
+                  {isHistoricalApproval ? (
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Read-only — this is history. Switch to the current approval above to edit it.
+                    </p>
+                  ) : (
                     <div className="mb-3 space-y-1 rounded-md border border-info/30 bg-info-muted p-2.5">
-                      <p className="text-xs font-medium">
-                        Editing towards a new version — nothing here is registered yet.
-                      </p>
+                      <p className="text-xs font-medium">Editing here is never registered by itself.</p>
                       <p className="text-xs text-muted-foreground">
-                        Add or change fields freely. “Register new version…” carries exactly this record into the
-                        ceremony on{" "}
+                        Add or change fields freely — the same editor as a library template. “Save” keeps a draft
+                        here, unregistered. “Register new version…” carries exactly this buffer into the ceremony
+                        on{" "}
                         <span className="font-medium text-foreground">
                           {owner?.flow.name}
                           {owner?.blockName ? ` · ${owner.blockName}` : ""}
                         </span>
-                        , and approval there registers it under a fresh global id. Approval v
-                        {activeApproval?.version} keeps its own id and stays readable in the history.
+                        , and approval there registers it under a fresh global id — the approval you are viewing now
+                        keeps its own id and stays readable in the history.
                       </p>
                     </div>
-                  ) : (
-                    <p className="mb-3 text-xs text-muted-foreground">
-                      Read-only until you edit it. There is no evolution: a change is registered as a new approval by
-                      the ceremony, never by writing over this one.
-                    </p>
                   )}
 
                   {checkFor?.id === selectedSchema.id && <CheckPanel lines={checkFor.lines} />}
 
                   <AvroEditorTabs
                     buffer={buffer}
-                    readOnly={!editingApproval}
+                    readOnly={isHistoricalApproval}
                     emptyLabel="This approval's Avro could not be parsed."
                   />
                 </CardContent>
@@ -1002,18 +1056,11 @@ const Schemas = () => {
                       >
                         <Wand2 className="h-3.5 w-3.5" /> Check & register…
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => runCheck(selectedTemplate.id)}>
-                        <ShieldCheck className="h-3.5 w-3.5" /> Check only
-                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={duplicateMut.isPending}
-                        onClick={() => duplicateMut.mutate(selectedTemplate.id)}
+                        onClick={() => setDeleteTarget({ kind: "template", template: selectedTemplate })}
                       >
-                        <Copy className="h-3.5 w-3.5" /> Duplicate
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setDeleteTarget(selectedTemplate)}>
                         <Trash2 className="h-3.5 w-3.5" /> Delete
                       </Button>
                     </div>
@@ -1041,14 +1088,6 @@ const Schemas = () => {
                   </span>
                   <div className="flex gap-2">
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!templateDirty || saveMut.isPending}
-                      onClick={handleDiscard}
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" /> Discard changes
-                    </Button>
-                    <Button
                       size="sm"
                       disabled={!templateDirty || !!buffer.rawError || saveMut.isPending}
                       title={buffer.rawError ? `Cannot save: ${buffer.rawError}` : undefined}
@@ -1059,7 +1098,7 @@ const Schemas = () => {
                       ) : (
                         <Save className="h-3.5 w-3.5" />
                       )}
-                      Save template
+                      Save
                     </Button>
                   </div>
                 </div>
@@ -1153,26 +1192,101 @@ const Schemas = () => {
       {/* --------------------------------------------------- delete confirmation */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete “{deleteTarget?.name}”?</DialogTitle>
-            <DialogDescription>
-              Templates are bound to nothing, so this is always allowed. Approvals that were pre-filled from it keep
-              the name as a frozen history line.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deleteMut.isPending}
-              onClick={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
-            >
-              {deleteMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Delete template
-            </Button>
-          </DialogFooter>
+          {deleteTarget?.kind === "template" ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Delete “{deleteTarget.template.name}”?</DialogTitle>
+                <DialogDescription>
+                  Templates are bound to nothing, so this is always allowed. Approvals that were pre-filled from it
+                  keep the name as a frozen history line.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={deleteMut.isPending}
+                  onClick={() => deleteMut.mutate(deleteTarget.template.id)}
+                >
+                  {deleteMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Delete template
+                </Button>
+              </DialogFooter>
+            </>
+          ) : deleteTarget?.kind === "approved" ? (
+            (() => {
+              const { schema, approval } = deleteTarget;
+              const onlyVersionLeft = schema.approvals.length <= 1;
+              const referencedBy = flowsReferencingApprovedSchema(schema);
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle>Delete from “{schema.subject}”?</DialogTitle>
+                    <DialogDescription>
+                      Choose exactly what gets removed — one approval from history, or the whole record.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {referencedBy.length > 0 && (
+                    <p className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning-muted p-2.5 text-xs text-muted-foreground">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+                      <span>
+                        Referenced by {referencedBy.join(", ")} — its kafka+connect block points at this schema.
+                      </span>
+                    </p>
+                  )}
+
+                  <div className="space-y-3">
+                    <div className="space-y-1.5 rounded-md border p-3">
+                      <p className="text-sm font-medium">Delete version v{approval.version} (current selection)</p>
+                      <p className="text-xs text-muted-foreground">
+                        {onlyVersionLeft
+                          ? "This is the only remaining version — use “Delete entire schema” below instead."
+                          : `Removes global id #${approval.registryGlobalId} from history and falls the selection back to the previous approval.`}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={onlyVersionLeft || deleteApprovedVersionMut.isPending}
+                        title={onlyVersionLeft ? "The only remaining version cannot be deleted on its own." : undefined}
+                        onClick={() =>
+                          deleteApprovedVersionMut.mutate({ schemaId: schema.id, version: approval.version })
+                        }
+                      >
+                        {deleteApprovedVersionMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Delete version v{approval.version}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-1.5 rounded-md border border-destructive/30 p-3">
+                      <p className="text-sm font-medium">Delete entire schema</p>
+                      <p className="text-xs text-muted-foreground">
+                        Removes “{schema.subject}” and all {schema.approvals.length} approval(s), including current
+                        global id #{schema.registryGlobalId}.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={deleteApprovedSchemaMut.isPending}
+                        onClick={() => deleteApprovedSchemaMut.mutate(schema.id)}
+                      >
+                        {deleteApprovedSchemaMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Delete entire schema
+                      </Button>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                      Cancel
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()
+          ) : null}
         </DialogContent>
       </Dialog>
 

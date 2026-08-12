@@ -185,6 +185,14 @@ export interface ApprovedSchema {
   registryGlobalId: number;
   /** Approval history, oldest first, latest LAST. Never empty. */
   approvals: SchemaApproval[];
+  /**
+   * An edited-but-unregistered buffer, saved from the Schemas page without
+   * going through a ceremony. Applies only to the current approval — it is
+   * cleared implicitly the moment a new version is registered, because
+   * `approveSchema` replaces the whole record rather than mutating it.
+   */
+  draftAvro?: unknown;
+  draftUpdatedAt?: string;
 }
 
 /**

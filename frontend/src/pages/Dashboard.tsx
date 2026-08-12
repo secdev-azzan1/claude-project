@@ -116,9 +116,6 @@ const Dashboard = () => {
 
   const connectionsDegraded =
     !!summary && summary.connectionsHealthy < summary.connectionsTotal;
-  // A sink that is not RUNNING is the failure people care about — a paused or
-  // failed connector means data has stopped landing while the flow still reads
-  // as Running, because the connector lives on the Connect cluster, not in NiFi.
   const sinksDegraded =
     !!summary && summary.sinkConnectorsRunning < summary.sinkConnectorsTotal;
 
@@ -149,16 +146,15 @@ const Dashboard = () => {
       warn: connectionsDegraded,
     },
     {
-      label: "Sink connectors running",
+      label: "Sink connectors",
       value: summary ? `${summary.sinkConnectorsRunning}/${summary.sinkConnectorsTotal}` : undefined,
       icon: PlugZap,
       tone: sinksDegraded ? "text-warning bg-warning-muted" : "text-success bg-success-muted",
       warn: sinksDegraded,
-      hint: summary
-        ? summary.sinkConnectorsUndeployed > 0
-          ? `on the Connect cluster · ${summary.sinkConnectorsUndeployed} more configured but not deployed`
-          : "on the Connect cluster"
-        : undefined,
+      hint:
+        summary && summary.sinkConnectorsUndeployed > 0
+          ? `${summary.sinkConnectorsUndeployed} not deployed`
+          : undefined,
     },
   ];
 

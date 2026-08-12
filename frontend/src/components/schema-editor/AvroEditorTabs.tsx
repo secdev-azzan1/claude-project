@@ -2,14 +2,16 @@
 // Both read from the same `useAvroBuffer`, so they cannot drift.
 
 import { useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_STRUCTURED_SCHEMA_DEPTH } from "@/lib/schemaEditor";
 import { cn } from "@/lib/utils";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Plus } from "lucide-react";
 import { SchemaFieldList } from "./SchemaFieldList";
+import { createDefaultField } from "./schemaTypes";
 import type { AvroBuffer } from "./useAvroBuffer";
 
 export function AvroEditorTabs({
@@ -37,12 +39,39 @@ export function AvroEditorTabs({
   const [tab, setTab] = useState("structured");
   const record = buffer.record;
 
+  /**
+   * Appends a field to the ROOT record — the same default-field logic the old
+   * bottom-of-list button used at depth 1 — and switches to the Structured
+   * tab so the new field is immediately visible. Lives here, at the top of
+   * the editor, so it is reachable identically for templates and approved
+   * schemas rather than scattered at the bottom of every field list.
+   */
+  const handleAddRootField = () => {
+    if (!record) return;
+    buffer.setFields([...buffer.fields, createDefaultField(1)]);
+    setTab("structured");
+  };
+
   return (
     <Tabs value={tab} onValueChange={setTab} className={cn("min-w-0", className)}>
-      <TabsList>
-        <TabsTrigger value="structured">Structured Editor</TabsTrigger>
-        <TabsTrigger value="raw">Raw Avro JSON</TabsTrigger>
-      </TabsList>
+      <div className="flex items-center justify-between gap-2">
+        <TabsList>
+          <TabsTrigger value="structured">Structured Editor</TabsTrigger>
+          <TabsTrigger value="raw">Raw Avro JSON</TabsTrigger>
+        </TabsList>
+        {!readOnly && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!record}
+            title={record ? undefined : "Nothing to add a field to yet."}
+            onClick={handleAddRootField}
+          >
+            <Plus className="h-4 w-4" /> Add Field
+          </Button>
+        )}
+      </div>
 
       {buffer.rawError && tab === "structured" && (
         <p className="mt-3 flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning-muted p-2.5 text-xs text-muted-foreground">

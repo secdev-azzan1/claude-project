@@ -142,11 +142,17 @@ export function SchemaFieldList({
         ))
       )}
 
-      {!readOnly && (
+      {/*
+       * The root-level (depth 1) "Add Field" lives ONLY in AvroEditorTabs'
+       * top-right action row now — rendering it here too would duplicate it.
+       * Nested levels still need this inline affordance: there is no other
+       * place in the layout to add a field to a nested record.
+       */}
+      {!readOnly && isNested && (
         <Button
           variant="outline"
           size="sm"
-          className={isNested ? "bg-background" : undefined}
+          className="bg-background"
           disabled={!canAddNestedField}
           title={canAddNestedField ? undefined : `Structured editing stops at depth ${MAX_STRUCTURED_SCHEMA_DEPTH}.`}
           onClick={() => onChange([...fields, createDefaultField(depth)])}

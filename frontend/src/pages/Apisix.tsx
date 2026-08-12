@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,11 +58,10 @@ import {
   type ProxyTestResult,
 } from "@/prototype/api";
 import { blockProxyId } from "@/prototype/validation";
-import type { Flow, GatewayProxy, GatewayResources, PlatformConnection } from "@/prototype/types";
+import type { Flow, GatewayProxy, GatewayResources } from "@/prototype/types";
 import {
   AlertTriangle,
   CheckCircle2,
-  Cable,
   Globe,
   KeyRound,
   Loader2,
@@ -81,12 +81,25 @@ import { toast } from "sonner";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] as const;
 
-const str = (v: unknown, fb = ""): string => (typeof v === "string" ? v : fb);
-
 const gwId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 /** Bare hostname — no scheme, no port, no path. The port is its own field. */
 const HOST_RE = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
+
+/** Lowercase-only variant — the allowlist stores hosts verbatim, so casing has to be right at entry. */
+const HOST_LOWER_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
+
+/** One reason the allowlist "add host" field is refused, or null. Empty input is not an error yet. */
+function hostFieldError(raw: string): string | null {
+  const host = raw.trim();
+  if (!host) return null;
+  if (/^[a-z]+:\/\//i.test(host)) return "Enter a bare hostname — drop the scheme (e.g. “https://”).";
+  if (host.includes("/")) return "Enter a bare hostname — no path.";
+  if (host.includes(":")) return "Enter a bare hostname — no port.";
+  if (/[A-Z]/.test(host)) return "Hostnames are lowercase.";
+  if (!HOST_LOWER_RE.test(host)) return "Not a valid hostname.";
+  return null;
+}
 
 function msLabel(ms: number | undefined): string {
   if (typeof ms !== "number" || !Number.isFinite(ms)) return "default";
@@ -167,6 +180,20 @@ function proxySaveBlockReason(f: ProxyForm): string | null {
     if (!Number.isFinite(n) || n <= 0) return `${label} must be a positive number of milliseconds.`;
   }
   return null;
+}
+
+interface CertForm {
+  name: string;
+  subject: string;
+  expiresAt: string;
+}
+
+/** One reason per required field, keyed by field — drives inline hints on the create dialog. */
+function certFieldErrors(c: CertForm): Partial<Record<"name" | "subject", string>> {
+  const errors: Partial<Record<"name" | "subject", string>> = {};
+  if (!c.name.trim()) errors.name = "Name the certificate profile.";
+  if (!c.subject.trim()) errors.subject = "Set the subject — e.g. CN=api-client.example.corp.";
+  return errors;
 }
 
 function proxyFromForm(f: ProxyForm, editing: GatewayProxy | null): GatewayProxy {
@@ -259,6 +286,8 @@ export default function Apisix() {
   const [testResults, setTestResults] = useState<Record<string, ProxyTestResult>>({});
   const [adminAction, setAdminAction] = useState<AdminAction | null>(null);
   const [newHost, setNewHost] = useState("");
+  const [certFormOpen, setCertFormOpen] = useState(false);
+  const [certAttempted, setCertAttempted] = useState(false);
   const [newCert, setNewCert] = useState({ name: "", subject: "", expiresAt: "" });
   const [certDeleteTarget, setCertDeleteTarget] = useState<string | null>(null);
 
@@ -402,10 +431,59 @@ export default function Apisix() {
     setFormOpen(true);
   };
 
+  const openCertCreate = () => {
+    setNewCert({ name: "", subject: "", expiresAt: "" });
+    setCertAttempted(false);
+    setCertFormOpen(true);
+  };
+
+  const certErrors = certFieldErrors(newCert);
+  const certBlocked = Object.keys(certErrors).length > 0;
+
+  const submitCert = () => {
+    setCertAttempted(true);
+    if (certBlocked || !gateway) return;
+    const expiresAt = newCert.expiresAt
+      ? new Date(`${newCert.expiresAt}T00:00:00Z`).toISOString()
+      : new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
+    gwMut.mutate(
+      {
+        next: nextResources({
+          certProfiles: [
+            ...certProfiles,
+            {
+              id: gwId("gw-cert"),
+              name: newCert.name.trim(),
+              subject: newCert.subject.trim(),
+              expiresAt,
+              refCount: 0,
+            },
+          ],
+        }),
+        message: `Certificate profile "${newCert.name.trim()}" added`,
+      },
+      {
+        onSuccess: () => {
+          setCertFormOpen(false);
+          setNewCert({ name: "", subject: "", expiresAt: "" });
+          setCertAttempted(false);
+        },
+      },
+    );
+  };
+
   const blockReason = proxySaveBlockReason(form);
   const deleteDeps = deleteTarget ? proxyDependents(deleteTarget.id) : [];
   const certDeleteRefs = certDeleteTarget ? certRefs(certDeleteTarget) : 0;
   const certDeleteName = certProfiles.find((cp) => cp.id === certDeleteTarget)?.name ?? "";
+
+  const hostTrimmed = newHost.trim();
+  const hostError = hostFieldError(newHost);
+  const hostDuplicate = hostTrimmed !== "" && allowlist.includes(hostTrimmed);
+  const submitHost = () => {
+    if (!hostTrimmed || hostDuplicate || hostError) return;
+    setAdminAction({ kind: "allow", host: hostTrimmed });
+  };
 
   const loading = proxiesLoading || gatewayLoading;
 
@@ -420,8 +498,23 @@ export default function Apisix() {
       }
     >
       <div className="space-y-8">
-        {/* ── Active connection header ────────────────────────────────────── */}
-        <ConnectionHeader conn={apisixConn} inactiveCount={inactiveApisix.length} />
+        {/* ── No-connection guard ─────────────────────────────────────────── */}
+        {!apisixConn && (
+          <Alert variant="destructive" className="py-3">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+              <span>
+                No active APISIX connection — configure one under Platform Connections.
+                {inactiveApisix.length > 0
+                  ? ` ${inactiveApisix.length} APISIX connection${inactiveApisix.length === 1 ? " exists" : "s exist"} but ${inactiveApisix.length === 1 ? "is" : "are"} not active.`
+                  : ""}
+              </span>
+              <Link to="/connections" className="font-medium underline underline-offset-2">
+                Go to Platform Connections
+              </Link>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* ── Proxies ─────────────────────────────────────────────────────── */}
         <section>
@@ -489,6 +582,11 @@ export default function Apisix() {
             count={certProfiles.length}
             unit="profile"
             plural="profiles"
+            action={
+              <Button size="sm" variant="outline" onClick={openCertCreate}>
+                <Plus className="h-3.5 w-3.5" /> Add certificate
+              </Button>
+            }
           />
           <Card>
             <CardContent className="space-y-2 pt-6">
@@ -534,58 +632,6 @@ export default function Apisix() {
                   </div>
                 );
               })}
-              <div className="flex flex-wrap items-end gap-2 pt-2">
-                <Input
-                  className="w-44"
-                  placeholder="Name"
-                  value={newCert.name}
-                  onChange={(e) => setNewCert({ ...newCert, name: e.target.value })}
-                />
-                <Input
-                  className="w-60 font-mono"
-                  placeholder="Subject (CN=…)"
-                  value={newCert.subject}
-                  onChange={(e) => setNewCert({ ...newCert, subject: e.target.value })}
-                />
-                <Input
-                  className="w-40"
-                  type="date"
-                  aria-label="Expiry date"
-                  value={newCert.expiresAt}
-                  onChange={(e) => setNewCert({ ...newCert, expiresAt: e.target.value })}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!gateway || !newCert.name.trim() || !newCert.subject.trim() || gwMut.isPending}
-                  title={
-                    !newCert.name.trim() || !newCert.subject.trim() ? "Name and subject are required." : undefined
-                  }
-                  onClick={() => {
-                    const expiresAt = newCert.expiresAt
-                      ? new Date(`${newCert.expiresAt}T00:00:00Z`).toISOString()
-                      : new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
-                    gwMut.mutate({
-                      next: nextResources({
-                        certProfiles: [
-                          ...certProfiles,
-                          {
-                            id: gwId("gw-cert"),
-                            name: newCert.name.trim(),
-                            subject: newCert.subject.trim(),
-                            expiresAt,
-                            refCount: 0,
-                          },
-                        ],
-                      }),
-                      message: `Certificate profile "${newCert.name.trim()}" added`,
-                    });
-                    setNewCert({ name: "", subject: "", expiresAt: "" });
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add profile
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </section>
@@ -638,36 +684,40 @@ export default function Apisix() {
                   );
                 })}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  className="w-64 font-mono"
-                  placeholder="host.example.corp"
-                  aria-label="Host to allowlist"
-                  value={newHost}
-                  onChange={(e) => setNewHost(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Enter") return;
-                    e.preventDefault();
-                    const host = newHost.trim();
-                    if (!host || allowlist.includes(host)) return;
-                    setAdminAction({ kind: "allow", host });
-                  }}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!gateway || !newHost.trim() || allowlist.includes(newHost.trim()) || gwMut.isPending}
-                  title={
-                    !newHost.trim()
-                      ? "Enter a host to allowlist."
-                      : allowlist.includes(newHost.trim())
-                        ? "Host is already on the allowlist."
-                        : "Administrator action — you will be asked to confirm."
-                  }
-                  onClick={() => setAdminAction({ kind: "allow", host: newHost.trim() })}
-                >
-                  <ShieldCheck className="h-3.5 w-3.5" /> Add host (admin)
-                </Button>
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2">
+                  <Input
+                    className="w-64 font-mono"
+                    placeholder="host.example.corp"
+                    aria-label="Host to allowlist"
+                    value={newHost}
+                    onChange={(e) => setNewHost(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      submitHost();
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!gateway || !hostTrimmed || hostDuplicate || !!hostError || gwMut.isPending}
+                    title={
+                      !hostTrimmed
+                        ? "Enter a host to allowlist."
+                        : (hostError ?? (hostDuplicate ? "Host is already on the allowlist." : "Administrator action — you will be asked to confirm."))
+                    }
+                    onClick={submitHost}
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" /> Add host (admin)
+                  </Button>
+                </div>
+                {hostTrimmed && (hostError || hostDuplicate) && (
+                  <p className="text-xs text-destructive">{hostError ?? "Host is already on the allowlist."}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Administrator approval required — additions are audited.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -814,6 +864,73 @@ export default function Apisix() {
             >
               {saveMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {editing ? "Save proxy" : "Create Proxy"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ──────────────────────────────────────── create certificate profile ── */}
+      <Dialog
+        open={certFormOpen}
+        onOpenChange={(open) => {
+          setCertFormOpen(open);
+          if (!open) {
+            setNewCert({ name: "", subject: "", expiresAt: "" });
+            setCertAttempted(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add certificate profile</DialogTitle>
+            <DialogDescription>
+              A client certificate profile is presented on egress for mutual TLS toward upstreams. It is shared —
+              any number of proxies may reference the same profile.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <TextField
+                label="Name"
+                value={newCert.name}
+                placeholder="prod-client-cert"
+                onChange={(name) => setNewCert((p) => ({ ...p, name }))}
+              />
+              {certAttempted && certErrors.name && <p className="text-xs text-destructive">{certErrors.name}</p>}
+            </div>
+            <div className="grid gap-1.5">
+              <TextField
+                label="Subject"
+                mono
+                value={newCert.subject}
+                placeholder="CN=api-client.example.corp"
+                onChange={(subject) => setNewCert((p) => ({ ...p, subject }))}
+              />
+              {certAttempted && certErrors.subject && (
+                <p className="text-xs text-destructive">{certErrors.subject}</p>
+              )}
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Expiry date</Label>
+              <Input
+                className="w-full"
+                type="date"
+                aria-label="Expiry date"
+                value={newCert.expiresAt}
+                onChange={(e) => setNewCert((p) => ({ ...p, expiresAt: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Defaults to 365 days from today if left blank.</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCertFormOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitCert} disabled={gwMut.isPending}>
+              {gwMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create profile
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -971,6 +1088,7 @@ function SectionHeading({
   count,
   unit,
   plural,
+  action,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
@@ -978,6 +1096,7 @@ function SectionHeading({
   count: number;
   unit: string;
   plural: string;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -988,102 +1107,8 @@ function SectionHeading({
       <span className="text-xs text-muted-foreground">
         · {count} {count === 1 ? unit : plural} — {blurb}
       </span>
+      {action && <span className="ml-auto">{action}</span>}
     </div>
-  );
-}
-
-function ConnectionHeader({
-  conn,
-  inactiveCount,
-}: {
-  conn: PlatformConnection | null;
-  inactiveCount: number;
-}) {
-  if (!conn) {
-    return (
-      <Card className="border-destructive/30">
-        <CardHeader className="flex-row items-start gap-3 space-y-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-destructive-muted text-destructive">
-            <XCircle className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <CardTitle className="text-base">No active APISIX connection</CardTitle>
-            <CardDescription>
-              Nothing on this page can reach a gateway. Proxies can be defined and edited, but none of them will
-              reconcile, and any flow with a proxied http block is refused at deploy — the block has no egress path.
-              {inactiveCount > 0
-                ? ` ${inactiveCount} APISIX connection${inactiveCount === 1 ? " exists" : "s exist"} but ${inactiveCount === 1 ? "is" : "are"} not active.`
-                : " No APISIX connection is configured at all."}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/connections">
-              <Cable className="h-3.5 w-3.5" /> Go to Platform Connections
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const healthy = conn.health === "Healthy" && conn.reachability === "Reachable";
-  return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
-        <div className="flex min-w-0 items-start gap-3">
-          <div
-            className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
-              healthy ? "bg-success-muted text-success" : "bg-warning-muted text-warning",
-            )}
-          >
-            {healthy ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle className="truncate text-base">{conn.name}</CardTitle>
-              <StatusBadge status="Active" />
-            </div>
-            <CardDescription>
-              Active APISIX connection — the gateway every proxy below is reconciled onto. Last tested{" "}
-              {timeAgo(conn.lastTestedAt)}.
-            </CardDescription>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          <StatusBadge status={conn.health} />
-          <StatusBadge status={conn.reachability} />
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="space-y-1 rounded-md border bg-muted/40 px-3 py-2">
-          <div className="flex items-baseline justify-between gap-3 text-xs">
-            <span className="shrink-0 text-muted-foreground">Admin API</span>
-            <span className="truncate font-mono">{str(conn.config.adminUrl, "—")}</span>
-          </div>
-          <div className="flex items-baseline justify-between gap-3 text-xs">
-            <span className="shrink-0 text-muted-foreground">Runtime</span>
-            <span className="truncate font-mono">{str(conn.config.runtimeUrl, "—")}</span>
-          </div>
-        </div>
-        {!healthy && (
-          <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-muted px-3 py-2 text-xs">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-            <span>
-              The active connection is {conn.health} · {conn.reachability}. Reconcile and test will fail against it
-              until it is healthy — retest it from Platform Connections.
-            </span>
-          </div>
-        )}
-        <Button asChild size="sm" variant="outline">
-          <Link to="/connections">
-            <Cable className="h-3.5 w-3.5" /> Manage on Platform Connections
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
   );
 }
 

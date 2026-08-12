@@ -425,6 +425,88 @@ export async function listSchemas(): Promise<ApprovedSchema[]> {
   return clone(getState().schemas);
 }
 
+/**
+ * Save an edited-but-unregistered buffer onto an approved schema. This is
+ * NOT registration — it never touches `approvals`, `rawAvro` or the registry
+ * global id. Registering (via the ceremony) replaces the whole record, which
+ * clears the draft as a natural side effect rather than a second code path.
+ */
+export async function saveApprovedSchemaDraft(schemaId: string, avro: unknown): Promise<ApprovedSchema> {
+  await sleep(200);
+  return mutate((state) => {
+    const schema = state.schemas.find((s) => s.id === schemaId);
+    if (!schema) throw new Error("Approved schema not found.");
+    schema.draftAvro = clone(avro);
+    schema.draftUpdatedAt = nowIso();
+    audit(state, "Schema draft saved", "Schema", schema.subject, "Success", "Edited buffer saved — not registered");
+    return clone(schema);
+  });
+}
+
+/**
+ * Delete one approval from an approved schema's history. Refused when it is
+ * the only one left — that is "Delete entire schema" territory instead. When
+ * the deleted approval was the current (non-superseded) one, the new latest
+ * remaining approval is promoted to current and the record's mirrored fields
+ * (`rawAvro`, `provenance`, `registryGlobalId`, `approvedAt`) follow it.
+ */
+export async function deleteApprovedSchemaVersion(
+  schemaId: string,
+  versionOrGlobalId: number,
+): Promise<ApprovedSchema> {
+  await sleep(250);
+  return mutate((state) => {
+    const schema = state.schemas.find((s) => s.id === schemaId);
+    if (!schema) throw new Error("Approved schema not found.");
+    if (schema.approvals.length <= 1) {
+      throw new Error("This is the only remaining version — delete the entire schema instead.");
+    }
+    const idx = schema.approvals.findIndex(
+      (a) => a.version === versionOrGlobalId || a.registryGlobalId === versionOrGlobalId,
+    );
+    if (idx === -1) throw new Error("Approval not found.");
+    const [removed] = schema.approvals.splice(idx, 1);
+    if (!removed.supersededAt) {
+      // The current approval was removed — promote the new latest.
+      const newLatest = schema.approvals[schema.approvals.length - 1];
+      if (newLatest) {
+        delete newLatest.supersededAt;
+        schema.rawAvro = newLatest.rawAvro;
+        schema.provenance = newLatest.provenance;
+        schema.registryGlobalId = newLatest.registryGlobalId;
+        schema.approvedAt = newLatest.approvedAt;
+      }
+    }
+    audit(
+      state,
+      "Schema version deleted",
+      "Schema",
+      schema.subject,
+      "Warning",
+      `Approval v${removed.version} (global id ${removed.registryGlobalId}) removed from history`,
+    );
+    return clone(schema);
+  });
+}
+
+/** Delete an approved schema entirely — every approval, gone with it. */
+export async function deleteApprovedSchema(schemaId: string): Promise<void> {
+  await sleep(250);
+  mutate((state) => {
+    const schema = state.schemas.find((s) => s.id === schemaId);
+    if (!schema) return;
+    state.schemas = state.schemas.filter((s) => s.id !== schemaId);
+    audit(
+      state,
+      "Schema deleted",
+      "Schema",
+      schema.subject,
+      "Warning",
+      `${schema.approvals.length} approval(s) removed, including current global id ${schema.registryGlobalId}`,
+    );
+  });
+}
+
 // ------------------------------------------------------- library templates
 // Hand-authored, unregistered, bound to nothing. They live in their own
 // collection: `state.schemas.length` guards the registry connection's edit and
@@ -466,24 +548,6 @@ export async function saveSchemaTemplate(tpl: SchemaTemplate): Promise<SchemaTem
     state.schemaTemplates[idx] = next;
     audit(state, "Schema template saved", "Schema", next.name);
     return clone(next);
-  });
-}
-
-export async function duplicateSchemaTemplate(id: string): Promise<SchemaTemplate> {
-  await sleep(200);
-  return mutate((state) => {
-    const source = state.schemaTemplates.find((t) => t.id === id);
-    if (!source) throw new Error("Template not found.");
-    const copy: SchemaTemplate = {
-      ...clone(source),
-      id: uid("tpl"),
-      name: `${source.name} (copy)`,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-    };
-    state.schemaTemplates.push(copy);
-    audit(state, "Schema template duplicated", "Schema", copy.name);
-    return clone(copy);
   });
 }
 
