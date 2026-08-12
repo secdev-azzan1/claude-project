@@ -1,0 +1,474 @@
+"""Port of frontend/src/prototype/validation.ts: block-level and flow-level
+issues that drive the frontend's error badges / Validate panel / deploy
+preflight, now the server-side source of truth for the same checks.
+
+`validate_block` / `validate_flow` return the same `{blockId, where,
+message}` issue shape as the TS `ValidationIssue` interface (camelCase).
+
+Two small helpers this file needs (`gateway`/proxy facts and "is this
+branch's rule set incomplete") are pure ports of code that lives in
+sibling frontend files rather than validation.ts itself:
+  - `GatewaySnapshot` / `blockProxyId` / `gatewayRefusals` -- from
+    validation.ts (unchanged location).
+  - branch-incompleteness -- ported from frontend/src/prototype/branches.ts
+    (`rulesOf` / `opNeedsValue` / `ruleIncomplete` / `branchIncomplete`),
+    inlined here as `_branch_incomplete` since validation.ts only imports
+    the one function it needs from that file.
+
+Beyond the literal TS port, `validate_block` adds three dedup checks the
+task brief asked for that do not exist in validation.ts today: "only one
+dedup transform per block", "dedup window (`windowHours`) must be within
+1/60-8760 hours (1 minute - 365 days), default 24", and "dedup needs at
+least one identity field". validation.ts today only checks "dedup must be
+the last transformation" (findIndex on the *first* dedup, which is why the
+port below computes the same first-index check for that one message, then
+layers the three new checks on top, scanning every dedup transform found).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+from models.adapter import AppService, ApprovedSchema, BranchInfo, Flow, FlowBlock, GatewayProxy
+
+from .legality import flow_has_trigger, hosts_transforms, root_block
+from .naming import derive_topic_name, is_valid_cron, override_matches_derived, topic_name_collision
+
+
+@dataclass
+class ValidationIssue:
+    blockId: Optional[str]  # None = flow-level
+    where: str  # "Flow settings" or block name
+    message: str
+
+
+@dataclass
+class GatewaySnapshot:
+    """The gateway facts the http checks need. Passed in so validation stays
+    pure -- the router layer is responsible for reading the real
+    proxies/allowlist (from COLLECTIONS.gateway) and constructing this."""
+
+    proxies: List[GatewayProxy] = field(default_factory=list)
+    allowlist: List[str] = field(default_factory=list)
+
+
+def _is_kafka_family_write(block: FlowBlock) -> bool:
+    return (block.adapter == "kafka" and block.mode == "write") or block.adapter == "kafka_kc"
+
+
+def block_proxy_id(block: FlowBlock, services: Optional[List[AppService]] = None) -> Optional[str]:
+    """The proxy an http block routes through, or None.
+
+    A proxy is how a HOST is reached, and the host belongs to the service --
+    every block using that service inherits the same egress. A block-level
+    `config.proxyId` is still honoured as a fallback for datasets saved
+    before the reference moved to the service; nothing writes one any more.
+    """
+    if block.adapter != "http":
+        return None
+    services = services or []
+    service = next((s for s in services if s.id == block.serviceId), None)
+    from_service = (service.config or {}).get("proxyId") if service else None
+    if isinstance(from_service, str) and from_service.strip():
+        return from_service
+    legacy = (block.config or {}).get("proxyId")
+    return legacy if isinstance(legacy, str) and legacy.strip() else None
+
+
+def gateway_refusals(block: FlowBlock, gateway: GatewaySnapshot, services: Optional[List[AppService]] = None) -> List[str]:
+    """Every reason the referenced proxy is not deployable, in user-facing words."""
+    proxy_id = block_proxy_id(block, services)
+    if not proxy_id:
+        return []
+    proxy = next((p for p in gateway.proxies if p.id == proxy_id), None)
+    if not proxy:
+        return [f"The APISIX proxy this block routes through ({proxy_id}) no longer exists — pick one on the APISIX Gateway page."]
+    refusals: List[str] = []
+    if proxy.status != "Reconciled":
+        detail = f" {proxy.statusDetail}" if proxy.statusDetail else ""
+        refusals.append(
+            f'APISIX proxy "{proxy.name}" is {proxy.status} — it must reconcile onto the gateway before this flow can deploy.{detail}'
+        )
+    if proxy.targetHost not in gateway.allowlist:
+        refusals.append(
+            f'Host "{proxy.targetHost}" (proxy "{proxy.name}") is not on the gateway allowlist — egress hosts are admin-allowlisted, so an administrator must add it first.'
+        )
+    return refusals
+
+
+def _is_write(block: FlowBlock) -> bool:
+    return block.mode == "write" or block.adapter == "kafka_kc"
+
+
+_PLACEHOLDER_RE = re.compile(r"\$\{([a-zA-Z0-9_.-]+)\}")
+
+
+def _unresolved_placeholders(flow: Flow, block: FlowBlock) -> List[str]:
+    text = json.dumps(block.config or {}, default=str)
+    found = _PLACEHOLDER_RE.findall(text)
+    if not found:
+        return []
+    # Resolved by: this flow's variables, or extraction attributes anywhere
+    # upstream. Global variables are gone -- per-flow is the only scope.
+    flow_vars = {v.name for v in flow.variables}
+    by_id = {b.id: b for b in flow.blocks}
+    upstream_attrs: set = set()
+    cur: Optional[FlowBlock] = block
+    while cur is not None:
+        for t in cur.transforms:
+            attribute = (t.config or {}).get("attribute")
+            if t.kind == "extract" and isinstance(attribute, str):
+                upstream_attrs.add(attribute)
+        cur = by_id.get(cur.parentId) if cur.parentId else None
+    ordered_unique: List[str] = []
+    seen = set()
+    for name in found:
+        if name not in seen:
+            seen.add(name)
+            ordered_unique.append(name)
+    return [name for name in ordered_unique if name not in flow_vars and name not in upstream_attrs]
+
+
+_CONNECTOR_CLASS_RE = re.compile(r"^[\w$]+(\.[\w$]+)+$", re.ASCII)
+
+
+def _sink_config_refusals(block: FlowBlock) -> List[str]:
+    """Sink-configuration sanity for kc / kafka_kc. Deliberately narrow: an
+    empty sink config is a legitimate "not configured yet" state, so only a
+    config that *says* something wrong is an issue."""
+    if block.adapter != "kc" and block.adapter != "kafka_kc":
+        return []
+    sink = (block.config or {}).get("sinkConfig")
+    if not isinstance(sink, dict) or len(sink) == 0:
+        return []
+    refusals: List[str] = []
+    connector_class = sink.get("connector.class")
+    if not isinstance(connector_class, str) or not connector_class.strip():
+        refusals.append("Set connector.class — the platform has to know which Connect plugin runs this sink.")
+    elif not _CONNECTOR_CLASS_RE.match(connector_class.strip()):
+        # A class outside the shipped catalog is a CUSTOM sink, not an error.
+        refusals.append(
+            f'connector.class "{connector_class}" is not a class name — a custom sink still needs a fully-qualified class, e.g. com.example.kafka.connect.MySinkConnector.'
+        )
+    # Platform-owned keys are rendered as disabled rows and computed at render;
+    # a persisted copy goes stale the moment a name changes.
+    owned = [k for k in ("topics", "key.converter", "value.converter") if k in sink]
+    if owned:
+        refusals.append(f"The platform owns {', '.join(owned)} — remove {'them' if len(owned) > 1 else 'it'}; the value is derived at deploy.")
+    return refusals
+
+
+# ------------------------------------------------------ branch incompleteness
+# Ported from frontend/src/prototype/branches.ts.
+
+_BRANCH_OPS_NEED_VALUE = {
+    "equals": True,
+    "not_equals": True,
+    "contains": True,
+    "starts_with": True,
+    "regex": True,
+    "is_empty": False,
+}
+
+
+def _op_needs_value(op: str) -> bool:
+    return _BRANCH_OPS_NEED_VALUE.get(op, True)
+
+
+def _rule_incomplete(rule: Any) -> bool:
+    if not (getattr(rule, "field", "") or "").strip():
+        return True
+    return _op_needs_value(getattr(rule, "op", "equals")) and not (getattr(rule, "value", "") or "").strip()
+
+
+def _branch_incomplete(branch: Optional[BranchInfo]) -> bool:
+    rules = (branch.rules if branch and branch.rules else None) or []
+    return any(_rule_incomplete(r) for r in rules)
+
+
+# --------------------------------------------------------------------- dedup
+
+DEDUP_MIN_WINDOW_HOURS = 1 / 60  # 1 minute
+DEDUP_MAX_WINDOW_HOURS = 8760  # 365 days
+DEDUP_DEFAULT_WINDOW_HOURS = 24
+
+
+def validate_block(
+    flow: Flow,
+    block: FlowBlock,
+    services: List[AppService],
+    schemas: List[ApprovedSchema],
+    gateway: Optional[GatewaySnapshot] = None,
+) -> List[ValidationIssue]:
+    if gateway is None:
+        gateway = GatewaySnapshot()
+    issues: List[ValidationIssue] = []
+
+    def at(message: str) -> None:
+        issues.append(ValidationIssue(blockId=block.id, where=block.name, message=message))
+
+    if not block.name.strip():
+        at("Block needs a name.")
+
+    needs_service = block.adapter in ("http", "jdbc", "kafka_kc", "kc")
+    if needs_service and not block.serviceId:
+        at("Select a service — hosts and credentials always come from a saved service.")
+    if block.serviceId:
+        svc = next((s for s in services if s.id == block.serviceId), None)
+        if not svc:
+            at("The selected service no longer exists.")
+        elif svc.retired:
+            at(f'Service "{svc.name}" is retired — action required: select a replacement.')
+
+    if _is_write(block) and not (block.entity or "").strip():
+        at("No write without an entity, ever — set the entity label.")
+    # kc is a write in spec terms but not in `_is_write()` terms: widening that
+    # predicate would leak kc into service-type mapping, transform hosting and
+    # legality. The entity requirement is therefore its own targeted check.
+    if block.adapter == "kc" and not (block.entity or "").strip():
+        at("No write without an entity, ever — this subscription delivers records, so it needs an entity label.")
+
+    if block.adapter == "http":
+        path = (block.config or {}).get("path") or ""
+        if not path:
+            at("Set the request path.")
+        missing = _unresolved_placeholders(flow, block)
+        if missing:
+            at(f"Unresolved ${{...}} values: {', '.join(missing)} — extract them upstream or define a flow variable.")
+        for refusal in gateway_refusals(block, gateway, services):
+            at(refusal)
+    if block.adapter == "jdbc" and not (block.config or {}).get("table"):
+        at("Pick a table.")
+    if block.adapter == "kafka" and block.mode == "read" and not block.parentId and not (block.config or {}).get("topicName"):
+        at("Pick a topic to consume.")
+    # The override is legal on the whole kafka family (R7), so the collision
+    # check has to cover kafka_kc too -- its derived name is overridable now.
+    if _is_kafka_family_write(block) and block.topicOverride and not override_matches_derived(flow, block):
+        collision = topic_name_collision(derive_topic_name(flow, block).value)
+        if collision:
+            at(collision)
+    if block.adapter == "kafka_kc":
+        if not any(s.flowId == flow.id and s.blockId == block.id for s in schemas):
+            at("Schema ceremony required — the flow cannot deploy until this write's schema is approved.")
+        if not (block.config or {}).get("sinkServiceId") and not block.serviceId:
+            at("Select the sink destination service.")
+    if block.adapter == "kc" and not (block.config or {}).get("attachTopicId"):
+        at("Attach the subscription to a topic.")
+    for refusal in _sink_config_refusals(block):
+        at(refusal)
+
+    # A half-written rule matches nothing, so the branch silently receives no
+    # records. NO rules is legal and means "everything" -- only an unfinished
+    # rule is an issue.
+    if _branch_incomplete(block.branch):
+        branch_name = block.branch.name if block.branch and block.branch.name else block.name
+        at(
+            f'Branch "{branch_name}" has an unfinished rule — it matches no records until every rule has a field, an operator and a value.'
+        )
+
+    # Transforms sanity.
+    dedup_positions = [i for i, t in enumerate(block.transforms) if t.kind == "dedup"]
+    if dedup_positions and dedup_positions[0] != len(block.transforms) - 1:
+        at("Dedup must be the last transformation.")
+    if len(dedup_positions) > 1:
+        at("Only one dedup transformation is allowed per block.")
+    if not hosts_transforms(flow, block) and len(block.transforms) > 0 and block.adapter != "kc":
+        at("R8 — this branch carries raw bytes; transformations are not available here.")
+
+    for i in dedup_positions:
+        cfg = block.transforms[i].config or {}
+        identity_fields = cfg.get("identityFields")
+        if not isinstance(identity_fields, list) or not any(isinstance(f, str) and f.strip() for f in identity_fields):
+            at("Dedup needs at least one identity field.")
+        window = cfg.get("windowHours", DEDUP_DEFAULT_WINDOW_HOURS)
+        if window is None:
+            window = DEDUP_DEFAULT_WINDOW_HOURS
+        valid_number = isinstance(window, (int, float)) and not isinstance(window, bool)
+        if not valid_number or not (DEDUP_MIN_WINDOW_HOURS <= window <= DEDUP_MAX_WINDOW_HOURS):
+            at("Dedup window must be between 1 minute and 365 days (1/60-8760 hours).")
+
+    return issues
+
+
+def validate_flow(
+    flow: Flow,
+    services: List[AppService],
+    schemas: List[ApprovedSchema],
+    gateway: Optional[GatewaySnapshot] = None,
+) -> List[ValidationIssue]:
+    if gateway is None:
+        gateway = GatewaySnapshot()
+    issues: List[ValidationIssue] = []
+
+    def flow_level(message: str) -> None:
+        issues.append(ValidationIssue(blockId=None, where="Flow settings", message=message))
+
+    if not flow.name.strip():
+        flow_level("Name the flow — the name is the first half of every derived name.")
+    if len(flow.blocks) == 0 and len(flow.topics) == 0:
+        flow_level("The flow is empty — add a root block.")
+    if flow_has_trigger(flow):
+        if not flow.cron:
+            flow_level("Set the cron schedule on the root block.")
+        elif not is_valid_cron(flow.cron):
+            flow_level("Cron must be a 5-field expression (UTC).")
+    root = root_block(flow)
+    if not root and any(b.adapter != "kc" for b in flow.blocks):
+        flow_level("The flow has no legal root (R2).")
+
+    writes = [b for b in flow.blocks if _is_write(b) or b.adapter == "kc"]
+    if len(flow.blocks) > 0 and len(writes) == 0:
+        flow_level("Data goes nowhere — add at least one write or sink.")
+
+    for block in flow.blocks:
+        issues.extend(validate_block(flow, block, services, schemas, gateway))
+    return issues
+
+
+# ------------------------------------------------------------- deploy preflight
+
+
+@dataclass
+class PreflightCheck:
+    label: str
+    ok: bool
+    detail: str
+
+
+def deploy_preflight(
+    flow: Flow,
+    services: List[AppService],
+    schemas: List[ApprovedSchema],
+    active_connections: List[Dict[str, Any]],
+    gateway: Optional[GatewaySnapshot] = None,
+) -> List[PreflightCheck]:
+    """Issues that specifically block Deploy (beyond plain validation).
+
+    `active_connections` mirrors the TS `{type, name, health}[]` shape as
+    plain dicts -- the router layer supplies these (e.g. from
+    COLLECTIONS.connections), same convention as `gateway`.
+    """
+    if gateway is None:
+        gateway = GatewaySnapshot()
+    checks: List[PreflightCheck] = []
+    validation = validate_flow(flow, services, schemas, gateway)
+    checks.append(
+        PreflightCheck(
+            label="Configuration valid",
+            ok=len(validation) == 0,
+            detail="All blocks pass validation." if len(validation) == 0 else f"{len(validation)} issue(s) — run Validate for details.",
+        )
+    )
+
+    needed: List[tuple] = [("nifi", "NiFi"), ("kafka", "Kafka"), ("apicurio", "Schema registry")]
+    uses_connect = any(b.adapter == "kafka_kc" or b.adapter == "kc" for b in flow.blocks)
+    if uses_connect:
+        needed.append(("kafka_connect", "Kafka Connect"))
+    uses_dedup = any(any(t.kind == "dedup" for t in b.transforms) for b in flow.blocks)
+    uses_bookmarks = any(b.adapter == "jdbc" and (b.config or {}).get("incremental") is True for b in flow.blocks)
+    if uses_dedup or uses_bookmarks:
+        needed.append(("redis", "Redis"))
+    proxied_blocks = [b for b in flow.blocks if block_proxy_id(b, services)]
+    if proxied_blocks:
+        needed.append(("apisix", "API gateway"))
+
+    for type_, label in needed:
+        conn = next((c for c in active_connections if c.get("type") == type_), None)
+        checks.append(
+            PreflightCheck(
+                label=f"{label} connection active",
+                ok=bool(conn) and conn.get("health") == "Healthy",
+                detail=f"{conn['name']} — {conn['health']}" if conn else f"No active {label} connection.",
+            )
+        )
+
+    # One pair of rows per referenced proxy: reconciliation and allowlisting
+    # are separate refusals with separate owners (self-serve vs admin).
+    referenced_proxy_ids: List[str] = []
+    seen_pids: set = set()
+    for b in proxied_blocks:
+        pid = block_proxy_id(b, services)
+        if pid and pid not in seen_pids:
+            seen_pids.add(pid)
+            referenced_proxy_ids.append(pid)
+
+    for proxy_id in referenced_proxy_ids:
+        proxy = next((p for p in gateway.proxies if p.id == proxy_id), None)
+        users = [b.name for b in proxied_blocks if block_proxy_id(b, services) == proxy_id]
+        if not proxy:
+            checks.append(
+                PreflightCheck(
+                    label=f"Gateway proxy resolves — {proxy_id}",
+                    ok=False,
+                    detail=f"{', '.join(users)} route through a proxy that no longer exists. Pick one on the APISIX Gateway page.",
+                )
+            )
+            continue
+        checks.append(
+            PreflightCheck(
+                label=f"Gateway proxy reconciled — {proxy.name}",
+                ok=proxy.status == "Reconciled",
+                detail=(
+                    f"{proxy.targetHost}:{proxy.port}{proxy.path} — reconciled onto the gateway."
+                    if proxy.status == "Reconciled"
+                    else f"{proxy.status}{f' — {proxy.statusDetail}' if proxy.statusDetail else ''}"
+                ),
+            )
+        )
+        allowlisted = proxy.targetHost in gateway.allowlist
+        checks.append(
+            PreflightCheck(
+                label=f"Gateway host allowlisted — {proxy.targetHost}",
+                ok=allowlisted,
+                detail="Host is on the admin allowlist." if allowlisted else "Egress hosts are admin-allowlisted; this one is not on the list yet.",
+            )
+        )
+
+    kafka_kc_blocks = [b for b in flow.blocks if b.adapter == "kafka_kc"]
+    for b in kafka_kc_blocks:
+        approved = any(s.flowId == flow.id and s.blockId == b.id for s in schemas)
+        checks.append(
+            PreflightCheck(
+                label=f"Schema approved — {b.name}",
+                ok=approved,
+                detail="Approved and registered." if approved else "The schema ceremony has not been completed.",
+            )
+        )
+
+    used_service_ids: List[str] = []
+    seen_sids: set = set()
+    for b in flow.blocks:
+        if b.serviceId and b.serviceId not in seen_sids:
+            seen_sids.add(b.serviceId)
+            used_service_ids.append(b.serviceId)
+    used_services = [s for sid in used_service_ids for s in services if s.id == sid]
+    failing = [s for s in used_services if s.health == "Failed"]
+    checks.append(
+        PreflightCheck(
+            label="Bound services reachable",
+            ok=len(failing) == 0,
+            detail=(
+                "No services bound."
+                if len(used_services) == 0
+                else (f"{len(used_services)} service(s) — none failing." if len(failing) == 0 else f"Failing: {', '.join(s.name for s in failing)}.")
+            ),
+        )
+    )
+
+    pinned_retired = [s for sid in flow.servicePins.keys() for s in services if s.id == sid and s.retired]
+    checks.append(
+        PreflightCheck(
+            label="No retired services",
+            ok=len(pinned_retired) == 0,
+            detail=(
+                "All bound services are live."
+                if len(pinned_retired) == 0
+                else f"Action required: {', '.join(s.name for s in pinned_retired)} retired."
+            ),
+        )
+    )
+
+    return checks

@@ -1,4 +1,5 @@
 export { AvroEditorTabs } from "./AvroEditorTabs";
+export { SampleInferencePanel, type SampleInferencePanelProps } from "./SampleInferencePanel";
 export { SchemaFieldList, SchemaFieldRow, SchemaNodeEditor } from "./SchemaFieldList";
 export { SchemaTypeSelect } from "./SchemaTypeSelect";
 export { recordToDisplayFields, structuredToDisplayFields } from "./avroDisplayFields";

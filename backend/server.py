@@ -25,6 +25,7 @@ import db as database
 from routers import application_services, connections, dashboard, audit, settings, sources, schemas, flows, flow_import, webhooks, openapi_specs, nifi_services, content_store
 from routers import schema_inference
 from routers import iceberg_sinks, kafka_connect
+from routers.v2 import openapi as v2_openapi
 
 # Configure logging
 logging.basicConfig(
@@ -138,6 +139,7 @@ app.include_router(openapi_specs.router)
 app.include_router(content_store.router)
 app.include_router(iceberg_sinks.router)
 app.include_router(kafka_connect.router)
+app.include_router(v2_openapi.router)
 
 
 @app.get("/api", tags=["health"], summary="Backend health/version check")

@@ -19,7 +19,6 @@
 // per-block open state makes sections appear to jump.
 
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -40,21 +39,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AdapterChip } from "@/components/AdapterChip";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TransformsEditor } from "./TransformsEditor";
 import { TestPanel } from "./TestPanel";
 import { KvRows, type KvRow } from "./KvRows";
-import { blockProxyId } from "@/prototype/validation";
 import { branchesOf, branchSummary, describeBranch, isConditional } from "@/prototype/branches";
 import { PaginationFields } from "./PaginationFields";
 import { SinkConfigEditor } from "./SinkConfigEditor";
@@ -62,6 +53,7 @@ import {
   ServiceFormFields,
   buildConfig,
   emptyForm,
+  formFromService,
   saveBlockReason,
   secretTyped,
   type ServiceForm,
@@ -77,7 +69,7 @@ import {
   tableName,
   topicNameCollision,
 } from "@/prototype/naming";
-import { listGatewayProxies, saveService } from "@/prototype/api";
+import { saveService } from "@/prototype/api";
 import { CONNECT_PLUGIN_CATALOG } from "@/prototype/seeds";
 import { uid } from "@/prototype/store";
 import { cn } from "@/lib/utils";
@@ -103,7 +95,6 @@ import {
   IdCard,
   Loader2,
   Lock,
-  Plus,
   Settings2,
   ShieldAlert,
   ShieldCheck,
@@ -152,16 +143,6 @@ function relativeTime(iso: string | undefined | null): string {
   const hours = Math.round(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
-}
-
-/** The host a block actually calls, read off its bound http service. */
-function hostOf(baseUrl: unknown): string | null {
-  if (typeof baseUrl !== "string" || !baseUrl.trim()) return null;
-  try {
-    return new URL(baseUrl).hostname;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -268,6 +249,8 @@ export function BlockForm(props: BlockFormProps) {
       services={eligibleServices}
       selected={selectedService}
       locked={block.adapter === "kc" ? false : locked}
+      blockId={block.id}
+      blockName={block.name}
       onSelect={(id) => {
         onPatchBlock(block.id, { serviceId: id });
         // kafka_kc keeps a copy in config for the connector payload; writing
@@ -501,6 +484,8 @@ branch: {block.branch.name}
                   services={eligibleServices}
                   selected={selectedService}
                   locked={locked}
+                  blockId={block.id}
+                  blockName={block.name}
                   onSelect={(id) => onPatchBlock(block.id, { serviceId: id })}
                 />
               )}
@@ -947,6 +932,17 @@ function Section({
 const PLATFORM_CLUSTER = "__platform__";
 const NO_PROXY = "__none__";
 
+/**
+ * The two explicit ways a block gets a service: pick one already configured
+ * for the org, or configure one right here. Both end up writing the exact
+ * same thing — `serviceId` on the block — so switching between them is a
+ * display choice, never a data migration. "Set up here" still creates (or
+ * updates) an ordinary Application Service flagged `private: true`; that is
+ * the one storage path for secrets, just presented as first-class manual
+ * configuration instead of a dialog bolted onto the Select.
+ */
+type ServiceMode = "existing" | "manual";
+
 function ServiceSelector({
   label,
   noneLabel,
@@ -954,6 +950,8 @@ function ServiceSelector({
   services,
   selected,
   locked,
+  blockId,
+  blockName,
   onSelect,
 }: {
   label: string;
@@ -963,186 +961,159 @@ function ServiceSelector({
   services: AppService[];
   selected: AppService | undefined;
   locked: boolean;
+  /** Identifies the owning block — local mode/draft state is keyed by it so
+   *  switching the selected block (props change, no remount) cannot leak one
+   *  block's in-progress draft into another's picker. */
+  blockId: string;
+  /** Seeds the generated name for a fresh "Set up here" draft. */
+  blockName: string;
   onSelect: (id: string | null) => void;
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const type = serviceType as AppService["type"];
+
+  // Private services are owned by exactly one block and configured inline —
+  // they never appear in the general catalogue picker.
+  const catalogServices = services.filter((s) => !s.private);
+
+  // Default: "Existing service" unless the block already points at a private
+  // service, in which case that service's own manual configuration is what
+  // the user came here to see.
+  const defaultMode: ServiceMode = selected?.private ? "manual" : "existing";
+  const [modeState, setModeState] = useState<{ key: string; mode: ServiceMode } | null>(null);
+  const mode = modeState?.key === blockId ? modeState.mode : defaultMode;
+  const setMode = (next: ServiceMode) => setModeState({ key: blockId, mode: next });
+
   // The same form the Application Services page uses — credentials included.
   // Sending someone to another page to type a password they already have in
   // front of them was the whole complaint; nothing about WHERE the secret ends
   // up changed, only where it can be typed.
-  const [form, setForm] = useState<ServiceForm>(emptyForm());
-  const queryClient = useQueryClient();
-  const type = serviceType as AppService["type"];
+  const draftDefault = (): ServiceForm =>
+    selected?.private ? formFromService(selected) : { ...emptyForm(), name: `${blockName || "Block"} (manual)` };
+  const [draftState, setDraftState] = useState<{ key: string; form: ServiceForm } | null>(null);
+  const draft = draftState?.key === blockId ? draftState.form : draftDefault();
+  const setDraft = (next: ServiceForm) => setDraftState({ key: blockId, form: next });
 
-  const createMutation = useMutation({
+  // Editing the block's own private service updates it in place (same id —
+  // saveService bumps the revision); anything else, including a fresh draft
+  // or a non-private service still bound from "Existing service", creates a
+  // brand new private record rather than overwriting someone else's service.
+  const editingOwn = selected?.private ? selected : null;
+
+  const saveMutation = useMutation({
     mutationFn: async () =>
       saveService({
-        id: "",
+        ...(editingOwn ?? {
+          id: "",
+          type,
+          revision: 1,
+          retired: false,
+          health: "Not Tested" as const,
+          lastTestedAt: null,
+          createdAt: "",
+          updatedAt: "",
+          hasSecret: false,
+        }),
         type,
-        name: form.name.trim(),
-        revision: 1,
-        retired: false,
         private: true,
-        health: "Not Tested",
-        lastTestedAt: null,
-        config: buildConfig(type, form),
-        hasSecret: secretTyped(type, form),
-        createdAt: "",
-        updatedAt: "",
+        name: draft.name.trim(),
+        config: buildConfig(type, draft),
+        hasSecret: secretTyped(type, draft) || (editingOwn?.hasSecret ?? false),
       }),
     onSuccess: (svc) => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
       onSelect(svc.id);
-      setCreateOpen(false);
-      setForm(emptyForm());
+      setDraftState({ key: blockId, form: formFromService(svc) });
       toast.success(
-        `Private service "${svc.name}" created${svc.hasSecret ? " with its credentials" : ""} — it lives on the service, never on the block`,
+        `Private service "${svc.name}" saved${svc.hasSecret ? " with its credentials" : ""} — it lives on the service, never on the block`,
       );
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const createBlockReason = saveBlockReason(type, form);
+  const saveReason = saveBlockReason(type, draft);
 
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
-      <div className="flex items-center gap-2">
-        <Select
-          value={selected?.id ?? (noneLabel ? PLATFORM_CLUSTER : "")}
-          disabled={locked}
-          onValueChange={(v) => onSelect(v === PLATFORM_CLUSTER ? null : v)}
-        >
-          <SelectTrigger className="max-w-sm">
-            <SelectValue placeholder="Select a service…" />
-          </SelectTrigger>
-          <SelectContent>
-            {noneLabel && <SelectItem value={PLATFORM_CLUSTER}>{noneLabel}</SelectItem>}
-            {services.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-                {s.private ? " (private)" : ""} · rev {s.revision}
-              </SelectItem>
-            ))}
-            {selected?.retired && (
-              <SelectItem value={selected.id} disabled>
-                {selected.name} · retired — action required
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" disabled={locked} onClick={() => setCreateOpen(true)}>
-          <Plus className="h-3 w-3" /> private service
-        </Button>
-      </div>
-      {selected && (
-        <p className="text-xs text-muted-foreground">
-          rev {selected.revision} · {selected.health}
-          {selected.hasSecret ? " · credentials stored on the service" : ""}
-        </p>
-      )}
-      <p className="text-xs text-muted-foreground">Hosts and credentials always come from a saved service — never typed into a block.</p>
+      <ToggleGroup
+        type="single"
+        value={mode}
+        onValueChange={(v) => v && setMode(v as ServiceMode)}
+        className="w-fit justify-start rounded-md border bg-muted/30 p-0.5"
+      >
+        <ToggleGroupItem value="existing" disabled={locked} className="h-7 px-3 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm">
+          Existing service
+        </ToggleGroupItem>
+        <ToggleGroupItem value="manual" disabled={locked} className="h-7 px-3 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm">
+          Set up here
+        </ToggleGroupItem>
+      </ToggleGroup>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create a private service</DialogTitle>
-            <DialogDescription>
-              A private service is a full Application Service — endpoint, auth and secret — that simply is not offered in
-              the shared catalogue. Fill it in here; you can promote or edit it later in Application Services.
-            </DialogDescription>
-          </DialogHeader>
-          <ServiceFormFields type={type} form={form} onChange={setForm} editing={false} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={!!createBlockReason || createMutation.isPending}
-              title={createBlockReason ?? undefined}
-            >
-              {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Create & select
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-/**
- * The egress this block will actually use — READ-ONLY, because the proxy is a
- * property of the host and the host belongs to the service.
- *
- * It used to be a picker here, which let two blocks calling the same API
- * disagree about how to reach it. The choice moved onto the http service; this
- * states the consequence where the request is configured, and points at the one
- * place that can change it.
- */
-function EgressLine({ block, service }: { block: FlowBlock; service: AppService | undefined }) {
-  const { data: proxies = [] } = useQuery({ queryKey: ["gatewayProxies"], queryFn: listGatewayProxies });
-  const configured = blockProxyId(block, service ? [service] : []);
-  const proxy = proxies.find((p) => p.id === configured);
-  const endpointHost = hostOf(service?.config?.baseUrl);
-  const dangling = !!configured && proxies.length > 0 && !proxy;
-  const legacy = !!block.config.proxyId || block.config.proxy === true;
-
-  return (
-    <div className="space-y-1.5 rounded-md border px-3 py-2.5">
-      <Label className="text-xs">Egress</Label>
-      {proxy ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={proxy.status} />
-          <span className="text-xs">
-            via <span className="font-medium">{proxy.name}</span>
-          </span>
-          <code className="font-mono text-xs text-muted-foreground">
-            {proxy.targetHost}:{proxy.port}
-            {proxy.path}
-          </code>
-          {proxy.certProfileId && (
-            <Badge variant="outline" className="text-xs">
-              client certificate
-            </Badge>
+      {mode === "existing" ? (
+        <>
+          <Select
+            value={selected?.id ?? (noneLabel ? PLATFORM_CLUSTER : "")}
+            disabled={locked}
+            onValueChange={(v) => onSelect(v === PLATFORM_CLUSTER ? null : v)}
+          >
+            <SelectTrigger className="max-w-sm">
+              <SelectValue placeholder="Select a service…" />
+            </SelectTrigger>
+            <SelectContent>
+              {noneLabel && <SelectItem value={PLATFORM_CLUSTER}>{noneLabel}</SelectItem>}
+              {catalogServices.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name} · rev {s.revision}
+                </SelectItem>
+              ))}
+              {selected?.retired && (
+                <SelectItem value={selected.id} disabled>
+                  {selected.name} · retired — action required
+                </SelectItem>
+              )}
+              {selected?.private && !selected.retired && (
+                <SelectItem value={selected.id} disabled>
+                  {selected.name} · private — bound via "Set up here"
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+          {selected && (
+            <p className="text-xs text-muted-foreground">
+              rev {selected.revision} · {selected.health}
+              {selected.hasSecret ? " · credentials stored on the service" : ""}
+              {selected.private ? " · private — switch to \"Set up here\" to edit it" : ""}
+            </p>
           )}
-        </div>
-      ) : dangling ? (
-        <p className="flex items-start gap-1 text-xs text-destructive">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          The proxy configured for this service ({configured}) no longer exists — pick another on the service, or
-          re-create it on the APISIX Gateway page.
-        </p>
+          <p className="text-xs text-muted-foreground">Hosts and credentials always come from a saved service — never typed into a block.</p>
+        </>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Direct to {endpointHost ?? "the service host"} — no gateway proxy.
-        </p>
+        <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+          <ServiceFormFields type={type} form={draft} onChange={setDraft} editing={!!selected?.private} />
+          {selected?.private && (
+            <p className="text-xs text-muted-foreground">
+              rev {selected.revision} · {selected.health}
+              {selected.hasSecret ? " · credentials stored on the service" : ""}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Stored as a private service owned by this block — credentials are kept server-side, not in the flow.
+            </p>
+            <Button
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 text-xs"
+              disabled={locked || !!saveReason || saveMutation.isPending}
+              title={saveReason ?? undefined}
+              onClick={() => saveMutation.mutate()}
+            >
+              {saveMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Save configuration
+            </Button>
+          </div>
+        </div>
       )}
-      {proxy && proxy.status !== "Reconciled" && (
-        <p className="flex items-start gap-1 text-xs text-warning">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {proxy.statusDetail ?? `The proxy is ${proxy.status}.`} It must reconcile onto the gateway before this flow can
-          deploy.
-        </p>
-      )}
-      {legacy && !service?.config?.proxyId && (
-        <p className="flex items-start gap-1 text-xs text-warning">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          This block carries a proxy setting from before egress moved onto the service. It is still honoured, but set it
-          on the service so every block calling that host agrees.
-        </p>
-      )}
-      <p className="text-xs leading-4 text-muted-foreground">
-        Chosen on the service, so every block calling this host routes the same way.{" "}
-        {service ? (
-          <Link to="/application-services" className="underline underline-offset-2">
-            Edit “{service.name}”
-          </Link>
-        ) : (
-          "Select a service first."
-        )}
-      </p>
     </div>
   );
 }
@@ -1348,8 +1319,6 @@ function HttpSettings({
             )}
 
             <PaginationFields block={block} locked={locked} onPatchConfig={onPatchConfig} />
-
-            <EgressLine block={block} service={service} />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

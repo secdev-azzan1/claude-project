@@ -40,9 +40,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AvroEditorTabs, useAvroBuffer } from "@/components/schema-editor";
+import { AvroEditorTabs, SampleInferencePanel, useAvroBuffer } from "@/components/schema-editor";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
   createEmptyAvroTemplate,
@@ -65,6 +66,7 @@ import {
   saveSchemaTemplate,
   stageCeremonyDraft,
 } from "@/prototype/api";
+import type { InferenceReport } from "@/prototype/inference";
 import type { ApprovedSchema, Flow, SchemaApproval, SchemaProvenance, SchemaTemplate } from "@/prototype/types";
 import {
   AlertTriangle,
@@ -78,6 +80,7 @@ import {
   ShieldCheck,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -267,6 +270,54 @@ function CheckPanel({ lines }: { lines: CheckLine[] }) {
   );
 }
 
+/**
+ * Summary of a "New template → Infer from sample files" run, shown once above
+ * the freshly created template's editor. Purely transient client-side state —
+ * dismissing it (or navigating to a different artifact) loses nothing that
+ * was persisted; the inferred fields themselves are already saved.
+ */
+function InferredReportPanel({ report, onDismiss }: { report: InferenceReport; onDismiss: () => void }) {
+  return (
+    <div className="mb-3 space-y-1 rounded-md border border-info/30 bg-info-muted p-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium">
+          Inferred {report.fieldCount} field(s) from {report.recordsSampled} sample record(s).
+        </p>
+        <button
+          type="button"
+          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Dismiss"
+          onClick={onDismiss}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {report.notes.length > 0 ? (
+        <ul className="space-y-0.5">
+          {report.notes.slice(0, 6).map((note, i) => (
+            <li key={`${note.field}-${note.kind}-${i}`} className="text-xs text-muted-foreground">
+              {note.field ? (
+                <>
+                  <code className="font-mono">{note.field}</code> {note.note}
+                </>
+              ) : (
+                note.note
+              )}
+            </li>
+          ))}
+          {report.notes.length > 6 && (
+            <li className="text-xs text-muted-foreground">…and {report.notes.length - 6} more inference note(s).</li>
+          )}
+        </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Every field was consistent across the samples — nothing had to be widened or made nullable.
+        </p>
+      )}
+    </div>
+  );
+}
+
 type KindFilter = "all" | "approved" | "template";
 
 type Artifact =
@@ -316,6 +367,14 @@ const Schemas = () => {
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
   const [newTemplateDescription, setNewTemplateDescription] = useState("");
+  /** "Start empty" (current behaviour) vs. "Infer from sample files" (expands SampleInferencePanel inline). */
+  const [newTemplateMode, setNewTemplateMode] = useState<"empty" | "infer">("empty");
+  /**
+   * The inference report for a template just created via the "infer" path —
+   * transient, client-side only, shown as a dismissible summary above the
+   * editor for that one template until dismissed or the selection moves on.
+   */
+  const [inferredReport, setInferredReport] = useState<{ templateId: string; report: InferenceReport } | null>(null);
   const [saveAsTemplateFor, setSaveAsTemplateFor] = useState<ApprovedSchema | null>(null);
   const [saveAsTemplateName, setSaveAsTemplateName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -569,6 +628,32 @@ const Schemas = () => {
     }
   };
 
+  /**
+   * The "Infer from sample files" path's completion: SampleInferencePanel has
+   * already turned the uploaded samples into a normalised Avro record, so this
+   * just names it and creates the template with it instead of an empty record.
+   */
+  const handleInferredTemplate = (avro: unknown, report: InferenceReport) => {
+    const name = newTemplateName.trim();
+    if (!name) {
+      toast.error("A template needs a name.");
+      return;
+    }
+    try {
+      const record = normalizeAvroRecord(avro, subjectToRecordName(name));
+      createMut.mutate(
+        {
+          name,
+          description: newTemplateDescription.trim() || undefined,
+          rawAvro: JSON.stringify(record, null, 2),
+        },
+        { onSuccess: (tpl) => setInferredReport({ templateId: tpl.id, report }) },
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not build a valid Avro record from those samples.");
+    }
+  };
+
   const handleSaveTemplate = () => {
     if (!selectedTemplate) return;
     const name = templateName.trim();
@@ -708,6 +793,7 @@ const Schemas = () => {
                 onClick={() => {
                   setNewTemplateName("");
                   setNewTemplateDescription("");
+                  setNewTemplateMode("empty");
                   setNewTemplateOpen(true);
                 }}
               >
@@ -1078,6 +1164,12 @@ const Schemas = () => {
                 </CardHeader>
 
                 <CardContent className={cn(schemaWorkspaceLayout.detailScroll, "pt-4")}>
+                  {inferredReport?.templateId === selectedTemplate.id && (
+                    <InferredReportPanel
+                      report={inferredReport.report}
+                      onDismiss={() => setInferredReport(null)}
+                    />
+                  )}
                   {checkFor?.id === selectedTemplate.id && <CheckPanel lines={checkFor.lines} />}
                   <AvroEditorTabs buffer={buffer} emptyLabel="This template's Avro could not be parsed." />
                 </CardContent>
@@ -1114,8 +1206,8 @@ const Schemas = () => {
           <DialogHeader>
             <DialogTitle>New library template</DialogTitle>
             <DialogDescription>
-              A hand-authored Avro record. It is not registered and is bound to no flow — a ceremony can pre-fill
-              from it later.
+              Hand-author an Avro record, or infer one from real sample data. Either way it is not registered and is
+              bound to no flow — a ceremony can pre-fill from it later.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -1141,15 +1233,65 @@ const Schemas = () => {
                 className="min-h-[3.5rem]"
               />
             </div>
+
+            <div className="space-y-1.5">
+              <Label>Starting point</Label>
+              <RadioGroup
+                value={newTemplateMode}
+                onValueChange={(value) => setNewTemplateMode(value as "empty" | "infer")}
+                className="gap-2"
+              >
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5">
+                  <RadioGroupItem value="empty" className="mt-0.5" />
+                  <span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      <FileJson className="h-3.5 w-3.5" /> Start empty
+                    </span>
+                    <span className="text-xs text-muted-foreground">One blank record — build it up by hand.</span>
+                  </span>
+                </label>
+                <label
+                  className={cn(
+                    "flex items-start gap-2 rounded-md border p-2.5",
+                    newTemplateName.trim() ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                  )}
+                >
+                  <RadioGroupItem value="infer" disabled={!newTemplateName.trim()} className="mt-0.5" />
+                  <span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      <Wand2 className="h-3.5 w-3.5" /> Infer from sample files
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {newTemplateName.trim()
+                        ? "Upload JSON, NDJSON or CSV samples and start from a shape inferred from real data."
+                        : "Name the template first — it becomes the inferred record's name."}
+                    </span>
+                  </span>
+                </label>
+              </RadioGroup>
+            </div>
+
+            {newTemplateMode === "infer" && (
+              <div className="rounded-md border bg-muted/30 p-3">
+                <SampleInferencePanel
+                  compact
+                  recordName={subjectToRecordName(newTemplateName.trim() || "record")}
+                  namespace="com.nif"
+                  onInferred={handleInferredTemplate}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewTemplateOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={createMut.isPending} onClick={handleCreateTemplate}>
-              {createMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Create template
-            </Button>
+            {newTemplateMode === "empty" && (
+              <Button disabled={createMut.isPending} onClick={handleCreateTemplate}>
+                {createMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Create template
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

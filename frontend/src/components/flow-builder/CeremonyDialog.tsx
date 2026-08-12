@@ -38,18 +38,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AvroEditorTabs, recordToDisplayFields, useAvroBuffer } from "@/components/schema-editor";
+import { AvroEditorTabs, recordToDisplayFields, SampleInferencePanel, useAvroBuffer } from "@/components/schema-editor";
 import { normalizeAvroRecord, type AvroField as SchemaAvroField, type AvroRecord } from "@/lib/schemaEditor";
 import { approveSchema, listSchemaTemplates } from "@/prototype/api";
 import {
   inferAvroFromRecords,
-  mergeCsvHints,
-  parseSampleFile,
-  resolveRecordPath,
-  suggestRecordPaths,
   validateRecordsAgainstAvro,
   type InferenceReport,
-  type ParseSampleResult,
 } from "@/prototype/inference";
 import { deriveTopicName } from "@/prototype/naming";
 import type { ApprovedSchema, Flow, FlowBlock, SchemaProvenance, SchemaTemplate } from "@/prototype/types";
@@ -57,31 +52,17 @@ import { cn } from "@/lib/utils";
 import {
   AlertCircle,
   CheckCircle2,
-  FileJson,
-  FileUp,
   FlaskConical,
   Loader2,
   PenLine,
   Upload,
-  Wand2,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 const STEPS = ["Declare", "Orchestrate", "Review", "Approve"] as const;
 
-/** Sample files are read in the browser — big ones are refused, not truncated. */
-const MAX_SAMPLE_BYTES = 2_000_000;
 /** How many matched records are retained for inference and re-validation. */
 const MAX_SAMPLE_RECORDS = 500;
-
-interface SampleFile {
-  id: string;
-  name: string;
-  status: "reading" | "ok" | "error";
-  parsed?: ParseSampleResult;
-  error?: string;
-}
 
 const NO_PREFILL = "none";
 const schemaOption = (id: string) => `schema:${id}`;
@@ -147,15 +128,13 @@ export function CeremonyDialog({
   const [collecting, setCollecting] = useState(false);
   const [approving, setApproving] = useState(false);
 
-  // ---- uploaded evidence path
-  const [sampleFiles, setSampleFiles] = useState<SampleFile[]>([]);
-  const [recordPath, setRecordPath] = useState("");
+  // ---- uploaded evidence path (file handling itself lives in SampleInferencePanel)
   /** The records the schema was inferred from — retained as the evidence. */
   const [sampleRecords, setSampleRecords] = useState<unknown[]>([]);
   const [inferReport, setInferReport] = useState<InferenceReport | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  /** A suggested path is offered once; after that the field is the user's. */
-  const suggestedPathApplied = useRef(false);
+  /** Record path + file count as of the last successful upload inference, for the read-only Review/Approve summaries. */
+  const [uploadRecordPath, setUploadRecordPath] = useState("");
+  const [uploadFileCount, setUploadFileCount] = useState(0);
 
   // The live-sample path infers from the parent's probe. Writes other than http
   // no longer host a Test at all, so for those parents there is genuinely nothing
@@ -195,11 +174,10 @@ export function CeremonyDialog({
     setPrefillId(fromUrl ? templateOption(fromUrl) : existing && !prefillDraft ? schemaOption(existing.id) : NO_PREFILL);
     setProgress(0);
     setCollecting(false);
-    setSampleFiles([]);
-    setRecordPath("");
     setSampleRecords([]);
     setInferReport(null);
-    suggestedPathApplied.current = false;
+    setUploadRecordPath("");
+    setUploadFileCount(0);
     seedSignature.current = null;
     buffer.reset(null);
 
@@ -280,94 +258,24 @@ export function CeremonyDialog({
   };
 
   // ------------------------------------------------ uploaded sample files
-  const patchFile = (id: string, patch: Partial<SampleFile>) =>
-    setSampleFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
-
-  const readFiles = (files: FileList) => {
-    for (const file of Array.from(files)) {
-      const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      setSampleFiles((prev) => [...prev, { id, name: file.name, status: "reading" }]);
-
-      if (file.size > MAX_SAMPLE_BYTES) {
-        patchFile(id, {
-          status: "error",
-          error: `"${file.name}" is ${(file.size / 1_000_000).toFixed(1)} MB — samples are read in the browser, so the limit is 2 MB. Upload a slice of it.`,
-        });
-        continue;
-      }
-
-      const reader = new FileReader();
-      reader.onerror = () => patchFile(id, { status: "error", error: `Could not read "${file.name}".` });
-      reader.onload = () => {
-        const parsed = parseSampleFile(file.name, String(reader.result ?? ""));
-        if (parsed.ok) patchFile(id, { status: "ok", parsed });
-        else {
-          patchFile(id, { status: "error", error: parsed.error });
-          toast.error(parsed.error);
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const readyFiles = useMemo(
-    () => sampleFiles.filter((f) => f.status === "ok" && f.parsed?.ok) as (SampleFile & { parsed: ParseSampleResult })[],
-    [sampleFiles],
-  );
-
-  /** Candidate record paths across every parsed file, deepest first. */
-  const pathSuggestions = useMemo(() => {
-    const out: string[] = [];
-    for (const file of readyFiles) {
-      if (!file.parsed.ok) continue;
-      for (const path of suggestRecordPaths(file.parsed.value)) if (!out.includes(path)) out.push(path);
-    }
-    return out.slice(0, 8);
-  }, [readyFiles]);
-
-  // Offer the shallowest suggestion once, when the file's top level is a
-  // wrapper object rather than records — the common "it's nested deep" case.
-  useEffect(() => {
-    if (suggestedPathApplied.current || recordPath !== "" || pathSuggestions.length === 0) return;
-    const topLevelIsRecords = readyFiles.some((f) => f.parsed.ok && Array.isArray(f.parsed.value));
-    if (topLevelIsRecords) return;
-    setRecordPath(pathSuggestions[pathSuggestions.length - 1]);
-    suggestedPathApplied.current = true;
-  }, [pathSuggestions, readyFiles, recordPath]);
-
-  /** Live resolution of the record path across every parsed file. */
-  const resolution = useMemo(() => {
-    if (readyFiles.length === 0) return null;
-    const records: unknown[] = [];
-    const errors: { name: string; error: string }[] = [];
-    for (const file of readyFiles) {
-      if (!file.parsed.ok) continue;
-      const result = resolveRecordPath(file.parsed.value, recordPath);
-      if (result.ok) records.push(...result.records);
-      else errors.push({ name: file.name, error: result.error ?? "Could not resolve the record path." });
-    }
-    return { records, kept: records.slice(0, MAX_SAMPLE_RECORDS), errors };
-  }, [readyFiles, recordPath]);
-
-  const columnHints = useMemo(() => mergeCsvHints(readyFiles.map((f) => f.parsed)), [readyFiles]);
-
-  const runInference = () => {
-    const records = resolution?.kept ?? [];
-    if (records.length === 0) {
-      toast.error("No records matched the record path — nothing to infer from.");
-      return;
-    }
-    const { record, report } = inferAvroFromRecords(records, recordName, namespace, {
-      stringColumnHints: columnHints,
-    });
+  // File reading, the record-path input, and the live match count all live in
+  // SampleInferencePanel now — this just reacts to a successful inference the
+  // same way `runInference` used to react to itself.
+  const handleUploadInferred = (
+    avro: unknown,
+    report: InferenceReport,
+    context: { records: unknown[]; recordPath: string; fileCount: number },
+  ) => {
     try {
-      buffer.reset(normalizeAvroRecord({ ...record, name: recordName, namespace }, recordName));
+      buffer.reset(normalizeAvroRecord(avro, recordName));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not build a valid Avro record from those samples.");
       return;
     }
-    setSampleRecords(records);
+    setSampleRecords(context.records);
     setInferReport(report);
+    setUploadRecordPath(context.recordPath);
+    setUploadFileCount(context.fileCount);
     // The inferred record is the seed for this declaration — do not let
     // Back→Continue overwrite it with the pre-fill or the live-sample guess.
     seedSignature.current = `${prefillId}|${provenance}`;
@@ -464,9 +372,10 @@ export function CeremonyDialog({
   };
 
   const canDeclare = entity.trim().length > 0;
-  const matchedCount = resolution?.kept.length ?? 0;
-  const canOrchestrateNext =
-    provenance === "sample_run" ? progress >= 100 : provenance === "uploaded" ? matchedCount > 0 : true;
+  // The uploaded path's "Continue" lives inside SampleInferencePanel itself
+  // (its own "Infer schema" button gates on having matched records), so this
+  // only needs to gate the sample_run path's footer button.
+  const canOrchestrateNext = provenance === "sample_run" ? progress >= 100 : true;
   const fieldCount = buffer.record?.fields.length ?? 0;
   const samplesFail = !!sampleCheck && !sampleCheck.ok;
 
@@ -494,6 +403,19 @@ export function CeremonyDialog({
               {i < STEPS.length - 1 && <span className="text-muted-foreground">→</span>}
             </div>
           ))}
+        </div>
+
+        {/*
+          Always mounted — just hidden off-step — so the uploaded files and
+          record path survive Back→Forward navigation and toggling the
+          evidence-path radio, exactly like the ceremony-level state this
+          replaced did. Only step 1 with "uploaded" evidence ever shows it.
+        */}
+        <div className={cn("space-y-3", !(step === 1 && provenance === "uploaded") && "hidden")}>
+          <p className="text-sm">
+            Upload sample files — they are read and parsed here in the browser, and never sent anywhere.
+          </p>
+          <SampleInferencePanel recordName={recordName} namespace={namespace} onInferred={handleUploadInferred} />
         </div>
 
         {step === 0 && (
@@ -605,174 +527,6 @@ export function CeremonyDialog({
                 </p>
               </div>
             )}
-            {provenance === "uploaded" && (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <p className="text-sm">
-                    Upload sample files — they are read and parsed here in the browser, and never sent anywhere.
-                  </p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept=".json,.ndjson,.jsonl,.csv,.txt,application/json,text/csv,text/plain"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files?.length) readFiles(e.target.files);
-                      // Allow re-selecting the same file after a failed parse.
-                      e.target.value = "";
-                    }}
-                  />
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                    <FileUp className="mr-1.5 h-3.5 w-3.5" /> Add sample files
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    JSON, NDJSON (one object per line) and CSV, up to 2 MB each. XML and XLSX are refused with a note
-                    rather than half-parsed — export those as CSV or JSON first.
-                  </p>
-                </div>
-
-                {sampleFiles.length > 0 && (
-                  <ul className="space-y-1.5">
-                    {sampleFiles.map((file) => {
-                      const parsed = file.parsed?.ok ? file.parsed : null;
-                      const topLevel = parsed
-                        ? Array.isArray(parsed.value)
-                          ? `${(parsed.value as unknown[]).length} top-level item(s)`
-                          : "1 top-level object"
-                        : null;
-                      return (
-                        <li
-                          key={file.id}
-                          className={cn(
-                            "flex items-start gap-2 rounded-md border p-2 shadow-sm",
-                            file.status === "error" && "border-destructive/40 bg-destructive/5",
-                          )}
-                        >
-                          <FileJson className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1 space-y-0.5">
-                            <p className="flex flex-wrap items-center gap-1.5 text-sm">
-                              <span className="truncate font-mono text-xs">{file.name}</span>
-                              {file.status === "reading" && (
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Loader2 className="h-3 w-3 animate-spin" /> reading…
-                                </span>
-                              )}
-                              {parsed && (
-                                <>
-                                  <Badge variant="outline" className="text-xs uppercase">
-                                    {parsed.format}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">{topLevel}</span>
-                                </>
-                              )}
-                            </p>
-                            {file.status === "error" && <p className="text-xs text-destructive">{file.error}</p>}
-                            {parsed?.notes?.map((note) => (
-                              <p key={note} className="text-xs text-muted-foreground">
-                                {note}
-                              </p>
-                            ))}
-                          </div>
-                          <button
-                            type="button"
-                            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            title={`Remove ${file.name}`}
-                            onClick={() => setSampleFiles((prev) => prev.filter((f) => f.id !== file.id))}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-
-                {readyFiles.length > 0 && (
-                  <div className="space-y-1.5">
-                    <Label>Record path — where the records live inside the file</Label>
-                    <Input
-                      value={recordPath}
-                      onChange={(e) => {
-                        suggestedPathApplied.current = true;
-                        setRecordPath(e.target.value);
-                      }}
-                      placeholder="$.result.records[*] — blank means the file's top level"
-                      className="max-w-md font-mono text-xs"
-                    />
-                    {pathSuggestions.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Found in these files:</span>
-                        {pathSuggestions.map((path) => (
-                          <button
-                            key={path}
-                            type="button"
-                            onClick={() => {
-                              suggestedPathApplied.current = true;
-                              setRecordPath(path);
-                            }}
-                          >
-                            <Badge
-                              variant={recordPath === path ? "default" : "outline"}
-                              className={cn("cursor-pointer font-mono text-xs", recordPath !== path && "hover:bg-accent")}
-                            >
-                              {path}
-                            </Badge>
-                          </button>
-                        ))}
-                        {recordPath !== "" && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              suggestedPathApplied.current = true;
-                              setRecordPath("");
-                            }}
-                          >
-                            <Badge variant="outline" className="cursor-pointer text-xs hover:bg-accent">
-                              use the top level
-                            </Badge>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Same syntax as the http adapter's response record path — <code className="font-mono">$.data.items[*]</code>{" "}
-                      or <code className="font-mono">$.result.records[*].payload</code>.
-                    </p>
-
-                    {resolution && resolution.errors.length > 0 && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>The record path does not fit every file</AlertTitle>
-                        <AlertDescription className="space-y-0.5 text-xs">
-                          {resolution.errors.map((e) => (
-                            <p key={e.name}>
-                              <span className="font-mono">{e.name}</span> — {e.error}
-                            </p>
-                          ))}
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    <p className="text-xs text-muted-foreground">
-                      {matchedCount > 0 ? (
-                        <>
-                          <span className="font-medium text-foreground">
-                            {resolution?.records.length} record(s) matched
-                          </span>{" "}
-                          across {readyFiles.length} file(s)
-                          {(resolution?.records.length ?? 0) > MAX_SAMPLE_RECORDS
-                            ? ` — the first ${MAX_SAMPLE_RECORDS} are used for inference and kept as the evidence.`
-                            : " — all of them are inferred from and kept as the evidence."}
-                        </>
-                      ) : (
-                        "No records matched yet. Pick a suggested path, or leave the field blank to use the file's top level."
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
             {provenance === "manual" && (
               <p className="text-sm text-muted-foreground">
                 No evidence is collected. The schema you author will carry the provenance flag{" "}
@@ -783,17 +537,7 @@ export function CeremonyDialog({
               <Button variant="outline" onClick={() => setStep(0)}>
                 Back
               </Button>
-              {provenance === "uploaded" ? (
-                <Button
-                  onClick={runInference}
-                  disabled={!canOrchestrateNext}
-                  className="gap-1.5"
-                  title={canOrchestrateNext ? undefined : "No records match the record path yet."}
-                >
-                  <Wand2 className="h-3.5 w-3.5" />
-                  Infer schema & continue
-                </Button>
-              ) : (
+              {provenance !== "uploaded" && (
                 <Button onClick={goReview} disabled={!canOrchestrateNext}>
                   Continue to Review
                 </Button>
@@ -821,8 +565,8 @@ export function CeremonyDialog({
                   Inferred {inferReport.fieldCount} top-level field(s) from {inferReport.recordsSampled} record(s){" "}
                   {provenance === "uploaded" ? (
                     <>
-                      at <code className="font-mono">{recordPath.trim() || "$"}</code> across {readyFiles.length} uploaded
-                      file(s).
+                      at <code className="font-mono">{uploadRecordPath.trim() || "$"}</code> across {uploadFileCount}{" "}
+                      uploaded file(s).
                     </>
                   ) : (
                     <>collected by the live sample run — every record was inspected, not just the first.</>
@@ -938,7 +682,7 @@ export function CeremonyDialog({
                         ? `live sample run — ${parentRecordCount} record(s) collected, but the record was pre-filled rather than inferred from them`
                         : "live sample run — the upstream block has no probe, so no records backed this"
                     : provenance === "uploaded"
-                      ? `uploaded samples — ${readyFiles.length} file(s), ${sampleRecords.length} record(s) at ${recordPath.trim() || "$"}`
+                      ? `uploaded samples — ${uploadFileCount} file(s), ${sampleRecords.length} record(s) at ${uploadRecordPath.trim() || "$"}`
                       : "manually authored — not sample-validated"}
                 </dd>
                 {sampleCheck && (
