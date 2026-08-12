@@ -104,6 +104,7 @@ import { timeAgo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
+  clearDedupCache,
   forceRepairRuntime,
   getDlq,
   getFlowRuntime,
@@ -220,6 +221,10 @@ function chainRows(flow: Flow): { block: FlowBlock; depth: number }[] {
 
 function sinkServiceId(block: FlowBlock): string | null {
   return (block.config.sinkServiceId as string | undefined) ?? block.serviceId ?? null;
+}
+
+function hasDedup(block: FlowBlock): boolean {
+  return block.transforms.some((t) => t.kind === "dedup");
 }
 
 /** Destination topic for a write/sink block: the topic it materializes, or (for
@@ -1036,6 +1041,20 @@ function FlowDetailSheet({
   const qc = useQueryClient();
   const [tab, setTab] = useState("overview");
   const [msgTopic, setMsgTopic] = useState<string | null>(null);
+  const [clearDedupTarget, setClearDedupTarget] = useState<FlowBlock | null>(null);
+
+  const clearDedupMut = useMutation({
+    mutationFn: (block: FlowBlock) => clearDedupCache(flow.id, block.id),
+    onSuccess: (res, block) => {
+      qc.invalidateQueries({ queryKey: ["audit"] });
+      if (res.cleared) {
+        toast.success("Dedup cache cleared", { description: `${block.name} — previously suppressed records become eligible again before the window expires.` });
+      } else {
+        toast.info("Nothing to clear", { description: `${block.name} has never been deployed — there is no live cache yet.` });
+      }
+    },
+    onError: (e: Error) => toast.error("Could not clear the dedup cache", { description: e.message }),
+  });
 
   useEffect(() => {
     setTab("overview");
@@ -1314,6 +1333,17 @@ function FlowDetailSheet({
                         {block.entity && (
                           <Badge variant="outline" className="font-mono text-xs">{block.entity}</Badge>
                         )}
+                        {hasDedup(block) && (
+                          <span className="ml-auto inline-flex">
+                            <GuardedIconButton
+                              label="Clear dedup cache"
+                              reason={null}
+                              icon={Eraser}
+                              spinning={clearDedupMut.isPending && clearDedupMut.variables?.id === block.id}
+                              onClick={() => setClearDedupTarget(block)}
+                            />
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {svc && <span>{svc.name}</span>}
@@ -1551,6 +1581,29 @@ function FlowDetailSheet({
           <RuntimeTab flow={flow} services={services} connections={connections} onEdit={onEdit} />
         </TabsContent>
       </Tabs>
+
+      {/* ── Clear dedup cache confirmation ── */}
+      <AlertDialog open={!!clearDedupTarget} onOpenChange={(open) => !open && setClearDedupTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear the dedup cache for "{clearDedupTarget?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Previously suppressed records become eligible again before the window expires. This action is audited.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (clearDedupTarget) clearDedupMut.mutate(clearDedupTarget);
+                setClearDedupTarget(null);
+              }}
+            >
+              Clear cache
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SheetContent>
   );
 }

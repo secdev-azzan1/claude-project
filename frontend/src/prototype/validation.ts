@@ -73,6 +73,28 @@ export function gatewayRefusals(block: FlowBlock, gateway: GatewaySnapshot, serv
   return refusals;
 }
 
+// ------------------------------------------------------------------ dedup
+// TTL bounds per the MVP dedup rules: minimum 1 minute, maximum 365 days,
+// default 24 hours. windowHours is the canonical unit — fractional so a
+// 1-minute window is representable (1/60).
+export const DEDUP_WINDOW_MIN_HOURS = 1 / 60;
+export const DEDUP_WINDOW_MAX_HOURS = 8760; // 365 days
+export const DEDUP_WINDOW_DEFAULT_HOURS = 24;
+
+/** null = fine, string = the message to show (badge + inline). */
+export function dedupIdentityFieldsIssue(identityFields: unknown): string | null {
+  const fields = Array.isArray(identityFields) ? identityFields.filter((f) => typeof f === "string" && f.trim()) : [];
+  return fields.length === 0 ? "At least one identity field is required" : null;
+}
+
+/** null = fine, string = the message to show (badge + inline). */
+export function dedupWindowIssue(windowHours: unknown): string | null {
+  if (typeof windowHours !== "number" || Number.isNaN(windowHours)) return "Window must be between 1 minute and 365 days";
+  return windowHours < DEDUP_WINDOW_MIN_HOURS || windowHours > DEDUP_WINDOW_MAX_HOURS
+    ? "Window must be between 1 minute and 365 days"
+    : null;
+}
+
 function isWrite(block: FlowBlock): boolean {
   return block.mode === "write" || block.adapter === "kafka_kc";
 }
@@ -197,6 +219,13 @@ export function validateBlock(
   if (dedupIndex >= 0 && dedupIndex !== block.transforms.length - 1) at("Dedup must be the last transformation.");
   if (!hostsTransforms(flow, block) && block.transforms.length > 0 && block.adapter !== "kc")
     at("R8 — this branch carries raw bytes; transformations are not available here.");
+  for (const t of block.transforms) {
+    if (t.kind !== "dedup") continue;
+    const identityIssue = dedupIdentityFieldsIssue(t.config.identityFields);
+    if (identityIssue) at(identityIssue);
+    const windowIssue = dedupWindowIssue(t.config.windowHours);
+    if (windowIssue) at(windowIssue);
+  }
 
   return issues;
 }

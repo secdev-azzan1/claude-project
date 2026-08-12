@@ -2,6 +2,7 @@
 // block. Ordered rule list; dedup pinned last; routing rules create named
 // branches through the same legality-filtered add menu.
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,6 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { AddBlockMenu } from "./AddBlockMenu";
 import { computeAddMenu, type AddMenuEntry } from "@/prototype/legality";
 import { uid } from "@/prototype/store";
+import {
+  DEDUP_WINDOW_DEFAULT_HOURS,
+  dedupIdentityFieldsIssue,
+  dedupWindowIssue,
+} from "@/prototype/validation";
 import type { Flow, FlowBlock, TransformKind, TransformRule } from "@/prototype/types";
 import {
   DropdownMenu,
@@ -51,7 +57,7 @@ function defaultConfig(kind: TransformKind): Record<string, unknown> {
     case "coerce":
       return { field: "", type: "string" };
     case "dedup":
-      return { identityFields: [], excludedFields: [], windowHours: 24 };
+      return { identityFields: [], excludedFields: [], windowHours: DEDUP_WINDOW_DEFAULT_HOURS };
   }
 }
 
@@ -221,6 +227,16 @@ export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches
   );
 }
 
+type WindowUnit = "minutes" | "hours" | "days";
+
+const UNIT_TO_HOURS: Record<WindowUnit, number> = { minutes: 1 / 60, hours: 1, days: 24 };
+const UNIT_LABEL: Record<WindowUnit, string> = { minutes: "minutes", hours: "hours", days: "days" };
+
+/** Trim floating-point noise from unit conversion (e.g. 24 hours -> 1 day). */
+function roundDisplay(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
+}
+
 function DedupFields({
   rule,
   locked,
@@ -230,8 +246,15 @@ function DedupFields({
   locked: boolean;
   setRule: (id: string, patch: Partial<TransformRule>) => void;
 }) {
+  const [unit, setUnit] = useState<WindowUnit>("hours");
   const identity = ((rule.config.identityFields as string[]) ?? []).join(", ");
   const excluded = ((rule.config.excludedFields as string[]) ?? []).join(", ");
+  const windowHours = (rule.config.windowHours as number) ?? DEDUP_WINDOW_DEFAULT_HOURS;
+  const displayValue = roundDisplay(windowHours / UNIT_TO_HOURS[unit]);
+
+  const identityIssue = dedupIdentityFieldsIssue(rule.config.identityFields);
+  const windowIssue = dedupWindowIssue(rule.config.windowHours);
+
   return (
     <div className="w-full space-y-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -245,24 +268,52 @@ function DedupFields({
         <Input
           className="h-7 w-56 text-xs"
           value={excluded}
-          placeholder="excluded fields"
+          placeholder="excluded fields (optional)"
           disabled={locked}
           onChange={(e) => setRule(rule.id, { config: { excludedFields: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } })}
         />
-        <Input
-          className="h-7 w-24 text-xs"
-          type="number"
-          min={1}
-          max={8760}
-          value={(rule.config.windowHours as number) ?? 24}
-          disabled={locked}
-          onChange={(e) => setRule(rule.id, { config: { windowHours: Number(e.target.value) } })}
-        />
-        <span className="text-xs text-muted-foreground">hours</span>
       </div>
+      {identityIssue && <p className="text-xs leading-4 text-destructive">{identityIssue}</p>}
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Input
+          className="h-7 w-20 text-xs"
+          type="number"
+          step="any"
+          value={displayValue}
+          disabled={locked}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isNaN(n)) return;
+            setRule(rule.id, { config: { windowHours: n * UNIT_TO_HOURS[unit] } });
+          }}
+        />
+        <Select value={unit} disabled={locked} onValueChange={(v) => setUnit(v as WindowUnit)}>
+          <SelectTrigger className="h-7 w-28 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(UNIT_LABEL) as WindowUnit[]).map((u) => (
+              <SelectItem key={u} value={u}>
+                {UNIT_LABEL[u]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">window (1 minute – 365 days)</span>
+      </div>
+      {windowIssue && <p className="text-xs leading-4 text-destructive">{windowIssue}</p>}
+
       <p className="text-xs leading-4 text-muted-foreground">
-        Duplicate suppression, not a delivery guarantee. SHA-256 fingerprints in Redis, one cache per stream — if Redis is down,
-        records fail rather than sneak through. A record missing an identity field goes to the DLQ.
+        Platform metadata (ingest_id, ingest_ts, op) is always excluded from the fingerprint.
+      </p>
+      <p className="text-xs leading-4 text-muted-foreground">
+        Duplicate suppression is best-effort within the window — not a delivery guarantee. SHA-256 fingerprints in Redis,
+        one cache per stream — if Redis is down, records fail rather than sneak through. A record missing an identity
+        field goes to the DLQ.
+      </p>
+      <p className="text-xs leading-4 text-warning">
+        Changing dedup settings clears this block's cache at the next deploy — previously suppressed records may reappear.
       </p>
     </div>
   );

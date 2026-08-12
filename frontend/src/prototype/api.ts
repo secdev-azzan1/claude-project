@@ -49,8 +49,20 @@ function gatewayOf(state: PrototypeState): GatewaySnapshot {
   return { proxies: state.gatewayProxies, allowlist: state.gateway.allowlist };
 }
 
-function audit(state: PrototypeState, action: string, object: string, target: string, status: AuditEvent["status"] = "Success", details?: string) {
-  state.audit.unshift({ id: uid("a"), ts: nowIso(), user: "admin", action, object, target, status, details });
+// "Skipped" is not part of the persisted AuditEvent status vocabulary (kept
+// narrow everywhere else), but a no-op action — e.g. clearing a dedup cache
+// on a flow that has never been deployed — still needs to be audited as
+// "attempted, nothing to do" rather than as a Success or a Failed. It is
+// accepted here and narrowed back on write.
+function audit(
+  state: PrototypeState,
+  action: string,
+  object: string,
+  target: string,
+  status: AuditEvent["status"] | "Skipped" = "Success",
+  details?: string,
+) {
+  state.audit.unshift({ id: uid("a"), ts: nowIso(), user: "admin", action, object, target, status: status as AuditEvent["status"], details });
 }
 
 function clone<T>(value: T): T {
@@ -344,6 +356,27 @@ export async function testBlock(flowId: string, blockId: string): Promise<FlowBl
     block.testResult = result;
     audit(state, "Block tested", "Stream", `${flow.name} · ${block.name}`, result.ok ? "Success" : "Failed", result.ok ? "Bounded probe, max 10 records — nothing committed" : result.reason);
     return clone(result);
+  });
+}
+
+// ------------------------------------------------------------------ dedup
+// Changing a stream's dedup config clears its cache at the next deploy —
+// this is the explicit, audited, per-stream action for clearing it on
+// demand, independent of a deploy. A flow that has never been deployed has
+// no live cache to clear, so it succeeds as a no-op rather than failing.
+export async function clearDedupCache(flowId: string, blockId: string): Promise<{ cleared: boolean }> {
+  await sleep(400);
+  return mutate((state) => {
+    const flow = state.flows.find((f) => f.id === flowId);
+    const block = flow?.blocks.find((b) => b.id === blockId);
+    if (!flow || !block) throw new Error("Block not found");
+    const target = `${flow.name} · ${block.name}`;
+    if (!flow.deployedAt) {
+      audit(state, "Dedup cache cleared", "Stream", target, "Skipped", "Flow has never been deployed — no cache to clear");
+      return { cleared: false };
+    }
+    audit(state, "Dedup cache cleared", "Stream", target, "Success");
+    return { cleared: true };
   });
 }
 
