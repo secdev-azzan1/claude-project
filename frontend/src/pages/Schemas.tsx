@@ -219,6 +219,51 @@ function KindBadge({ globalId }: { globalId?: number }) {
   );
 }
 
+/**
+ * A template's registration pill — the alpha-model counterpart of
+ * `KindBadge` for library templates, which register independently (via
+ * Register…) rather than through a ceremony. `compact` drops the "Registered"
+ * word and version for the tight rail row; the detail header uses the full
+ * form. Unregistered templates render nothing in compact mode (nothing to
+ * say yet) but the explicit muted pill in the detail header.
+ */
+function TemplateRegistrationBadge({
+  globalId,
+  version,
+  compact,
+}: {
+  globalId?: number;
+  version?: number;
+  compact?: boolean;
+}) {
+  if (globalId == null) {
+    if (compact) return null;
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+        Not registered
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-success/20 bg-success-muted px-2 py-0.5 text-xs font-medium text-success">
+      <ShieldCheck className="h-3 w-3" />
+      {compact ? (
+        <span className="font-mono">#{globalId}</span>
+      ) : (
+        <>
+          Registered · <span className="font-mono">#{globalId}</span>
+          {version != null && (
+            <>
+              {" "}
+              · <span className="font-mono">v{version}</span>
+            </>
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
 function FilterChip({
   active,
   onClick,
@@ -399,7 +444,12 @@ function InferredReportPanel({ report, onDismiss }: { report: InferenceReport; o
   );
 }
 
-type KindFilter = "all" | "approved" | "template";
+/**
+ * The alpha model's registration axis: an approved schema is always
+ * registered (approval IS registration); a template is registered only once
+ * it has been through the independent Register… action.
+ */
+type RegistrationFilter = "all" | "registered" | "not_registered";
 
 type Artifact =
   | { kind: "approved"; id: string; label: string; at: string; schema: ApprovedSchema }
@@ -435,7 +485,7 @@ const Schemas = () => {
   // ─── rail state ───────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 250);
-  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [registrationFilter, setRegistrationFilter] = useState<RegistrationFilter>("all");
   const [provenanceFilter, setProvenanceFilter] = useState<SchemaProvenance[]>([]);
   const [selectedId, setSelectedId] = useState("");
 
@@ -503,7 +553,11 @@ const Schemas = () => {
   const filtered = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
     return artifacts.filter((artifact) => {
-      if (kindFilter !== "all" && artifact.kind !== kindFilter) return false;
+      if (registrationFilter !== "all") {
+        const registered = artifact.kind === "approved" || artifact.template.registryGlobalId != null;
+        if (registrationFilter === "registered" && !registered) return false;
+        if (registrationFilter === "not_registered" && registered) return false;
+      }
       // Provenance is an approved-only axis: narrowing it hides templates.
       if (provenanceFilter.length > 0) {
         if (artifact.kind !== "approved") return false;
@@ -523,7 +577,7 @@ const Schemas = () => {
           : [artifact.template.name, artifact.template.description ?? ""];
       return haystack.some((value) => value.toLowerCase().includes(query));
     });
-  }, [artifacts, kindFilter, provenanceFilter, debouncedSearch, flowLabel]);
+  }, [artifacts, registrationFilter, provenanceFilter, debouncedSearch, flowLabel]);
 
   const selected = useMemo(
     () => artifacts.find((a) => a.id === selectedId) ?? filtered[0] ?? artifacts[0] ?? null,
@@ -606,6 +660,18 @@ const Schemas = () => {
     (templateName !== selectedTemplate.name ||
       templateDescription !== (selectedTemplate.description ?? ""));
   const templateDirty = !!selectedTemplate && (buffer.dirty || metaDirty);
+  /**
+   * True once a registered template's buffer has moved on from what was last
+   * published — either the in-progress edit is unsaved (`templateDirty`), or
+   * it was saved after the last registration (`updatedAt` outran
+   * `registeredAt`). Meaningless for a template that was never registered.
+   */
+  const templateEditedSinceRegistration =
+    !!selectedTemplate &&
+    selectedTemplate.registryGlobalId != null &&
+    (templateDirty ||
+      (!!selectedTemplate.registeredAt &&
+        new Date(selectedTemplate.updatedAt).getTime() > new Date(selectedTemplate.registeredAt).getTime()));
 
   // ─── mutations ────────────────────────────────────────────────────────
   const invalidateTemplates = () => queryClient.invalidateQueries({ queryKey: ["schemaTemplates"] });
@@ -905,7 +971,7 @@ const Schemas = () => {
   return (
     <AppLayout
       title="Schemas"
-      description="Approved schemas are registered at approval and authored only through the ceremony. Library templates are hand-authored, unregistered, and can pre-fill a ceremony."
+      description="Approved schemas come from the flow ceremony. Library templates are hand-authored and can be verified and registered to the registry directly."
     >
       <div className={schemaWorkspaceLayout.grid}>
         {/* ------------------------------------------------ left artifact rail */}
@@ -949,11 +1015,15 @@ const Schemas = () => {
                 {(
                   [
                     ["all", "All"],
-                    ["approved", "Approved"],
-                    ["template", "Templates"],
-                  ] as [KindFilter, string][]
+                    ["registered", "Registered"],
+                    ["not_registered", "Not registered"],
+                  ] as [RegistrationFilter, string][]
                 ).map(([value, label]) => (
-                  <FilterChip key={value} active={kindFilter === value} onClick={() => setKindFilter(value)}>
+                  <FilterChip
+                    key={value}
+                    active={registrationFilter === value}
+                    onClick={() => setRegistrationFilter(value)}
+                  >
                     {label}
                   </FilterChip>
                 ))}
@@ -1024,13 +1094,17 @@ const Schemas = () => {
                           {artifact.label}
                         </span>
                       </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-5">
-                        <KindBadge
-                          globalId={
-                            artifact.kind === "approved" ? artifact.schema.registryGlobalId : undefined
-                          }
-                        />
-                      </div>
+                      {artifact.kind === "approved" ? (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-5">
+                          <KindBadge globalId={artifact.schema.registryGlobalId} />
+                        </div>
+                      ) : (
+                        artifact.template.registryGlobalId != null && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-5">
+                            <TemplateRegistrationBadge globalId={artifact.template.registryGlobalId} compact />
+                          </div>
+                        )
+                      )}
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-5 text-xs text-muted-foreground">
                         {artifact.kind === "approved" ? (
                           <>
@@ -1267,7 +1341,10 @@ const Schemas = () => {
                         aria-label="Template name"
                       />
                       <div className="flex flex-wrap items-center gap-2">
-                        <KindBadge />
+                        <TemplateRegistrationBadge
+                          globalId={selectedTemplate.registryGlobalId}
+                          version={selectedTemplate.registeredVersion}
+                        />
                         <span className="text-xs text-muted-foreground">
                           updated {relativeTime(selectedTemplate.updatedAt)}
                         </span>
@@ -1275,6 +1352,20 @@ const Schemas = () => {
                           <span className="text-xs font-medium text-warning">unsaved changes</span>
                         )}
                       </div>
+                      {selectedTemplate.registeredSubject && (
+                        <p className="font-mono text-xs text-muted-foreground">
+                          {selectedTemplate.registeredSubject}
+                          {selectedTemplate.registeredAt && (
+                            <span className="font-sans"> · registered {relativeTime(selectedTemplate.registeredAt)}</span>
+                          )}
+                        </p>
+                      )}
+                      {templateEditedSinceRegistration && (
+                        <p className="flex items-center gap-1 text-xs font-medium text-warning">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          Edited since registration — Register again to publish a new version.
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex shrink-0 flex-wrap gap-2">

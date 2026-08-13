@@ -543,6 +543,8 @@ function toSchemaTemplate(doc: Record<string, unknown>): SchemaTemplate {
     updatedAt: doc.updatedAt as string,
     ...(doc.registeredSubject ? { registeredSubject: doc.registeredSubject as string } : {}),
     ...(doc.registryGlobalId != null ? { registryGlobalId: doc.registryGlobalId as number } : {}),
+    ...(doc.registeredVersion != null ? { registeredVersion: doc.registeredVersion as number } : {}),
+    ...(doc.registeredAt ? { registeredAt: doc.registeredAt as string } : {}),
   };
 }
 

@@ -320,7 +320,9 @@ def test_verify_no_active_connection_skips_compat_check():
 def test_register_standalone_and_template_linking(monkeypatch):
     fake_db = FakeDB()
     fake_db.connections_v2.docs.append(make_apicurio_connection())
-    calls = _install_register_schema(monkeypatch, results=[{"ok": True, "global_id": 77, "version": 3}])
+    # ccompat's "version" sometimes round-trips as a numeric string -- (a)
+    # exercises int coercion end to end, both on the response and the doc.
+    calls = _install_register_schema(monkeypatch, results=[{"ok": True, "global_id": 77, "version": "3"}])
     client = _make_client(fake_db)
     try:
         tpl_resp = client.post("/api/v2/schemas/templates", json={"name": "Order Template", "avro": make_avro()})
@@ -332,15 +334,120 @@ def test_register_standalone_and_template_linking(monkeypatch):
             json={"subject": "raw.orders-value", "avro": make_avro(), "templateId": tpl_id},
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json() == {"globalId": 77, "subject": "raw.orders-value", "version": 3}
+        body = resp.json()
+        assert body["globalId"] == 77
+        assert body["subject"] == "raw.orders-value"
+        assert body["version"] == 3
+        assert isinstance(body["version"], int)
+        assert body.get("registeredAt")
         assert calls[0]["artifact_id"] == "raw.orders-value"
         assert calls[0]["ccompat_only"] is True  # E6 — see approve's equivalent assertion.
 
         tpl_doc = next(d for d in fake_db.schema_templates_v2.docs if d["id"] == tpl_id)
         assert tpl_doc["registeredSubject"] == "raw.orders-value"
         assert tpl_doc["registryGlobalId"] == 77
+        assert tpl_doc["registeredVersion"] == 3
+        assert isinstance(tpl_doc["registeredVersion"], int)
         assert tpl_doc.get("registeredAt")
         assert any(e["action"] == "Schema registered" for e in fake_db.audit_v2.docs)
+    finally:
+        _clear_overrides()
+
+
+def test_register_reregister_refreshes_all_four_fields(monkeypatch):
+    """(b) Re-registering under the same subject: CHANGED avro must land a
+    NEW global id + version on the template doc (ccompat's job -- we just
+    persist whatever it hands back); a further re-register with the SAME
+    (unchanged) avro is idempotent at the registry -- same version comes
+    back -- and must persist cleanly with no error."""
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append(make_apicurio_connection())
+    calls = _install_register_schema(
+        monkeypatch,
+        results=[
+            {"ok": True, "global_id": 77, "version": 1},
+            {"ok": True, "global_id": 78, "version": 2},  # changed avro -> new version
+            {"ok": True, "global_id": 78, "version": 2},  # unchanged avro -> same version, idempotent
+        ],
+    )
+    client = _make_client(fake_db)
+    try:
+        tpl_resp = client.post("/api/v2/schemas/templates", json={"name": "Order Template", "avro": make_avro()})
+        tpl_id = tpl_resp.json()["id"]
+
+        first = client.post(
+            "/api/v2/schemas/register",
+            json={"subject": "raw.orders-value", "avro": make_avro(), "templateId": tpl_id},
+        )
+        assert first.status_code == 200, first.text
+        assert first.json()["version"] == 1
+
+        tpl_doc_1 = next(d for d in fake_db.schema_templates_v2.docs if d["id"] == tpl_id)
+        assert tpl_doc_1["registryGlobalId"] == 77
+        assert tpl_doc_1["registeredVersion"] == 1
+        first_registered_at = tpl_doc_1["registeredAt"]
+
+        changed_avro = make_avro(["null", "long"])
+        second = client.post(
+            "/api/v2/schemas/register",
+            json={"subject": "raw.orders-value", "avro": changed_avro, "templateId": tpl_id},
+        )
+        assert second.status_code == 200, second.text
+        body2 = second.json()
+        assert body2["globalId"] == 78
+        assert body2["version"] == 2
+        assert body2.get("registeredAt")
+
+        tpl_doc_2 = next(d for d in fake_db.schema_templates_v2.docs if d["id"] == tpl_id)
+        assert tpl_doc_2["registryGlobalId"] == 78
+        assert tpl_doc_2["registeredVersion"] == 2
+        assert tpl_doc_2["registeredSubject"] == "raw.orders-value"
+        assert tpl_doc_2["registeredAt"] >= first_registered_at
+
+        # Re-register the SAME (unchanged) avro again -- registry idempotent,
+        # same version/global id come back, no error, doc still refreshed.
+        third = client.post(
+            "/api/v2/schemas/register",
+            json={"subject": "raw.orders-value", "avro": changed_avro, "templateId": tpl_id},
+        )
+        assert third.status_code == 200, third.text
+        assert third.json()["globalId"] == 78
+        assert third.json()["version"] == 2
+
+        tpl_doc_3 = next(d for d in fake_db.schema_templates_v2.docs if d["id"] == tpl_id)
+        assert tpl_doc_3["registryGlobalId"] == 78
+        assert tpl_doc_3["registeredVersion"] == 2
+        assert len(calls) == 3
+    finally:
+        _clear_overrides()
+
+
+def test_list_templates_carries_registration_fields(monkeypatch):
+    """(c) GET /api/v2/schemas/ round-trips all four registration fields for
+    a registered template (passthrough serialization -- no projection should
+    drop any of them)."""
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append(make_apicurio_connection())
+    _install_register_schema(monkeypatch, results=[{"ok": True, "global_id": 55, "version": "7"}])
+    client = _make_client(fake_db)
+    try:
+        tpl_resp = client.post("/api/v2/schemas/templates", json={"name": "Ledger Template", "avro": make_avro()})
+        tpl_id = tpl_resp.json()["id"]
+
+        reg = client.post(
+            "/api/v2/schemas/register",
+            json={"subject": "raw.ledger-value", "avro": make_avro(), "templateId": tpl_id},
+        )
+        assert reg.status_code == 200, reg.text
+
+        listing = client.get("/api/v2/schemas/")
+        assert listing.status_code == 200, listing.text
+        tpl = next(t for t in listing.json()["templates"] if t["id"] == tpl_id)
+        assert tpl["registeredSubject"] == "raw.ledger-value"
+        assert tpl["registryGlobalId"] == 55
+        assert tpl["registeredVersion"] == 7
+        assert isinstance(tpl["registeredVersion"], int)
+        assert tpl.get("registeredAt")
     finally:
         _clear_overrides()
 

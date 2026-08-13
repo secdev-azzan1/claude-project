@@ -155,6 +155,22 @@ _serialize_schema = _strip_id
 _serialize_template = _strip_id
 
 
+def _coerce_int(value: Any) -> Any:
+    """Best-effort int coercion for registry version numbers. ccompat's
+    `/subjects/.../versions/latest` response normally hands back an int, but
+    some registries/clients round-trip it as a numeric string (e.g. "4") --
+    store it as int either way so callers can compare/sort on it. Anything
+    that isn't a clean integer (None, non-numeric strings) passes through
+    unchanged rather than raising."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped and stripped.lstrip("-").isdigit():
+            return int(stripped)
+    return value
+
+
 # ------------------------------------------------------------- apicurio glue
 
 
@@ -497,27 +513,35 @@ async def register_schema_standalone(body: Dict[str, Any] = Body(...), db: Async
     global_id = result.get("global_id")
     if global_id is None:
         global_id = result.get("ccompat_id") or 0
-    version = result.get("version")
+    version = _coerce_int(result.get("version"))
+    registered_at = now_iso()
 
     tpl_name = None
     if template_id:
         tpl = await db[COLLECTIONS.schema_templates].find_one({"id": template_id}, {"_id": 0})
         if tpl:
             tpl_name = tpl.get("name")
+            # Unconditional $set on every registration -- whether this is the
+            # template's first register or a RE-register of changed/unchanged
+            # avro, all four fields are refreshed from what the registry just
+            # returned (ccompat hands back a new version when the schema
+            # changed, the same version when it didn't -- either way we just
+            # persist it, no error).
             await db[COLLECTIONS.schema_templates].update_one(
                 {"id": template_id},
                 {"$set": {
                     "registeredSubject": subject,
                     "registryGlobalId": global_id,
-                    "registeredAt": now_iso(),
-                    "updatedAt": now_iso(),
+                    "registeredVersion": version,
+                    "registeredAt": registered_at,
+                    "updatedAt": registered_at,
                 }},
             )
 
     details = f"Registered as global id {global_id}" + (f' · linked to template "{tpl_name}"' if tpl_name else "")
     await audit(db, "Schema registered", subject, status="Success", details=details, object="Schema")
 
-    return {"globalId": global_id, "subject": subject, "version": version}
+    return {"globalId": global_id, "subject": subject, "version": version, "registeredAt": registered_at}
 
 
 # -------------------------------------------------------------------- draft

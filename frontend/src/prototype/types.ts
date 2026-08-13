@@ -217,6 +217,10 @@ export interface SchemaTemplate {
   registeredSubject?: string;
   /** Global id from the most recent direct registration, alongside `registeredSubject`. */
   registryGlobalId?: number;
+  /** Registry's own version marker from the most recent direct registration. */
+  registeredVersion?: number;
+  /** When the most recent direct registration happened. */
+  registeredAt?: string;
 }
 
 // ------------------------------------------------------------ connections
