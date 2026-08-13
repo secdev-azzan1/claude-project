@@ -1248,6 +1248,15 @@ async def _run_http_read_probe(db, block: FlowBlock) -> Dict[str, Any]:
     path = str(config.get("path") or "")
     pagination = config.get("pagination") or {"type": "none", "fields": {}}
     query_params = _probe_query_params(pagination)
+    # Same join-safety as the compiler (user-reported: full URL / missing
+    # slash in path concatenates into an invalid host like `dummyjson.comhttps`).
+    from services.adapter.compiler.blocks_http import _normalize_path
+    from services.adapter.compiler.ir import CompileError as _CompileError
+    try:
+        path = _normalize_path(path, service)
+    except _CompileError as exc:
+        return {"ok": False, "reason": str(exc), "records": [], "detectedFields": [],
+                "testedAt": now_iso()}
     url = f"{base_url}{path}"
 
     auth_mode = service.config.get("authMode", "none")

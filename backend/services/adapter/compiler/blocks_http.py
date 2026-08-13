@@ -97,6 +97,29 @@ def _service_for(block: FlowBlock, ctx: "CompileContext") -> AppService:
     return svc
 
 
+def _normalize_path(path: str, service: AppService) -> str:
+    """Join-safety for the `{baseUrl}{path}` concatenation (user-reported live
+    failure: a full URL — or a missing leading slash — produced an invalid
+    host like `dummyjson.comhttps`/`dummyjson.comusers`).
+
+    - full URL matching the service's own base -> stripped to its path part
+    - foreign full URL -> CompileError (save/deploy validation also rejects it)
+    - missing leading '/' (and not a `${...}` template start) -> '/' prepended
+    """
+    p = (path or "").strip()
+    base = str(service.config.get("baseUrl") or "").strip().rstrip("/")
+    if p.lower().startswith(("http://", "https://")):
+        if base and p.lower().startswith(base.lower()):
+            p = p[len(base):] or "/"
+        else:
+            raise CompileError(
+                f"http path must be a path, not a full URL (the service provides the base URL): {p!r}"
+            )
+    if p and not p.startswith("/") and not p.startswith("${"):
+        p = "/" + p
+    return p
+
+
 def _base_url_expr(*, block: FlowBlock, service: AppService, ctx: "CompileContext", add_param) -> str:
     """`#{svc_<id>_base_url}`, or the APISIX proxy swap when a proxy is bound."""
     proxy_id = block_proxy_id(block, list(ctx.services.values()))
@@ -323,7 +346,7 @@ def compile_read(
     ptype = pagination.get("type", "none")
     split = bool(block.config.get("split", True))
     record_path = str(block.config.get("recordPath", "$"))
-    path = str(block.config.get("path", ""))
+    path = _normalize_path(str(block.config.get("path", "")), service)
 
     # ---- trigger / input port -------------------------------------------------
     if is_root:
@@ -696,7 +719,7 @@ def _compile_write(
     method = str(block.config.get("method") or "POST").upper()
     if method not in ("POST", "PUT", "PATCH"):
         raise CompileError(f"http write block {block.id!r} has invalid method {method!r} (POST/PUT/PATCH only)")
-    path = str(block.config.get("path", ""))
+    path = _normalize_path(str(block.config.get("path", "")), service)
     body_template = str(block.config.get("bodyTemplate", "") or "")
     write_forwards = str(block.config.get("writeForwards", "original") or "original")
 
@@ -782,7 +805,7 @@ def _compile_lookup(
     if is_root:
         raise CompileError(f"http lookup block {block.id!r} cannot be a flow root")
     service = _service_for(block, ctx)
-    path = str(block.config.get("path", ""))
+    path = _normalize_path(str(block.config.get("path", "")), service)
     join_field = str(block.config.get("lookupJoinField") or "id")
 
     source: Tail = ("inputPort", "")

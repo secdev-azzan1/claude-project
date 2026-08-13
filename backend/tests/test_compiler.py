@@ -1380,3 +1380,19 @@ def test_kafka_kc_sink_service_missing_both_raises():
     flow = base.model_copy(update={"blocks": blocks})
     with pytest.raises(CompileError, match="sink destination service"):
         compile_flow(flow, golden_ctx())
+
+def test_http_path_normalization_join_safety():
+    """User-reported live failure: {baseUrl}{path} blind concatenation. The
+    compiler must strip a base-matching full URL, slash-join a bare path,
+    and refuse a foreign full URL."""
+    from services.adapter.compiler.blocks_http import _normalize_path
+    svc = make_service(id="s", type="http", name="S",
+                       config={"baseUrl": "https://dummyjson.com", "authMode": "none"})
+    assert _normalize_path("/users", svc) == "/users"
+    assert _normalize_path("users", svc) == "/users"
+    assert _normalize_path("https://dummyjson.com/users", svc) == "/users"
+    assert _normalize_path("HTTPS://DUMMYJSON.COM/users", svc) == "/users"
+    assert _normalize_path("${dynamic.path}", svc) == "${dynamic.path}"
+    import pytest as _pytest
+    with _pytest.raises(CompileError):
+        _normalize_path("https://other.example.com/x", svc)
