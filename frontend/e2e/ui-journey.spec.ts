@@ -334,7 +334,7 @@ test("step08 REGRESSION stop -> undeploy -> redeploy passes preflight (own topic
   await shot("08-stopped");
 
   await page.getByRole("button", { name: "More" }).click();
-  await page.getByRole("menuitem", { name: /Undeploy/ }).click();
+  await page.getByRole("menuitem", { name: "Undeploy", exact: true }).click();
   await expect(page.getByText(/Undeployed — generated topics emptied/)).toBeVisible({ timeout: 180_000 });
   await shot("08b-undeployed");
 
@@ -364,7 +364,7 @@ test("step09 UI cleanup — delete flow, retire service", async () => {
 
   // Delete requires undeployed: undeploy the just-redeployed flow first (UI).
   await page.getByRole("button", { name: "More" }).click();
-  await page.getByRole("menuitem", { name: /Undeploy/ }).click();
+  await page.getByRole("menuitem", { name: "Undeploy", exact: true }).click();
   await expect(page.getByText(/Undeployed — generated topics emptied/)).toBeVisible({ timeout: 180_000 });
 
   await page.goto("/flows");

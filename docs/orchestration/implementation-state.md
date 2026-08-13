@@ -53,3 +53,4 @@ Last updated: 2026-08-13 — COMPLETE. Backend 653/0, frontend 157/0; journeys A
 
 - None currently. Kafka broker TCP + Redis unreachable from dev machine by design —
   mitigations decided (Kafbat REST; Redis via NiFi) — see decisions D15.
+| User-reported fixes (path UX, test-save, topic self-own, InvokeHTTP) + schema registration UX | VERIFIED | diag-invokehttp.md, ui-playwright-journey.md, schema-registration-verify.md; suites backend 660/0, frontend 161/0 |
