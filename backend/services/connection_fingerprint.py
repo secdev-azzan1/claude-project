@@ -20,12 +20,26 @@ from services.iceberg_catalog_client import test_iceberg_connection
 # Import kafka components at module level to allow monkeypatching
 try:
     from kafka.admin import KafkaAdminClient
-    from kafka.errors import NoBrokersAvailable, KafkaConnectionError, KafkaTimeoutError
 except ImportError:
     KafkaAdminClient = None
-    NoBrokersAvailable = Exception
-    KafkaConnectionError = Exception
-    KafkaTimeoutError = Exception
+
+# kafka-python 3.x removed NoBrokersAvailable; import error names individually
+# so one missing name cannot disable the whole client (it did, silently).
+try:
+    from kafka.errors import NoBrokersAvailable
+except ImportError:
+    try:
+        from kafka.errors import KafkaConnectionError as NoBrokersAvailable
+    except ImportError:
+        NoBrokersAvailable = ConnectionError
+try:
+    from kafka.errors import KafkaConnectionError
+except ImportError:
+    KafkaConnectionError = ConnectionError
+try:
+    from kafka.errors import KafkaTimeoutError
+except ImportError:
+    KafkaTimeoutError = TimeoutError
 
 
 class FingerprintResult(TypedDict):

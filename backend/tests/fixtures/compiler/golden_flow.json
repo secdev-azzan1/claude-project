@@ -1,0 +1,730 @@
+{
+  "flowId": "flow-golden",
+  "flowToken": "golden_flow",
+  "parameterContext": {
+    "name": "golden_flow__params",
+    "parameters": [
+      {
+        "name": "svc_svc-http_base_url",
+        "value": "https://insightvm.corp.local:3780",
+        "sensitive": false
+      },
+      {
+        "name": "svc_svc-http_key_value",
+        "value": "s3cr3t",
+        "sensitive": true
+      },
+      {
+        "name": "dlq_topic",
+        "value": "dlq.golden_flow",
+        "sensitive": false
+      },
+      {
+        "name": "kafka_bootstrap",
+        "value": "kafka:9092",
+        "sensitive": false
+      },
+      {
+        "name": "redis_connection_string",
+        "value": "redis.internal.corp:6379",
+        "sensitive": false
+      },
+      {
+        "name": "redis_password",
+        "value": "redispw",
+        "sensitive": true
+      },
+      {
+        "name": "topic_b-sink",
+        "value": "raw.golden_flow.asset",
+        "sensitive": false
+      },
+      {
+        "name": "schema_b-sink",
+        "value": "raw.golden_flow.asset-value",
+        "sensitive": false
+      },
+      {
+        "name": "apicurio_ccompat_url",
+        "value": "http://apicurio.internal.corp:8081/apis/ccompat/v7",
+        "sensitive": false
+      }
+    ]
+  },
+  "rootGroup": {
+    "name": "golden_flow",
+    "childGroups": [
+      {
+        "blockId": "b-read",
+        "name": "list_assets__http",
+        "processors": [
+          {
+            "key": "trigger",
+            "name": "trigger",
+            "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+            "properties": {
+              "File Size": "0B",
+              "Batch Size": "1",
+              "Unique FlowFiles": "false",
+              "Custom Text": "{}",
+              "Character Set": "UTF-8",
+              "Data Format": "Text"
+            },
+            "schedulingPeriod": "0 0 */6 * * *",
+            "schedulingStrategy": "CRON_DRIVEN",
+            "autoTerminate": [],
+            "runOnPrimary": true
+          },
+          {
+            "key": "init",
+            "name": "init",
+            "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "Accept": "application/json",
+              "mime.type": "application/json",
+              "request.url": "#{svc_svc-http_base_url}/api/3/assets?offset=${offset}&limit=${limit}",
+              "offset": "0",
+              "limit": "200",
+              "page_count": "0"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "fetch",
+            "name": "fetch",
+            "type": "org.apache.nifi.processors.standard.InvokeHTTP",
+            "properties": {
+              "Connection Timeout": "5 secs",
+              "Socket Read Timeout": "15 secs",
+              "Socket Write Timeout": "15 secs",
+              "Socket Idle Timeout": "5 mins",
+              "Socket Idle Connections": "5",
+              "Response Cache Enabled": "false",
+              "Response Cache Size": "10MB",
+              "Response FlowFile Naming Strategy": "RANDOM",
+              "Response Redirects Enabled": "False",
+              "Request Date Header Enabled": "True",
+              "Request Content-Type": "${mime.type}",
+              "Request Content-Encoding": "DISABLED",
+              "Request Body Enabled": "false",
+              "Request Multipart Form-Data Filename Enabled": "true",
+              "Request Chunked Transfer-Encoding Enabled": "false",
+              "HTTP/2 Disabled": "True",
+              "HTTP Method": "GET",
+              "HTTP URL": "${request.url}",
+              "X-Api-Key": "#{svc_svc-http_key_value}"
+            },
+            "autoTerminate": [
+              "No Retry",
+              "Retry",
+              "Original"
+            ]
+          },
+          {
+            "key": "split",
+            "name": "split",
+            "type": "org.apache.nifi.processors.standard.SplitJson",
+            "properties": {
+              "JsonPath Expression": "$.resources[*]"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "page_meta",
+            "name": "page_meta",
+            "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+            "properties": {
+              "Destination": "flowfile-attribute",
+              "Return Type": "scalar",
+              "Path Not Found Behavior": "ignore",
+              "probe": "$.resources[0]"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "has_more",
+            "name": "has_more",
+            "type": "org.apache.nifi.processors.standard.RouteOnAttribute",
+            "properties": {
+              "Routing Strategy": "Route to Property name",
+              "continue": "${probe:isEmpty():not()}"
+            },
+            "autoTerminate": [
+              "unmatched"
+            ]
+          },
+          {
+            "key": "next",
+            "name": "next",
+            "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "offset": "${offset:toNumber():plus(200)}",
+              "page_count": "${page_count:toNumber():plus(1)}"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "t0__extract",
+            "name": "t0__extract",
+            "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+            "properties": {
+              "Destination": "flowfile-attribute",
+              "Return Type": "scalar",
+              "Path Not Found Behavior": "ignore",
+              "Null Value Representation": "empty string",
+              "site_id": "$.siteId"
+            },
+            "autoTerminate": [
+              "unmatched"
+            ]
+          },
+          {
+            "key": "t1__add_field",
+            "name": "t1__add_field",
+            "type": "org.apache.nifi.processors.standard.UpdateRecord",
+            "properties": {
+              "Record Reader": "cs_json_reader",
+              "Record Writer": "cs_json_writer",
+              "Replacement Value Strategy": "literal-value",
+              "/source": "rapid7"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "dlq__meta",
+            "name": "dlq__meta",
+            "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "dlq.block": "b-read",
+              "dlq.reason": "${dlq.reason:isEmpty():ifElse('unspecified_failure', ${dlq.reason})}"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "dlq__publish",
+            "name": "dlq__publish",
+            "type": "org.apache.nifi.kafka.processors.PublishKafka",
+            "properties": {
+              "Kafka Connection Service": "cs_kafka_conn",
+              "Topic Name": "#{dlq_topic}",
+              "Record Reader": null,
+              "Record Writer": null,
+              "Publish Strategy": "USE_VALUE",
+              "Record Metadata Strategy": "FROM_PROPERTIES",
+              "Failure Strategy": "Route to Failure",
+              "acks": "all",
+              "compression.type": "none",
+              "FlowFile Attribute Header Pattern": "dlq\\..*"
+            },
+            "autoTerminate": [
+              "success"
+            ]
+          }
+        ],
+        "controllerServices": [
+          {
+            "key": "cs_json_reader",
+            "name": "json_reader",
+            "type": "org.apache.nifi.json.JsonTreeReader",
+            "properties": {
+              "Schema Access Strategy": "infer-schema"
+            }
+          },
+          {
+            "key": "cs_json_writer",
+            "name": "json_writer",
+            "type": "org.apache.nifi.json.JsonRecordSetWriter",
+            "properties": {
+              "Schema Access Strategy": "inherit-record-schema",
+              "Schema Write Strategy": "no-schema",
+              "Output Grouping": "output-array"
+            }
+          },
+          {
+            "key": "cs_kafka_conn",
+            "name": "kafka_connection",
+            "type": "org.apache.nifi.kafka.service.Kafka3ConnectionService",
+            "properties": {
+              "bootstrap.servers": "#{kafka_bootstrap}",
+              "security.protocol": "PLAINTEXT",
+              "ack.wait.time": "5 sec",
+              "max.block.ms": "5 sec",
+              "default.api.timeout.ms": "60 sec",
+              "max.poll.records": "10000",
+              "isolation.level": "read_committed"
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from": "trigger",
+            "to": "init",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "init",
+            "to": "fetch",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "fetch",
+            "to": "dlq",
+            "relationships": [
+              "Failure"
+            ]
+          },
+          {
+            "from": "fetch",
+            "to": "split",
+            "relationships": [
+              "Response"
+            ]
+          },
+          {
+            "from": "split",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "split",
+            "to": "page_meta",
+            "relationships": [
+              "original"
+            ]
+          },
+          {
+            "from": "page_meta",
+            "to": "has_more",
+            "relationships": [
+              "matched",
+              "unmatched"
+            ]
+          },
+          {
+            "from": "page_meta",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "has_more",
+            "to": "next",
+            "relationships": [
+              "continue"
+            ]
+          },
+          {
+            "from": "next",
+            "to": "fetch",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "split",
+            "to": "t0__extract",
+            "relationships": [
+              "split"
+            ]
+          },
+          {
+            "from": "t0__extract",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "t0__extract",
+            "to": "t1__add_field",
+            "relationships": [
+              "matched"
+            ]
+          },
+          {
+            "from": "t1__add_field",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "t1__add_field",
+            "to": "outputPort:b-sink",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "dlq__meta",
+            "to": "dlq__publish",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "dlq__publish",
+            "to": "dlq__publish",
+            "relationships": [
+              "failure"
+            ]
+          }
+        ],
+        "inputPort": false,
+        "outputPort": true,
+        "dlqPort": true
+      },
+      {
+        "blockId": "b-sink",
+        "name": "assets_to_iceberg__kafka_kc",
+        "processors": [
+          {
+            "key": "envelope",
+            "name": "envelope",
+            "type": "org.apache.nifi.processors.standard.UpdateRecord",
+            "properties": {
+              "Record Reader": "cs_json_reader",
+              "Record Writer": "cs_json_writer",
+              "Replacement Value Strategy": "literal-value",
+              "/ingest_id": "${uuid}",
+              "/ingest_ts": "${now():toNumber()}"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "dedupe__hash",
+            "name": "dedupe__hash",
+            "type": "org.apache.nifi.processors.groovyx.ExecuteGroovyScript",
+            "properties": {
+              "Script Body": "import groovy.json.*\nimport java.security.MessageDigest\nimport org.apache.nifi.processor.io.InputStreamCallback\n\ndef flowFile = session.get()\nif (!flowFile) return\ntry {\n    def exclStr = (binding.hasVariable('EXCLUDES') ? (EXCLUDES.value ?: '') : '')\n    def excl = exclStr.split(',').collect { it.trim() }.findAll { it }\n    def src = (binding.hasVariable('SRC') ? (SRC.value ?: 'src') : 'src')\n    def identStr = (binding.hasVariable('IDENTITY_FIELDS') ? (IDENTITY_FIELDS.value ?: '') : '')\n    def identityFields = identStr.split(',').collect { it.trim() }.findAll { it }\n\n    def holder = [t: '']\n    session.read(flowFile, { inp -> holder.t = inp.getText('UTF-8') } as InputStreamCallback)\n    def parsed = new JsonSlurper().parseText(holder.t)\n    def rec = (parsed instanceof List) ? parsed[0] : parsed\n\n    def missing = identityFields.findAll { f ->\n        !(rec instanceof Map) || !rec.containsKey(f) || rec.get(f) == null || rec.get(f).toString().trim().isEmpty()\n    }\n    if (identityFields.isEmpty() || !missing.isEmpty()) {\n        flowFile = session.putAttribute(flowFile, 'dlq.reason', 'dedup_identity_missing')\n        session.transfer(flowFile, REL_FAILURE)\n        return\n    }\n    def identityValue = identityFields.collect { f -> rec.get(f).toString() }.join(',')\n\n    def m = new LinkedHashMap(rec)\n    excl.each { m.remove(it) }\n    def cj = JsonOutput.toJson(m)\n    def h = MessageDigest.getInstance('SHA-256').digest(cj.getBytes('UTF-8')).encodeHex().toString()\n    flowFile = session.putAttribute(flowFile, 'dedupe.key', (src + ':' + identityValue + ':' + h).toString())\n    session.transfer(flowFile, REL_SUCCESS)\n} catch (Exception e) {\n    log.error('dedupe hash failed: ' + e.message, e)\n    flowFile = session.putAttribute(flowFile, 'dlq.reason', 'dedup_script_error')\n    session.transfer(flowFile, REL_FAILURE)\n}\n",
+              "Failure Strategy": "rollback",
+              "SRC": "golden_flow__b-sink",
+              "EXCLUDES": "ingest_id,ingest_ts,op",
+              "IDENTITY_FIELDS": "id"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "dedupe__detect",
+            "name": "dedupe__detect",
+            "type": "org.apache.nifi.processors.standard.DetectDuplicate",
+            "properties": {
+              "Cache Entry Identifier": "${dedupe.key}",
+              "Cache The Entry Identifier": "true",
+              "Age Off Duration": "24 hours",
+              "Distributed Cache Service": "cs_redis_cache"
+            },
+            "autoTerminate": [
+              "duplicate"
+            ]
+          },
+          {
+            "key": "publish",
+            "name": "publish",
+            "type": "org.apache.nifi.kafka.processors.PublishKafka",
+            "properties": {
+              "Kafka Connection Service": "cs_kafka_conn",
+              "Topic Name": "#{topic_b-sink}",
+              "Record Reader": "cs_json_reader",
+              "Record Writer": "cs_avro_writer",
+              "Publish Strategy": "USE_VALUE",
+              "Record Metadata Strategy": "FROM_PROPERTIES",
+              "Failure Strategy": "Route to Failure",
+              "acks": "all",
+              "compression.type": "none",
+              "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+              "Transactions Enabled": "false",
+              "Kafka Key Attribute Encoding": "utf-8",
+              "Header Encoding": "UTF-8",
+              "max.request.size": "1 MB"
+            },
+            "autoTerminate": [
+              "success"
+            ]
+          },
+          {
+            "key": "dlq__meta",
+            "name": "dlq__meta",
+            "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+            "properties": {
+              "dlq.block": "b-sink",
+              "dlq.reason": "${dlq.reason:isEmpty():ifElse('unspecified_failure', ${dlq.reason})}"
+            },
+            "autoTerminate": []
+          },
+          {
+            "key": "dlq__publish",
+            "name": "dlq__publish",
+            "type": "org.apache.nifi.kafka.processors.PublishKafka",
+            "properties": {
+              "Kafka Connection Service": "cs_kafka_conn",
+              "Topic Name": "#{dlq_topic}",
+              "Record Reader": null,
+              "Record Writer": null,
+              "Publish Strategy": "USE_VALUE",
+              "Record Metadata Strategy": "FROM_PROPERTIES",
+              "Failure Strategy": "Route to Failure",
+              "acks": "all",
+              "compression.type": "none",
+              "FlowFile Attribute Header Pattern": "dlq\\..*"
+            },
+            "autoTerminate": [
+              "success"
+            ]
+          }
+        ],
+        "controllerServices": [
+          {
+            "key": "cs_json_reader",
+            "name": "json_reader",
+            "type": "org.apache.nifi.json.JsonTreeReader",
+            "properties": {
+              "Schema Access Strategy": "infer-schema"
+            }
+          },
+          {
+            "key": "cs_json_writer",
+            "name": "json_writer",
+            "type": "org.apache.nifi.json.JsonRecordSetWriter",
+            "properties": {
+              "Schema Access Strategy": "inherit-record-schema",
+              "Schema Write Strategy": "no-schema",
+              "Output Grouping": "output-array"
+            }
+          },
+          {
+            "key": "cs_redis_pool",
+            "name": "redis_pool",
+            "type": "org.apache.nifi.redis.service.RedisConnectionPoolService",
+            "properties": {
+              "Connection String": "#{redis_connection_string}",
+              "Redis Mode": "Standalone",
+              "Database Index": "2",
+              "Password": "#{redis_password}"
+            }
+          },
+          {
+            "key": "cs_redis_cache",
+            "name": "dedupe_redis_cache",
+            "type": "org.apache.nifi.redis.service.RedisDistributedMapCacheClientService",
+            "properties": {
+              "Redis Connection Pool": "cs_redis_pool",
+              "TTL": "24 hours"
+            }
+          },
+          {
+            "key": "cs_kafka_conn",
+            "name": "kafka_connection",
+            "type": "org.apache.nifi.kafka.service.Kafka3ConnectionService",
+            "properties": {
+              "bootstrap.servers": "#{kafka_bootstrap}",
+              "security.protocol": "PLAINTEXT",
+              "ack.wait.time": "5 sec",
+              "max.block.ms": "5 sec",
+              "default.api.timeout.ms": "60 sec",
+              "max.poll.records": "10000",
+              "isolation.level": "read_committed"
+            }
+          },
+          {
+            "key": "cs_schema_registry",
+            "name": "schema_registry",
+            "type": "org.apache.nifi.confluent.schemaregistry.ConfluentSchemaRegistry",
+            "properties": {
+              "Schema Registry URLs": "#{apicurio_ccompat_url}",
+              "Cache Size": "1000",
+              "Cache Expiration": "1 hour",
+              "Communications Timeout": "30 secs"
+            }
+          },
+          {
+            "key": "cs_schema_ref_writer",
+            "name": "schema_ref_writer",
+            "type": "org.apache.nifi.confluent.schemaregistry.ConfluentEncodedSchemaReferenceWriter",
+            "properties": {}
+          },
+          {
+            "key": "cs_avro_writer",
+            "name": "avro_writer",
+            "type": "org.apache.nifi.avro.AvroRecordSetWriter",
+            "properties": {
+              "Schema Access Strategy": "schema-name",
+              "Schema Name": "#{schema_b-sink}",
+              "Schema Registry": "cs_schema_registry",
+              "Schema Write Strategy": "schema-reference-writer",
+              "Schema Reference Writer": "cs_schema_ref_writer",
+              "Encoder Pool Size": "32",
+              "Cache Size": "1000",
+              "Compression Format": "NONE"
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from": "inputPort",
+            "to": "envelope",
+            "relationships": []
+          },
+          {
+            "from": "envelope",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "envelope",
+            "to": "dedupe__hash",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "dedupe__hash",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "dedupe__hash",
+            "to": "dedupe__detect",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "dedupe__detect",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "dedupe__detect",
+            "to": "publish",
+            "relationships": [
+              "non-duplicate"
+            ]
+          },
+          {
+            "from": "publish",
+            "to": "dlq",
+            "relationships": [
+              "failure"
+            ]
+          },
+          {
+            "from": "dlq__meta",
+            "to": "dlq__publish",
+            "relationships": [
+              "success"
+            ]
+          },
+          {
+            "from": "dlq__publish",
+            "to": "dlq__publish",
+            "relationships": [
+              "failure"
+            ]
+          }
+        ],
+        "inputPort": true,
+        "outputPort": false,
+        "dlqPort": true
+      }
+    ],
+    "connections": [
+      {
+        "fromBlockId": "b-read",
+        "toBlockId": "b-sink",
+        "viaPort": "outputPort:b-sink"
+      }
+    ]
+  },
+  "topics": [
+    {
+      "name": "raw.golden_flow.asset",
+      "kind": "data",
+      "ownerBlockId": "b-sink"
+    },
+    {
+      "name": "dlq.golden_flow",
+      "kind": "dlq",
+      "ownerBlockId": null
+    }
+  ],
+  "connectors": [
+    {
+      "name": "golden_flow.b-sink.kafka_kc",
+      "config": {
+        "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+        "topics": "raw.golden_flow.asset",
+        "tasks.max": "1",
+        "iceberg.tables": "bronze.asset",
+        "iceberg.tables.auto-create-enabled": "true",
+        "iceberg.catalog.uri": "http://polaris.internal.corp:8181/api/catalog",
+        "iceberg.catalog.warehouse": "bronze",
+        "iceberg.control.commit.interval-ms": "60000",
+        "value.converter": "io.apicurio.registry.utils.converter.AvroConverter",
+        "value.converter.apicurio.registry.url": "http://apicurio.internal.corp:8081/apis/ccompat/v7",
+        "value.converter.apicurio.registry.as-confluent": "true",
+        "value.converter.apicurio.registry.find-latest": "true",
+        "value.converter.schemas.enable": "true",
+        "key.converter": "org.apache.kafka.connect.storage.StringConverter"
+      },
+      "ownerBlockId": "b-sink"
+    }
+  ],
+  "scopeMap": {
+    "b-read": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "list_assets__http",
+      "components": [
+        "trigger",
+        "init",
+        "fetch",
+        "split",
+        "page_meta",
+        "has_more",
+        "next",
+        "t0__extract",
+        "t1__add_field",
+        "dlq__meta",
+        "dlq__publish",
+        "cs_json_reader",
+        "cs_json_writer",
+        "cs_kafka_conn"
+      ]
+    },
+    "b-sink": {
+      "adapter": "kafka_kc",
+      "engine": "nifi",
+      "groupName": "assets_to_iceberg__kafka_kc",
+      "components": [
+        "envelope",
+        "dedupe__hash",
+        "dedupe__detect",
+        "publish",
+        "dlq__meta",
+        "dlq__publish",
+        "cs_json_reader",
+        "cs_json_writer",
+        "cs_redis_pool",
+        "cs_redis_cache",
+        "cs_kafka_conn",
+        "cs_schema_registry",
+        "cs_schema_ref_writer",
+        "cs_avro_writer"
+      ]
+    }
+  }
+}

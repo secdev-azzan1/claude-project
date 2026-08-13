@@ -25,8 +25,10 @@ def test_kafka_down_no_brokers_available(monkeypatch):
 
     class MockAdminClientDown:
         def __init__(self, bootstrap_servers, request_timeout_ms):
-            # Simulate NoBrokersAvailable on init
-            from kafka.errors import NoBrokersAvailable
+            # Simulate NoBrokersAvailable on init (kafka-python 3.x removed the
+            # name; use the module's own compat alias so the test matches what
+            # the probe actually catches on any installed version)
+            from services.connection_fingerprint import NoBrokersAvailable
             raise NoBrokersAvailable()
 
         def describe_cluster(self):

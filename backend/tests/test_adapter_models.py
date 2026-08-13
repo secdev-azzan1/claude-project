@@ -200,6 +200,8 @@ class TestAppServiceRedact:
         "saslPassword": "external_kafka",
         "adminKey": "http",  # type doesn't matter for redact(); any is fine
         "s3SecretKey": "http",
+        "oauthClientSecret": "sink_destination",
+        "kafbatPassword": "http",  # connection-level key; type irrelevant for redact()
     }
 
     @pytest.mark.parametrize("secret_key", SECRET_CONFIG_KEYS)

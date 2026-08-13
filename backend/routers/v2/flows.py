@@ -1,0 +1,361 @@
+"""Flows v2 router (`/api/v2/flows`) — T1.2b.
+
+CRUD + validation + verb skeleton + enable/disable, mirroring
+frontend/src/prototype/api.ts's flow functions (`listFlows`, `getFlow`,
+`saveFlow`, `deleteFlow` (via `runFlowVerb("delete")`), `runFlowVerb`,
+`setFlowEnabled`, `validateFlowNow`) and reading server-side truth off the
+ported rule engines in services/adapter/{legality,validation}.py.
+
+Deployment-engine-backed behaviour (actually talking to NiFi/Kafka
+Connect) does not exist yet. Every verb, once it passes the same state-machine
+guard api.ts's `getVerbBlockReason` enforces, returns `501 {"detail":
+"deployment engine pending", "verb": ...}` without touching flow state — the
+guard itself is real today so the UI's refusal behaviour is testable ahead of
+the engine landing.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
+
+from db import get_db
+from models.adapter import AppService, ApprovedSchema, Flow, GatewayProxy, PlatformConnection
+from services.adapter.common import COLLECTIONS, audit, now_iso
+from services.adapter.legality import validate_placement
+from services.adapter.validation import GatewaySnapshot, ValidationIssue, validate_flow
+
+router = APIRouter(prefix="/api/v2/flows", tags=["flows-v2"])
+
+# The 8 verbs api.ts's `FlowVerb` union exposes through `runFlowVerb`, minus
+# "delete" (that one is `DELETE /{id}` on this router, mirroring how the
+# frontend's Flows page routes it through the same verb machinery but this
+# port gives it its own REST verb/method instead).
+ALLOWED_VERBS = ("deploy", "redeploy", "start", "pause", "resume", "stop", "stop_clear", "undeploy")
+
+# States getEditLockReason() / disableBlockReason() (frontend/src/pages/Flows.tsx)
+# both refuse edits/disable in — a flow that is deployed and not at rest.
+_LOCKED_STATES = ("Running", "Paused", "Deploying", "Degraded")
+
+
+class SetEnabledRequest(BaseModel):
+    enabled: bool
+
+
+# --------------------------------------------------------------- loaders
+
+async def _load_services(db: AsyncIOMotorDatabase) -> List[AppService]:
+    docs = await db[COLLECTIONS.services].find({}, {"_id": 0}).to_list(None)
+    return [AppService(**d) for d in docs]
+
+
+async def _load_schemas(db: AsyncIOMotorDatabase) -> List[ApprovedSchema]:
+    docs = await db[COLLECTIONS.schemas].find({}, {"_id": 0}).to_list(None)
+    return [ApprovedSchema(**d) for d in docs]
+
+
+async def _load_connections(db: AsyncIOMotorDatabase) -> List[PlatformConnection]:
+    docs = await db[COLLECTIONS.connections].find({}, {"_id": 0}).to_list(None)
+    return [PlatformConnection(**d) for d in docs]
+
+
+async def _load_gateway(db: AsyncIOMotorDatabase) -> GatewaySnapshot:
+    """`COLLECTIONS.gateway` is a single document: {proxies, certProfiles,
+    allowlist} (see services/adapter/common.py's docstring)."""
+    doc = await db[COLLECTIONS.gateway].find_one({}, {"_id": 0})
+    doc = doc or {}
+    proxies = [GatewayProxy(**p) for p in (doc.get("proxies") or [])]
+    allowlist = list(doc.get("allowlist") or [])
+    return GatewaySnapshot(proxies=proxies, allowlist=allowlist)
+
+
+async def _get_flow_doc_or_404(db: AsyncIOMotorDatabase, flow_id: str) -> Dict[str, Any]:
+    doc = await db[COLLECTIONS.flows].find_one({"id": flow_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Flow not found")
+    return doc
+
+
+def _issue_dict(issue: ValidationIssue) -> Dict[str, Any]:
+    return {"blockId": issue.blockId, "where": issue.where, "message": issue.message}
+
+
+# ----------------------------------------------------------- guard mirrors
+
+def _get_edit_lock_reason(flow: Flow) -> Optional[str]:
+    """Line-for-line port of api.ts's `getEditLockReason`: editing a deployed,
+    non-stopped flow is refused (kc "Save is live" is the sole exception,
+    noted in the message but not modeled as a bypass here — no kc-only fast
+    path exists yet)."""
+    if flow.state in _LOCKED_STATES:
+        return "Editing a deployed flow is refused until it is stopped. (kc sink subscriptions save live.)"
+    return None
+
+
+def _get_enable_block_reason(flow: Flow, enabled: bool) -> Optional[str]:
+    """Port of frontend/src/pages/Flows.tsx's `bulkBlockReason`/`disableBlockReason`
+    guards around `setFlowEnabled`: already-enabled/-disabled is a no-op
+    refusal, and disabling is refused while the flow is not at rest."""
+    if enabled:
+        return "Already enabled." if flow.enabled else None
+    if not flow.enabled:
+        return "Already disabled."
+    if flow.state in _LOCKED_STATES:
+        return "Stop the flow first."
+    return None
+
+
+def _get_verb_block_reason(
+    flow: Flow,
+    verb: str,
+    services: List[AppService],
+    schemas: List[ApprovedSchema],
+    gateway: GatewaySnapshot,
+    connections: List[PlatformConnection],
+) -> Optional[str]:
+    """Line-for-line port of api.ts's `getVerbBlockReason` (the `editVerbs`
+    table), for the 8 verbs this router serves. `delete` is intentionally
+    absent — it is `DELETE /{id}` below."""
+    deployed = bool(flow.deployedAt)
+
+    if verb == "deploy":
+        if flow.state in ("Running", "Paused"):
+            return "Stop the flow before deploying."
+        if flow.state == "Deploying":
+            return "A deploy is already in progress."
+        issues = validate_flow(flow, services, schemas, gateway)
+        if issues:
+            return f"{len(issues)} validation issue(s) — run Validate for details."
+        return None
+
+    if verb == "start":
+        if not deployed:
+            return "Deploy the flow first."
+        if not flow.enabled:
+            return "The flow is disabled."
+        if flow.state == "Running":
+            return "Already running."
+        if flow.state == "Paused":
+            return "Use Resume — the flow is paused, its trigger still fires."
+        missing = [
+            t
+            for t in ("nifi", "kafka", "apicurio")
+            if not any(c.type == t and c.active and c.health == "Healthy" for c in connections)
+        ]
+        if missing:
+            return f"Runtime connections unavailable: {', '.join(missing)}."
+        return None
+
+    if verb == "pause":
+        return None if flow.state == "Running" else "Only a running flow can be paused."
+
+    if verb == "resume":
+        return None if flow.state == "Paused" else "Only a paused flow can be resumed."
+
+    if verb in ("stop", "stop_clear"):
+        return None if flow.state in ("Running", "Paused", "Degraded") else "The flow is not running."
+
+    if verb == "redeploy":
+        if not deployed:
+            return "The flow has never been deployed."
+        if flow.state != "Stopped":
+            return "Redeploy requires the flow stopped (and queues cleared)."
+        return None
+
+    if verb == "undeploy":
+        if not deployed:
+            return "The flow is not deployed."
+        if flow.state in ("Running", "Paused"):
+            return "Stop the flow before undeploying."
+        return None
+
+    return "Unknown verb."
+
+
+# --------------------------------------------------------------------- CRUD
+
+@router.get("/")
+async def list_flows_v2(db: AsyncIOMotorDatabase = Depends(get_db)):
+    return await db[COLLECTIONS.flows].find({}, {"_id": 0}).to_list(None)
+
+
+@router.get("/{flow_id}")
+async def get_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    return await _get_flow_doc_or_404(db, flow_id)
+
+
+@router.post("/")
+async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Create-or-update mirror of api.ts's `saveFlow` (there is no separate
+    v2 create endpoint — a flow with an id not yet on record is created,
+    one already on record is updated), with two server-side guards the
+    frontend mock never needed because its UI only ever constructs legal
+    trees and hides the editor while a flow is locked:
+
+      1. Edit-lock: refused (409) while the *existing* record is deployed
+         and not at rest — `_get_edit_lock_reason`.
+      2. Structural legality: `validate_placement` (R1-R8) plus the
+         flow-level (non-block) issues from `validate_flow` must both be
+         clean, or the save is refused (422) with the issue messages.
+         Block-level completeness issues (missing service, unset path, ...)
+         do NOT block a save — those are legitimate "still editing" states,
+         surfaced instead by `POST /{id}/validate` and enforced for real at
+         `deploy`.
+    """
+    existing = await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
+
+    if existing:
+        lock_reason = _get_edit_lock_reason(Flow(**existing))
+        if lock_reason:
+            raise HTTPException(status_code=409, detail=lock_reason)
+
+    services = await _load_services(db)
+    schemas = await _load_schemas(db)
+    gateway = await _load_gateway(db)
+
+    placement_violations = validate_placement(flow_in)
+    flow_level_issues = [i for i in validate_flow(flow_in, services, schemas, gateway) if i.blockId is None]
+    if placement_violations or flow_level_issues:
+        issues = [{"blockId": v.blockId, "where": None, "message": v.message} for v in placement_violations]
+        issues += [_issue_dict(i) for i in flow_level_issues]
+        raise HTTPException(status_code=422, detail={"issues": issues})
+
+    now = now_iso()
+    next_doc = flow_in.model_dump()
+    next_doc["updatedAt"] = now
+
+    if existing:
+        next_doc["createdAt"] = existing.get("createdAt") or now
+        await db[COLLECTIONS.flows].update_one({"id": flow_in.id}, {"$set": next_doc})
+        await audit(db, action="Draft saved", target=flow_in.name, object="Flow")
+    else:
+        next_doc["createdAt"] = next_doc.get("createdAt") or now
+        await db[COLLECTIONS.flows].insert_one(next_doc)
+        await audit(db, action="Flow created", target=flow_in.name, object="Flow")
+
+    return await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
+
+
+@router.delete("/{flow_id}")
+async def delete_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Mirror of api.ts's `runFlowVerb("delete")`. Full teardown (undeploying
+    the runtime for you) arrives with the deployment engine — for now a
+    deployed flow must be undeployed first."""
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    if doc.get("deployedAt"):
+        raise HTTPException(status_code=409, detail="Undeploy before deleting")
+
+    await db[COLLECTIONS.flows].delete_one({"id": flow_id})
+    await db[COLLECTIONS.runtimes].delete_one({"flowId": flow_id})
+    await audit(db, action="Flow deleted", target=doc.get("name", ""), status="Warning", object="Flow")
+    return {"ok": True, "id": flow_id}
+
+
+# --------------------------------------------------------------------- verbs
+
+@router.post("/{flow_id}/verbs/{verb}")
+async def run_flow_verb_v2(flow_id: str, verb: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    if verb not in ALLOWED_VERBS:
+        raise HTTPException(status_code=404, detail=f"Unknown verb: {verb}")
+
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    flow = Flow(**doc)
+
+    services = await _load_services(db)
+    schemas = await _load_schemas(db)
+    gateway = await _load_gateway(db)
+    connections = await _load_connections(db)
+
+    reason = _get_verb_block_reason(flow, verb, services, schemas, gateway, connections)
+    if reason:
+        await audit(
+            db,
+            action=f"Flow {verb} refused",
+            target=flow.name,
+            status="Failed",
+            details=reason,
+            object="Flow",
+        )
+        raise HTTPException(status_code=409, detail=reason)
+
+    # Transition is legal, but every verb still needs the deployment engine
+    # (NiFi start/stop/deploy, Kafka Connect...) to actually do anything.
+    # State is deliberately left untouched.
+    await audit(
+        db,
+        action=f"Flow {verb} accepted (pending engine)",
+        target=flow.name,
+        status="Warning",
+        details="deployment engine pending",
+        object="Flow",
+    )
+    return JSONResponse(status_code=501, content={"detail": "deployment engine pending", "verb": verb})
+
+
+@router.post("/{flow_id}/enabled")
+async def set_flow_enabled_v2(flow_id: str, body: SetEnabledRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    flow = Flow(**doc)
+
+    reason = _get_enable_block_reason(flow, body.enabled)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
+
+    now = now_iso()
+    await db[COLLECTIONS.flows].update_one({"id": flow_id}, {"$set": {"enabled": body.enabled, "updatedAt": now}})
+    await audit(db, action="Flow enabled" if body.enabled else "Flow disabled", target=flow.name, object="Flow")
+    return {"id": flow_id, "enabled": body.enabled}
+
+
+@router.post("/{flow_id}/validate")
+async def validate_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Server-truth mirror of api.ts's `validateFlowNow` — same `{blockId,
+    where, message}[]` shape `ValidationIssue[]` is on the frontend."""
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    flow = Flow(**doc)
+
+    services = await _load_services(db)
+    schemas = await _load_schemas(db)
+    gateway = await _load_gateway(db)
+
+    issues = validate_flow(flow, services, schemas, gateway)
+    return [_issue_dict(i) for i in issues]
+
+
+# ------------------------------------------------------- read-only, pre-engine
+
+@router.get("/{flow_id}/dlq")
+async def get_flow_dlq_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    await _get_flow_doc_or_404(db, flow_id)
+    # Real implementation arrives with the deployment engine.
+    return {"records": []}
+
+
+@router.get("/{flow_id}/metrics")
+async def get_flow_metrics_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    await _get_flow_doc_or_404(db, flow_id)
+    runtime = await db[COLLECTIONS.runtimes].find_one({"flowId": flow_id}, {"_id": 0})
+    if not runtime:
+        return {"available": False, "reason": "not deployed"}
+    # A runtime record exists, but metrics collection itself is not wired up
+    # yet — still an honest "unavailable", just a different reason.
+    return {"available": False, "reason": "metrics collection pending deployment engine"}
+
+
+@router.get("/{flow_id}/messages")
+async def get_flow_messages_v2(flow_id: str, topic: str = Query(""), db: AsyncIOMotorDatabase = Depends(get_db)):
+    await _get_flow_doc_or_404(db, flow_id)
+    return {"messages": [], "source": "unavailable"}
+
+
+@router.get("/{flow_id}/runtime")
+async def get_flow_runtime_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    await _get_flow_doc_or_404(db, flow_id)
+    runtime = await db[COLLECTIONS.runtimes].find_one({"flowId": flow_id}, {"_id": 0})
+    if not runtime:
+        raise HTTPException(status_code=404, detail="No runtime record for this flow")
+    return runtime

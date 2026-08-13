@@ -38,6 +38,11 @@ use, not guessed:
                        anyway per the task spec's explicit example list, as
                        forward-compatibility for a future S3-backed
                        service/connection type.
+  - oauthClientSecret - added for routers/v2/services.py's T3.3
+                       sink_destination (iceberg_catalog) extended config:
+                       `oauthClientId`/`oauthClientSecret` for the
+                       catalog's own OAuth2 client-credentials probe,
+                       distinct from the http-service `clientSecret` above.
 """
 
 from typing import Any, Dict, List, Tuple
@@ -50,6 +55,9 @@ SECRET_CONFIG_KEYS: List[str] = [
     "saslPassword",
     "adminKey",
     "s3SecretKey",
+    "oauthClientSecret",
+    # kafka platform connection in kafbat mode authenticates to the Kafbat UI
+    "kafbatPassword",
 ]
 
 

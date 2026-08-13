@@ -26,6 +26,14 @@ from routers import application_services, connections, dashboard, audit, setting
 from routers import schema_inference
 from routers import iceberg_sinks, kafka_connect
 from routers.v2 import openapi as v2_openapi
+from routers.v2 import connections as v2_connections
+from routers.v2 import services as v2_services
+from routers.v2 import gateway as v2_gateway
+from routers.v2 import schemas as v2_schemas
+from routers.v2 import flows as v2_flows
+from routers.v2 import dashboard as v2_dashboard
+from routers.v2 import audit as v2_audit
+from services.adapter.seed import seed_v2_connections
 
 # Configure logging
 logging.basicConfig(
@@ -140,6 +148,13 @@ app.include_router(content_store.router)
 app.include_router(iceberg_sinks.router)
 app.include_router(kafka_connect.router)
 app.include_router(v2_openapi.router)
+app.include_router(v2_connections.router)
+app.include_router(v2_services.router)
+app.include_router(v2_gateway.router)
+app.include_router(v2_schemas.router)
+app.include_router(v2_flows.router)
+app.include_router(v2_dashboard.router)
+app.include_router(v2_audit.router)
 
 
 @app.get("/api", tags=["health"], summary="Backend health/version check")
@@ -314,6 +329,11 @@ async def startup():
     asyncio.create_task(recover_runtime_state_background())
     asyncio.create_task(ensure_indexes())
     await seed_default_connections()
+    try:
+        await seed_v2_connections(database.get_db())
+        logger.info("v2 connections seeded/verified.")
+    except Exception as exc:
+        logger.warning("v2 connection seeding did not complete: %s", exc)
     logger.info("NIF Abstractor API started successfully.")
 
 
