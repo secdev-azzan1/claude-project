@@ -231,7 +231,13 @@ def test_delete_draft_flow_ok():
         _clear_overrides()
 
 
-def test_delete_deployed_flow_refused_409():
+def test_delete_deployed_flow_tears_down_and_removes():
+    """T7.2+T7.3+T7.4: DELETE on a deployed flow now performs a full
+    teardown (lifecycle.delete -> undeploy, best-effort against whatever
+    connections happen to be configured, then removes the docs) instead of
+    refusing with 409 — with no connections_v2 docs seeded here, every
+    NiFi/Connect/Kafka step is a no-op skip (no active connection to act
+    against), so this also exercises that skip-if-missing path end to end."""
     fake_db = FakeDB()
     fake_db.flows_v2.docs.append(
         _valid_flow(flow_id="flow-del-2", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z")
@@ -239,9 +245,12 @@ def test_delete_deployed_flow_refused_409():
     client = _make_client(fake_db)
     try:
         resp = client.delete("/api/v2/flows/flow-del-2")
-        assert resp.status_code == 409, resp.text
-        assert resp.json()["detail"] == "Undeploy before deleting"
-        assert len(fake_db.flows_v2.docs) == 1
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"ok": True, "id": "flow-del-2"}
+        assert fake_db.flows_v2.docs == []
+        actions = [e["action"] for e in fake_db.audit_v2.docs]
+        assert "Flow undeployed" in actions
+        assert "Flow deleted" in actions
     finally:
         _clear_overrides()
 
@@ -263,20 +272,26 @@ def test_start_from_draft_refused_409_with_reason():
         _clear_overrides()
 
 
-def test_deploy_from_draft_returns_501_pending_engine_without_state_change():
+def test_deploy_from_draft_without_connections_returns_422_preflight_rows():
+    """T7.2+T7.3+T7.4: the verb guard (`_get_verb_block_reason`) passes for
+    a valid Draft flow, so this now reaches the real deployment engine
+    (`services/adapter/deployer/lifecycle.deploy`) — which refuses at
+    preflight (compiler-spec.md §8) because no connections_v2 docs are
+    seeded here, reporting every failing row rather than a bare 501."""
     fake_db = FakeDB()
     _seed_valid_service(fake_db)
     fake_db.flows_v2.docs.append(_valid_flow(flow_id="flow-verb-2"))
     client = _make_client(fake_db)
     try:
         resp = client.post("/api/v2/flows/flow-verb-2/verbs/deploy")
-        assert resp.status_code == 501, resp.text
-        assert resp.json() == {"detail": "deployment engine pending", "verb": "deploy"}
-        # State untouched.
+        assert resp.status_code == 422, resp.text
+        rows = resp.json()["detail"]["rows"]
+        assert any(not r["ok"] and "NiFi" in r["label"] for r in rows)
+        # State untouched — preflight failure happens before any apply step.
         assert fake_db.flows_v2.docs[0]["state"] == "Draft"
-        accepted = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deploy accepted (pending engine)"]
-        assert len(accepted) == 1
-        assert accepted[0]["status"] == "Warning"
+        refused = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deploy refused (preflight)"]
+        assert len(refused) == 1
+        assert refused[0]["status"] == "Failed"
     finally:
         _clear_overrides()
 

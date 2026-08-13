@@ -286,7 +286,26 @@ def _compile_dedup(
         window_hours = 24
 
     excludes = dedupe_preserve_order(user_excludes + DEDUP_PLATFORM_EXCLUDES)
-    src = f"{flow_token}__{block.id}"
+    # `dedupEpoch` (T7.2+): a server-set, redeploy-only counter on this rule's
+    # config, bumped by lifecycle.clear_dedup_cache() every time an operator
+    # asks to clear the dedup cache for this block. Since Redis isn't
+    # reachable from the app host (module docstring on
+    # services/adapter/deployer/lifecycle.py), a real FLUSH of the block's
+    # cache namespace isn't possible from here -- rewriting the cache-key
+    # namespace on next redeploy is the honest substitute: every hash key
+    # this Groovy script produces is prefixed with SRC, so bumping the epoch
+    # makes every post-redeploy key miss the old namespace outright, which is
+    # operationally identical to a flush for THIS block's keys. Epoch 0 (the
+    # default -- never cleared) omits the suffix entirely so already-compiled
+    # plans/fixtures for existing flows are byte-identical to before this
+    # field existed; only a block that has actually had its cache cleared at
+    # least once gets the `__e<epoch>` suffix.
+    epoch_raw = rule.config.get("dedupEpoch")
+    try:
+        epoch = int(epoch_raw) if epoch_raw is not None else 0
+    except (TypeError, ValueError):
+        epoch = 0
+    src = f"{flow_token}__{block.id}" + (f"__e{epoch}" if epoch else "")
     ttl = format_duration_hours(float(window_hours))
 
     hash_key = "dedupe__hash"

@@ -26,6 +26,9 @@ from pydantic import BaseModel
 from db import get_db
 from models.adapter import AppService, ApprovedSchema, Flow, GatewayProxy, PlatformConnection
 from services.adapter.common import COLLECTIONS, audit, now_iso
+from services.adapter.deployer import lifecycle
+from services.adapter.deployer.connect_apply import ConnectApplyError
+from services.adapter.deployer.nifi_apply import NifiApplyError
 from services.adapter.legality import validate_placement
 from services.adapter.validation import GatewaySnapshot, ValidationIssue, validate_flow
 
@@ -242,20 +245,34 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
 
 @router.delete("/{flow_id}")
 async def delete_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    """Mirror of api.ts's `runFlowVerb("delete")`. Full teardown (undeploying
-    the runtime for you) arrives with the deployment engine — for now a
-    deployed flow must be undeployed first."""
+    """Mirror of api.ts's `runFlowVerb("delete")`. Performs a full teardown
+    (undeploy: delete the NiFi PG + Connect connectors, empty owned Kafka
+    topics) before removing the flow/runtime docs when the flow is
+    deployed — `services/adapter/deployer/lifecycle.py`'s `delete()` does
+    the actual work; a flow that was never deployed just has its docs
+    removed, same as before."""
     doc = await _get_flow_doc_or_404(db, flow_id)
-    if doc.get("deployedAt"):
-        raise HTTPException(status_code=409, detail="Undeploy before deleting")
-
-    await db[COLLECTIONS.flows].delete_one({"id": flow_id})
-    await db[COLLECTIONS.runtimes].delete_one({"flowId": flow_id})
-    await audit(db, action="Flow deleted", target=doc.get("name", ""), status="Warning", object="Flow")
-    return {"ok": True, "id": flow_id}
+    try:
+        result = await lifecycle.delete(db, doc)
+    except (NifiApplyError, ConnectApplyError, lifecycle.LifecycleError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return result
 
 
 # --------------------------------------------------------------------- verbs
+
+# Dispatch table: verb -> lifecycle.<fn>(db, flow_doc) -> updated flow doc.
+_VERB_HANDLERS = {
+    "deploy": lifecycle.deploy,
+    "redeploy": lifecycle.redeploy,
+    "start": lifecycle.start,
+    "pause": lifecycle.pause,
+    "resume": lifecycle.resume,
+    "stop": lifecycle.stop,
+    "stop_clear": lifecycle.stop_clear,
+    "undeploy": lifecycle.undeploy,
+}
+
 
 @router.post("/{flow_id}/verbs/{verb}")
 async def run_flow_verb_v2(flow_id: str, verb: str, db: AsyncIOMotorDatabase = Depends(get_db)):
@@ -282,18 +299,40 @@ async def run_flow_verb_v2(flow_id: str, verb: str, db: AsyncIOMotorDatabase = D
         )
         raise HTTPException(status_code=409, detail=reason)
 
-    # Transition is legal, but every verb still needs the deployment engine
-    # (NiFi start/stop/deploy, Kafka Connect...) to actually do anything.
-    # State is deliberately left untouched.
-    await audit(
-        db,
-        action=f"Flow {verb} accepted (pending engine)",
-        target=flow.name,
-        status="Warning",
-        details="deployment engine pending",
-        object="Flow",
-    )
-    return JSONResponse(status_code=501, content={"detail": "deployment engine pending", "verb": verb})
+    handler = _VERB_HANDLERS[verb]
+    try:
+        return await handler(db, doc)
+    except lifecycle.DeployPreflightFailed as exc:
+        raise HTTPException(status_code=422, detail={"rows": exc.rows}) from exc
+    except (NifiApplyError, ConnectApplyError, lifecycle.LifecycleError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/{flow_id}/dedup-cache/clear")
+async def clear_dedup_cache_v2(
+    flow_id: str,
+    block_id: str = Query(..., alias="blockId"),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    """T7.4: bump the dedup cache epoch for one block — see
+    `services/adapter/deployer/lifecycle.py`'s `clear_dedup_cache()`
+    docstring for why this is a redeploy-scoped epoch bump rather than an
+    instantaneous Redis flush (Redis is not reachable from this host)."""
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    try:
+        return await lifecycle.clear_dedup_cache(db, doc, block_id)
+    except lifecycle.LifecycleError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/{flow_id}/blocks/{block_id}/test")
+async def test_block_v2(flow_id: str, block_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """T7.5 fills this in (live per-block sample-run testing). The frontend
+    maps a 501 here to a friendly "not available yet" message, same
+    convention `run_flow_verb_v2` used before the deployment engine
+    landed."""
+    await _get_flow_doc_or_404(db, flow_id)
+    return JSONResponse(status_code=501, content={"detail": "block test run pending (T7.5)", "blockId": block_id})
 
 
 @router.post("/{flow_id}/enabled")
