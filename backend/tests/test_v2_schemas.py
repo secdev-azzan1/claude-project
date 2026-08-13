@@ -137,6 +137,9 @@ def install_fake_httpx(monkeypatch, calls: List[Dict[str, Any]], responses: Opti
         async def delete(self, url, **kw):
             return await self._handle("DELETE", url, **kw)
 
+        async def get(self, url, **kw):
+            return await self._handle("GET", url, **kw)
+
     monkeypatch.setattr(v2_schemas.httpx, "AsyncClient", _FakeClient)
 
 
@@ -680,5 +683,98 @@ def test_infer_requires_at_least_one_file():
     try:
         resp = client.post("/api/v2/schemas/infer", files=[], data={})
         assert resp.status_code in (400, 422)
+    finally:
+        _clear_overrides()
+
+
+# ---------------------------------------------------- registry version browsing
+
+
+def test_list_registry_subject_versions_ascending(monkeypatch):
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append(make_apicurio_connection())
+    calls: List[Dict[str, Any]] = []
+    # Deliberately out of order + one numeric-string entry, to exercise both
+    # the sort and _coerce_int.
+    install_fake_httpx(monkeypatch, calls, default=FakeResponse(200, [3, "1", 2]))
+    client = _make_client(fake_db)
+    try:
+        resp = client.get("/api/v2/schemas/registry-subject/raw.orders-value/versions")
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == [{"version": 1}, {"version": 2}, {"version": 3}]
+        assert len(calls) == 1
+        assert calls[0]["method"] == "GET"
+        assert calls[0]["url"] == "http://apicurio.test:8080/apis/ccompat/v7/subjects/raw.orders-value/versions"
+    finally:
+        _clear_overrides()
+
+
+def test_get_registry_subject_version_parses_schema_string(monkeypatch):
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append(make_apicurio_connection())
+    calls: List[Dict[str, Any]] = []
+    avro = make_avro()
+    install_fake_httpx(
+        monkeypatch,
+        calls,
+        default=FakeResponse(200, {"id": 42, "version": "2", "schema": json.dumps(avro)}),
+    )
+    client = _make_client(fake_db)
+    try:
+        resp = client.get("/api/v2/schemas/registry-subject/raw.orders-value/versions/2")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["version"] == 2
+        assert isinstance(body["version"], int)
+        assert body["globalId"] == 42
+        assert body["avro"] == avro
+        assert calls[0]["url"] == "http://apicurio.test:8080/apis/ccompat/v7/subjects/raw.orders-value/versions/2"
+    finally:
+        _clear_overrides()
+
+
+def test_registry_subject_versions_404_subject_not_found(monkeypatch):
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append(make_apicurio_connection())
+    calls: List[Dict[str, Any]] = []
+    install_fake_httpx(monkeypatch, calls, default=FakeResponse(404, {"error_code": 40401, "message": "Subject not found."}))
+    client = _make_client(fake_db)
+    try:
+        resp1 = client.get("/api/v2/schemas/registry-subject/does.not-exist-value/versions")
+        assert resp1.status_code == 404, resp1.text
+        assert "does.not-exist-value" in resp1.json()["detail"]
+
+        resp2 = client.get("/api/v2/schemas/registry-subject/does.not-exist-value/versions/1")
+        assert resp2.status_code == 404, resp2.text
+        assert "does.not-exist-value" in resp2.json()["detail"]
+    finally:
+        _clear_overrides()
+
+
+def test_registry_subject_with_dots_is_url_encoded(monkeypatch):
+    """The subject naming convention (`<topic>-value`) routinely contains dots
+    (e.g. `raw.orders-value`) -- confirm the path segment sent to ccompat is
+    the properly quoted subject, dots preserved (they're legal in a URL path
+    segment and must NOT be double-encoded or stripped)."""
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append(make_apicurio_connection())
+    calls: List[Dict[str, Any]] = []
+    install_fake_httpx(monkeypatch, calls, default=FakeResponse(200, [1]))
+    client = _make_client(fake_db)
+    try:
+        resp = client.get("/api/v2/schemas/registry-subject/raw.orders.v2-value/versions")
+        assert resp.status_code == 200, resp.text
+        assert calls[0]["url"].endswith("/subjects/raw.orders.v2-value/versions")
+    finally:
+        _clear_overrides()
+
+
+def test_registry_subject_versions_no_active_connection():
+    client = _make_client(FakeDB())
+    try:
+        resp = client.get("/api/v2/schemas/registry-subject/raw.orders-value/versions")
+        assert resp.status_code == 502
+        resp2 = client.get("/api/v2/schemas/registry-subject/raw.orders-value/versions/1")
+        assert resp2.status_code == 502
     finally:
         _clear_overrides()

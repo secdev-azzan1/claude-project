@@ -32,7 +32,7 @@ const mainItems = [
 
 const systemItems = [
   { title: "Platform Connections", url: "/connections", icon: Cable },
-  { title: "APISIX Gateway", url: "/apisix", icon: Globe },
+  { title: "Proxies", url: "/apisix", icon: Globe },
 ];
 
 export function AppSidebar() {

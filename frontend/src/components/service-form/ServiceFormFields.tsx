@@ -51,6 +51,7 @@ export interface ServiceForm {
   database: string;
   dbUsername: string;
   dbPassword: string;
+  driverLocations: string;
   capRead: boolean;
   capWrite: boolean;
   // external kafka
@@ -91,6 +92,7 @@ export const emptyForm = (): ServiceForm => ({
   database: "",
   dbUsername: "",
   dbPassword: "",
+  driverLocations: "",
   capRead: true,
   capWrite: false,
   bootstrapServers: "",
@@ -128,6 +130,7 @@ export function formFromService(svc: AppService): ServiceForm {
     port: numStr(c.port, "5432"),
     database: str(c.database),
     dbUsername: str(c.username),
+    driverLocations: str(c.driverLocations),
     capRead: caps.includes("read"),
     capWrite: caps.includes("write"),
     bootstrapServers: str(c.bootstrapServers),
@@ -174,6 +177,7 @@ export function buildConfig(type: ServiceType, f: ServiceForm): Record<string, u
         port: Number.parseInt(f.port, 10) || 0,
         database: f.database.trim(),
         username: f.dbUsername.trim(),
+        driverLocations: f.driverLocations.trim(),
         capabilities: [...(f.capRead ? ["read"] : []), ...(f.capWrite ? ["write"] : [])],
       };
     case "external_kafka":
@@ -441,6 +445,18 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                   <TextField label="Database" mono value={form.database} onChange={(database) => setForm((p) => ({ ...p, database }))} />
                   <TextField label="Username" value={form.dbUsername} onChange={(dbUsername) => setForm((p) => ({ ...p, dbUsername }))} />
                   <SecretField label="Password" value={form.dbPassword} editing={!!editing} onChange={(dbPassword) => setForm((p) => ({ ...p, dbPassword }))} />
+                  <div className="grid gap-1.5">
+                    <TextField
+                      label="Driver JAR location(s)"
+                      mono
+                      value={form.driverLocations}
+                      placeholder="/opt/nifi/nifi-current/nar_extensions/trino-jdbc-480.jar"
+                      onChange={(driverLocations) => setForm((p) => ({ ...p, driverLocations }))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Path(s) on the NiFi host to the JDBC driver JAR — needed for drivers NiFi doesn&apos;t bundle (e.g. Trino). Comma-separated.
+                    </p>
+                  </div>
                   <div className="grid gap-1.5">
                     <Label>Capabilities</Label>
                     <div className="flex gap-2">

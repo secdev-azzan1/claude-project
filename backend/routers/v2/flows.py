@@ -50,6 +50,10 @@ class SetEnabledRequest(BaseModel):
     enabled: bool
 
 
+class ClearTopicRequest(BaseModel):
+    topic: str
+
+
 # --------------------------------------------------------------- loaders
 
 async def _load_services(db: AsyncIOMotorDatabase) -> List[AppService]:
@@ -420,6 +424,23 @@ async def get_flow_messages_v2(flow_id: str, topic: str = Query(""), db: AsyncIO
         return await runtime_svc.get_topic_messages(db, doc, topic)
     except runtime_svc.TopicNotOwned as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/{flow_id}/topics/clear")
+async def clear_flow_topic_v2(flow_id: str, body: ClearTopicRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Alpha parity: the ops-view "Clear Topics" destructive action
+    (MVP §19.7) -- owned topics only (an unowned topic 404s, an adopted one
+    409s), count -> clear -> count against the live cluster, audited.
+    See `services/adapter/runtime.py::clear_topic` for the full contract."""
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    try:
+        return await runtime_svc.clear_topic(db, doc, body.topic)
+    except runtime_svc.TopicNotOwned as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except runtime_svc.TopicClearRefused as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except runtime_svc.TopicClearFailed as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.get("/{flow_id}/runtime")

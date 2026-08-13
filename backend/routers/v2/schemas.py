@@ -45,6 +45,7 @@ import io
 import json
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import httpx
 import openpyxl
@@ -542,6 +543,92 @@ async def register_schema_standalone(body: Dict[str, Any] = Body(...), db: Async
     await audit(db, "Schema registered", subject, status="Success", details=details, object="Schema")
 
     return {"globalId": global_id, "subject": subject, "version": version, "registeredAt": registered_at}
+
+
+# ---------------------------------------------------- registry version browsing
+#
+# Alpha-parity gap fix: a registered template's detail header only ever showed
+# the CURRENT registry version (`registeredVersion` on the template doc) —
+# older versions of the same ccompat subject were unreachable from the UI,
+# unlike an approved schema's approval-history dropdown. These two endpoints
+# read the registry directly (never the local Mongo doc, which only tracks
+# "most recent") so the frontend can offer the same kind of version browser
+# for registered templates.
+
+
+@router.get("/registry-subject/{subject}/versions")
+async def list_registry_subject_versions(subject: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    conn = await _active_apicurio_connection(db)
+    if not conn:
+        raise HTTPException(status_code=502, detail="No active Apicurio connection.")
+    ccompat = _ccompat_base(conn)
+    if not ccompat:
+        raise HTTPException(status_code=502, detail="Apicurio connection has no URL configured.")
+
+    headers, basic_auth = _httpx_auth_kwargs(_apicurio_auth(conn))
+    url = f"{ccompat}/subjects/{quote(subject, safe='')}/versions"
+    try:
+        async with httpx.AsyncClient(verify=tls_verify_enabled(), timeout=10.0) as client:
+            resp = await client.get(url, headers=headers, auth=basic_auth)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach the registry: {exc}")
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail=f'Subject "{subject}" was not found in the registry.')
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Registry returned {resp.status_code}: {resp.text[:200]}")
+    try:
+        data = resp.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Registry returned a response that was not valid JSON.")
+    if not isinstance(data, list):
+        raise HTTPException(status_code=502, detail="Registry returned an unexpected versions payload.")
+
+    versions = sorted(_coerce_int(v) for v in data)
+    return [{"version": v} for v in versions]
+
+
+@router.get("/registry-subject/{subject}/versions/{version}")
+async def get_registry_subject_version(subject: str, version: int, db: AsyncIOMotorDatabase = Depends(get_db)):
+    conn = await _active_apicurio_connection(db)
+    if not conn:
+        raise HTTPException(status_code=502, detail="No active Apicurio connection.")
+    ccompat = _ccompat_base(conn)
+    if not ccompat:
+        raise HTTPException(status_code=502, detail="Apicurio connection has no URL configured.")
+
+    headers, basic_auth = _httpx_auth_kwargs(_apicurio_auth(conn))
+    url = f"{ccompat}/subjects/{quote(subject, safe='')}/versions/{version}"
+    try:
+        async with httpx.AsyncClient(verify=tls_verify_enabled(), timeout=10.0) as client:
+            resp = await client.get(url, headers=headers, auth=basic_auth)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not reach the registry: {exc}")
+
+    if resp.status_code == 404:
+        raise HTTPException(
+            status_code=404, detail=f'Subject "{subject}" has no version {version} in the registry.'
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Registry returned {resp.status_code}: {resp.text[:200]}")
+    try:
+        data = resp.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Registry returned a response that was not valid JSON.")
+
+    schema_field = data.get("schema") if isinstance(data, dict) else None
+    try:
+        avro = json.loads(schema_field) if isinstance(schema_field, str) else schema_field
+    except Exception:
+        raise HTTPException(status_code=502, detail="Registry returned a schema string that was not valid JSON.")
+    if not isinstance(avro, dict):
+        raise HTTPException(status_code=502, detail="Registry returned an unexpected schema payload.")
+
+    return {
+        "version": _coerce_int(data.get("version")),
+        "globalId": data.get("id"),
+        "avro": avro,
+    }
 
 
 # -------------------------------------------------------------------- draft

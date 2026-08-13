@@ -517,6 +517,11 @@ def test_jdbc_read_incremental_golden_checks():
     pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
     assert pool.type == "org.apache.nifi.dbcp.DBCPConnectionPool"
     assert pool.properties["Database Driver Class Name"] == "org.postgresql.Driver"
+    # postgresql keeps the standard trailing /{database} path segment.
+    assert pool.properties["Database Connection URL"] == "#{svc_svc-db_db_url}"
+    # No `driverLocations` configured on this fixture's service -> the
+    # property is left unset entirely (not invented/guessed).
+    assert "Database Driver Locations" not in pool.properties
 
     url_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-db_db_url")
     assert url_param.value == "jdbc:postgresql://db.internal.corp:5432/ops"
@@ -555,6 +560,73 @@ def test_jdbc_write():
     # b-write is wired as b-read's child (jdbc is never forced terminal).
     port_link = next((pl for pl in plan.rootGroup.connections if pl.toBlockId == "b-write"), None)
     assert port_link is not None and port_link.fromBlockId == "b-read"
+
+
+def trino_flow() -> Flow:
+    """Root jdbc read against a Trino lakehouse service -- exercises the
+    dialect-conditional URL branch (`_ensure_db_pool`) confirmed against
+    `Publish3.json`'s live `TrinoJDBC` DBCPConnectionPool
+    (docs/orchestration/analysis/user-reference-flows-2.md §5.2/§7):
+    `jdbc:trino://trino:8080` with NO trailing `/{database}`."""
+    return Flow(
+        id="flow-trino", name="Trino Flow", cron="0 */2 * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="jdbc", mode="read", name="Read Assets", parentId=None, serviceId="svc-trino",
+                config={"table": "gold.asset.asset__xref"},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def trino_ctx(*, driver_locations: str | None = None) -> CompileContext:
+    config = {"dialect": "trino", "host": "trino", "port": 8080, "database": "gold",
+              "username": "admin", "password": "s3cret"}
+    if driver_locations is not None:
+        config["driverLocations"] = driver_locations
+    services = {
+        "svc-trino": make_service(id="svc-trino", type="database", name="Lakehouse Trino", config=config, hasSecret=True),
+    }
+    connections = {"kafka": make_connection(id="conn-kafka", type="kafka", name="K", config={"bootstrapServers": "kafka:9092"})}
+    return CompileContext(services=services, connections=connections, gateway_proxies={}, approved_schemas={})
+
+
+def test_jdbc_trino_pool_url_omits_database_suffix_and_driver_locations_unset():
+    """Trino's JDBC URL has NO trailing /{database} even though the service
+    config has a non-blank `database` -- the omission is unconditional for
+    the dialect, per the confirmed reference URL `jdbc:trino://trino:8080`.
+    With no `driverLocations` configured, the property is left unset (NiFi
+    may still resolve the driver via a globally-installed jar) rather than
+    a path being invented."""
+    plan = compile_flow(trino_flow(), trino_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
+    assert pool.type == "org.apache.nifi.dbcp.DBCPConnectionPool"
+    assert pool.properties["Database Driver Class Name"] == "io.trino.jdbc.TrinoDriver"
+    assert "Database Driver Locations" not in pool.properties
+
+    url_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-trino_db_url")
+    assert url_param.value == "jdbc:trino://trino:8080"
+
+
+def test_jdbc_trino_pool_sets_driver_locations_when_configured():
+    """When the database service config carries an explicit `driverLocations`
+    string, `_ensure_db_pool` sets `Database Driver Locations` on the
+    DBCPConnectionPool verbatim -- needed for non-bundled drivers like
+    Trino's (Publish3.json: `/opt/nifi/nifi-current/nar_extensions/
+    trino-jdbc-480.jar`)."""
+    jar_path = "/opt/nifi/nifi-current/nar_extensions/trino-jdbc-480.jar"
+    plan = compile_flow(trino_flow(), trino_ctx(driver_locations=jar_path))
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
+    assert pool.properties["Database Driver Locations"] == jar_path
+    # URL suffix omission holds regardless of driverLocations being set.
+    url_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-trino_db_url")
+    assert url_param.value == "jdbc:trino://trino:8080"
 
 
 # --------------------------------------------------------------------------
@@ -1237,6 +1309,7 @@ def test_no_emitted_group_violates_disposition_invariant():
         (routing_flow(), routing_ctx()),
         (session_token_flow(), session_token_ctx()),
         (jdbc_flow(), jdbc_ctx()),
+        (trino_flow(), trino_ctx()),
         (kafka_read_flow(), kafka_read_ctx()),
         (http_write_flow("original"), http_svc_ctx()),
         (http_write_flow("response"), http_svc_ctx()),

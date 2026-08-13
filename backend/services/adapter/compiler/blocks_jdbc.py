@@ -86,7 +86,29 @@ def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, add_param) 
     Connection URL", "Database Driver Class Name", "Database User",
     "Password") are long-standing, stable NiFi controller-service properties
     — high confidence, unlike the QueryDatabaseTableRecord/ConsumeKafka
-    property names flagged elsewhere in this task."""
+    property names flagged elsewhere in this task. Both are additionally
+    CONFIRMED byte-exact against `Publish3.json`'s live `TrinoJDBC`
+    DBCPConnectionPool (docs/orchestration/analysis/user-reference-flows-2.md
+    §5.2/§7).
+
+    URL shape is dialect-conditional: `postgresql`/`mysql` keep the standard
+    trailing `/{database}` path segment, but `trino` does NOT — the
+    reference's live URL is `jdbc:trino://trino:8080` with no path at all;
+    Trino resolves catalog/schema per-query (`FROM <catalog>.<schema>.
+    <table>`), not via the connection URL. Appending an unused `/{database}`
+    segment there risks an invalid or mismatched URL, so it's omitted
+    unconditionally for trino (not just when `database` happens to be blank).
+
+    `Database Driver Locations` (a JAR path list) is required on a real NiFi
+    instance for drivers it doesn't bundle, like Trino's — the reference sets
+    it to a single NAR-extension JAR path. That path is deployment-specific
+    (dependent on where the operator placed the jar on the NiFi host), so we
+    don't invent one; we only set the property when the service config
+    supplies an explicit `driverLocations` string (comma-separated paths, set
+    verbatim). If absent, the property is left unset entirely — NiFi may
+    still resolve the driver via a globally-installed jar — rather than
+    guessing a path that would likely be wrong.
+    """
     cs_key = "cs_db_pool"
     sid = service.id
     dialect = str(service.config.get("dialect", "postgresql"))
@@ -96,22 +118,29 @@ def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, add_param) 
     host = service.config.get("host", "")
     port = service.config.get("port", "")
     database = service.config.get("database", "")
-    url = f"jdbc:{dialect}://{host}:{port}/{database}"
+    if dialect == "trino":
+        url = f"jdbc:trino://{host}:{port}"
+    else:
+        url = f"jdbc:{dialect}://{host}:{port}/{database}"
 
     add_param(f"svc_{sid}_db_url", url, False)
     add_param(f"svc_{sid}_db_user", str(service.config.get("username", "")), False)
     add_param(f"svc_{sid}_db_password", service.config.get("password"), True)
 
     if not builder.has_cs(cs_key):
+        properties: Dict[str, Any] = {
+            "Database Connection URL": f"#{{svc_{sid}_db_url}}",
+            "Database Driver Class Name": driver,
+            "Database User": f"#{{svc_{sid}_db_user}}",
+            "Password": f"#{{svc_{sid}_db_password}}",
+        }
+        driver_locations = str(service.config.get("driverLocations") or "").strip()
+        if driver_locations:
+            properties["Database Driver Locations"] = driver_locations
         builder.add_cs(
             ControllerServiceSpec(
                 key=cs_key, name="db_pool", type="org.apache.nifi.dbcp.DBCPConnectionPool",
-                properties={
-                    "Database Connection URL": f"#{{svc_{sid}_db_url}}",
-                    "Database Driver Class Name": driver,
-                    "Database User": f"#{{svc_{sid}_db_user}}",
-                    "Password": f"#{{svc_{sid}_db_password}}",
-                },
+                properties=properties,
             )
         )
     return cs_key

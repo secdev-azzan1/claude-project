@@ -676,6 +676,45 @@ export async function registerSchema(
   });
 }
 
+// ------------------------------------------- registry version browsing (alpha parity)
+// A registered template's local doc only ever tracks the CURRENT registry
+// version (`registeredVersion`). These read straight from the registry's own
+// ccompat subject history so older versions are reachable too — the template
+// counterpart of an approved schema's `approvals` history.
+
+export interface RegistrySubjectVersion {
+  version: number;
+}
+
+/** Every version registered under `subject`, ascending. 404s (unknown subject)
+ *  surface as a thrown `ApiRequestError` with status 404. */
+export async function listRegistrySubjectVersions(subject: string): Promise<RegistrySubjectVersion[]> {
+  return request<RegistrySubjectVersion[]>(
+    `/api/v2/schemas/registry-subject/${encodeURIComponent(subject)}/versions`,
+  );
+}
+
+export interface RegistrySubjectVersionDetail {
+  version: number;
+  globalId: number | null;
+  avro: unknown;
+}
+
+/** One specific registered version's Avro, read straight from the registry. */
+export async function getRegistrySubjectVersion(
+  subject: string,
+  version: number,
+): Promise<RegistrySubjectVersionDetail> {
+  const doc = await request<Record<string, unknown>>(
+    `/api/v2/schemas/registry-subject/${encodeURIComponent(subject)}/versions/${version}`,
+  );
+  return {
+    version: doc.version as number,
+    globalId: (doc.globalId as number) ?? null,
+    avro: doc.avro,
+  };
+}
+
 // ------------------------------------------------------- library templates
 
 export async function listSchemaTemplates(): Promise<SchemaTemplate[]> {
@@ -1043,6 +1082,25 @@ export async function getTopicMessages(flowId: string, topic: string): Promise<T
     `/api/v2/flows/${flowId}/messages?topic=${encodeURIComponent(topic)}`,
   );
   return data.messages ?? [];
+}
+
+export interface ClearTopicResult {
+  topic: string;
+  before: number;
+  after: number;
+}
+
+/**
+ * Alpha parity: the ops-view "Clear Topics" destructive action (MVP §19.7).
+ * Owned topics only — an unowned topic 404s, an adopted one 409s ("Adopted
+ * topics are never cleared from here."); a successful clear returns the
+ * real before/after retained-message counts the backend audited.
+ */
+export async function clearFlowTopic(flowId: string, topic: string): Promise<ClearTopicResult> {
+  return request<ClearTopicResult>(`/api/v2/flows/${flowId}/topics/clear`, {
+    method: "POST",
+    body: { topic },
+  });
 }
 
 // ---------------------------------------------------------- connectors

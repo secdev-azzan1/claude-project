@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Download,
   Eraser,
+  Eye,
   FileJson,
   Lock,
   MoreHorizontal,
@@ -105,6 +106,7 @@ import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
   clearDedupCache,
+  clearFlowTopic,
   forceRepairRuntime,
   getDlq,
   getFlowRuntime,
@@ -1031,6 +1033,7 @@ function FlowDetailSheet({
   const [tab, setTab] = useState("overview");
   const [msgTopic, setMsgTopic] = useState<string | null>(null);
   const [clearDedupTarget, setClearDedupTarget] = useState<FlowBlock | null>(null);
+  const [clearTopicTarget, setClearTopicTarget] = useState<string | null>(null);
 
   const clearDedupMut = useMutation({
     mutationFn: (block: FlowBlock) => clearDedupCache(flow.id, block.id),
@@ -1043,6 +1046,21 @@ function FlowDetailSheet({
       }
     },
     onError: (e: Error) => toast.error("Could not clear the dedup cache", { description: e.message }),
+  });
+
+  // Alpha parity: the ops-view "Clear Topics" destructive action (MVP §19.7)
+  // — shared by the Messages tab's "Clear topic" button (targets the picked
+  // topic) and the DLQ tab's "Clear DLQ" button (targets `dlqName(flow.name)`).
+  const clearTopicMut = useMutation({
+    mutationFn: (topic: string) => clearFlowTopic(flow.id, topic),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["flow-metrics", flow.id] });
+      qc.invalidateQueries({ queryKey: ["flow-dlq", flow.id] });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "topic-messages" });
+      qc.invalidateQueries({ queryKey: ["audit"] });
+      toast.success(`Cleared ${res.before} message(s) from ${res.topic}`);
+    },
+    onError: (e: Error) => toast.error("Could not clear the topic", { description: e.message }),
   });
 
   useEffect(() => {
@@ -1463,14 +1481,30 @@ function FlowDetailSheet({
               One DLQ per flow: <code className="text-foreground">{dlqName(flow.name)}</code> · 3 retries then here ·
               7-day retention · no automated replay.
             </p>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={dlq.length === 0}
-              onClick={() => downloadJson(`${dlqName(flow.name)}.json`, dlq)}
-            >
-              <Download className="mr-1.5 h-3.5 w-3.5" /> Download
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={dlq.length === 0}
+                onClick={() => downloadJson(`${dlqName(flow.name)}.json`, dlq)}
+              >
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Download
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                disabled={clearTopicMut.isPending}
+                onClick={() => setClearTopicTarget(dlqName(flow.name))}
+              >
+                {clearTopicMut.isPending && clearTopicMut.variables === dlqName(flow.name) ? (
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Eraser className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Clear DLQ
+              </Button>
+            </div>
           </div>
           {dlqQuery.isLoading ? (
             <div className="p-6 text-center text-sm text-muted-foreground">Loading DLQ records…</div>
@@ -1531,6 +1565,20 @@ function FlowDetailSheet({
                     ))}
                   </SelectContent>
                 </Select>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive hover:text-destructive"
+                  disabled={!msgTopic || clearTopicMut.isPending}
+                  onClick={() => msgTopic && setClearTopicTarget(msgTopic)}
+                >
+                  {clearTopicMut.isPending && clearTopicMut.variables === msgTopic ? (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Eraser className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Clear topic
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground">
                 Group-less viewer — nothing is committed. Avro payloads are not decoded here. Newest first, capped at 50.
@@ -1570,6 +1618,30 @@ function FlowDetailSheet({
           <RuntimeTab flow={flow} services={services} connections={connections} onEdit={onEdit} />
         </TabsContent>
       </Tabs>
+
+      {/* ── Clear topic confirmation (Messages tab "Clear topic" / DLQ tab "Clear DLQ") ── */}
+      <AlertDialog open={!!clearTopicTarget} onOpenChange={(open) => !open && setClearTopicTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all retained messages from "{clearTopicTarget}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. The action is audited.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (clearTopicTarget) clearTopicMut.mutate(clearTopicTarget);
+                setClearTopicTarget(null);
+              }}
+            >
+              Clear topic
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Clear dedup cache confirmation ── */}
       <AlertDialog open={!!clearDedupTarget} onOpenChange={(open) => !open && setClearDedupTarget(null)}>
@@ -2191,7 +2263,7 @@ const Flows = () => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <Table className="min-w-[1250px] table-fixed">
+              <Table className="min-w-[1290px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[44px]">
@@ -2202,7 +2274,7 @@ const Flows = () => {
                     <TableHead className="w-[180px]">Entities</TableHead>
                     <TableHead className="w-[230px]">Topics</TableHead>
                     <TableHead className="w-[160px]">Schema</TableHead>
-                    <TableHead className="w-[196px] px-1 text-right">Actions</TableHead>
+                    <TableHead className="w-[236px] px-1 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2225,12 +2297,8 @@ const Flows = () => {
                     const disableReason = flow.enabled ? disableBlockReason(flow) : null;
 
                     return (
-                      <TableRow
-                        key={flow.id}
-                        className={selectedIds.has(flow.id) ? "cursor-pointer bg-muted/40" : "cursor-pointer"}
-                        onClick={() => setOpenId(flow.id)}
-                      >
-                        <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
+                      <TableRow key={flow.id} className={selectedIds.has(flow.id) ? "bg-muted/40" : undefined}>
+                        <TableCell className="py-3">
                           <Checkbox
                             checked={selectedIds.has(flow.id)}
                             onCheckedChange={() =>
@@ -2309,8 +2377,14 @@ const Flows = () => {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="px-1 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-1 py-3 text-right">
                           <div className="flex justify-end gap-0.5">
+                            <GuardedIconButton
+                              label="Overview"
+                              reason={null}
+                              icon={Eye}
+                              onClick={() => setOpenId(flow.id)}
+                            />
                             <GuardedIconButton
                               label={VERB_META[primary].label}
                               reason={getVerbBlockReason(flow, primary)}

@@ -58,7 +58,9 @@ import {
   deleteApprovedSchema,
   deleteApprovedSchemaVersion,
   deleteSchemaTemplate,
+  getRegistrySubjectVersion,
   listFlows,
+  listRegistrySubjectVersions,
   listSchemaTemplates,
   listSchemas,
   registerSchema,
@@ -593,6 +595,29 @@ const Schemas = () => {
     approvals.find((a) => a.version === approvalVersion) ?? approvals[approvals.length - 1] ?? null;
   const isHistoricalApproval = !!activeApproval && activeApproval.version !== approvals[approvals.length - 1]?.version;
 
+  // ─── registered-template registry version browsing (alpha parity) ─────
+  // A registered template's doc only ever tracks the CURRENT registry
+  // version. `viewedRegistryVersion` is null while browsing the working
+  // (editable) buffer; picking an OLDER version fetches it straight from the
+  // registry and shows it read-only, mirroring `approvalVersion` above.
+  const [viewedRegistryVersion, setViewedRegistryVersion] = useState<number | null>(null);
+  const registeredSubject = selectedTemplate?.registryGlobalId != null ? selectedTemplate.registeredSubject : undefined;
+  const templateIsRegistered = !!registeredSubject;
+
+  const { data: templateRegistryVersions = [], isFetching: templateVersionsLoading } = useQuery({
+    queryKey: ["schemaRegistryVersions", registeredSubject],
+    queryFn: () => listRegistrySubjectVersions(registeredSubject!),
+    enabled: templateIsRegistered,
+  });
+
+  const isViewingOldTemplateVersion = templateIsRegistered && viewedRegistryVersion != null;
+
+  const { data: viewedTemplateVersionDetail, isFetching: viewedTemplateVersionLoading } = useQuery({
+    queryKey: ["schemaRegistryVersionDetail", registeredSubject, viewedRegistryVersion],
+    queryFn: () => getRegistrySubjectVersion(registeredSubject!, viewedRegistryVersion!),
+    enabled: templateIsRegistered && viewedRegistryVersion != null,
+  });
+
   // ─── the one source of truth for the editor ───────────────────────────
   const detail = useMemo(() => {
     if (!selected) return null;
@@ -609,12 +634,32 @@ const Schemas = () => {
         fallbackName: subjectToRecordName(selected.schema.subject),
       };
     }
+    if (isViewingOldTemplateVersion) {
+      // Never mutates the template — this is a pure read of the registry's
+      // own history. Holds the last-shown content until the fetch for the
+      // newly picked version lands, rather than flashing the working buffer.
+      const raw = viewedTemplateVersionDetail
+        ? JSON.stringify(viewedTemplateVersionDetail.avro, null, 2)
+        : selected.template.rawAvro;
+      return {
+        key: `template:${selected.id}:registry-v${viewedRegistryVersion}:${viewedTemplateVersionDetail ? "loaded" : "loading"}`,
+        raw,
+        fallbackName: subjectToRecordName(selected.template.name),
+      };
+    }
     return {
       key: `template:${selected.id}:${selected.template.updatedAt}`,
       raw: selected.template.rawAvro,
       fallbackName: subjectToRecordName(selected.template.name),
     };
-  }, [selected, activeApproval, isHistoricalApproval]);
+  }, [
+    selected,
+    activeApproval,
+    isHistoricalApproval,
+    isViewingOldTemplateVersion,
+    viewedRegistryVersion,
+    viewedTemplateVersionDetail,
+  ]);
 
   const parsed = useMemo(() => {
     if (!detail) return { record: null as AvroRecord | null, error: null as string | null };
@@ -648,6 +693,7 @@ const Schemas = () => {
     setApprovalVersion(null);
     setCheckFor(null);
     setVerifyFor(null);
+    setViewedRegistryVersion(null);
   }, [selected?.id]);
 
   useEffect(() => {
@@ -1371,7 +1417,12 @@ const Schemas = () => {
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <Button
                         size="sm"
-                        title="Check the shape, then pick the stream it is registered under"
+                        disabled={isViewingOldTemplateVersion}
+                        title={
+                          isViewingOldTemplateVersion
+                            ? `Viewing registered v${viewedRegistryVersion} — select v${selectedTemplate.registeredVersion} to edit and register the working copy.`
+                            : "Check the shape, then pick the stream it is registered under"
+                        }
                         onClick={() => {
                           const lines = checkAvroRecord(buffer.record, buffer.rawError ?? null);
                           setCheckFor({ id: selectedTemplate.id, lines });
@@ -1405,7 +1456,12 @@ const Schemas = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        title="Register the current buffer to the registry immediately — independent of any flow ceremony"
+                        disabled={isViewingOldTemplateVersion}
+                        title={
+                          isViewingOldTemplateVersion
+                            ? `Viewing registered v${viewedRegistryVersion} — select v${selectedTemplate.registeredVersion} to edit and register the working copy.`
+                            : "Register the current buffer to the registry immediately — independent of any flow ceremony"
+                        }
                         onClick={() => openRegisterForTemplate(selectedTemplate)}
                       >
                         <UploadCloud className="h-3.5 w-3.5" /> Register…
@@ -1419,6 +1475,48 @@ const Schemas = () => {
                       </Button>
                     </div>
                   </div>
+
+                  {templateIsRegistered && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <History className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Label className="text-xs text-muted-foreground">Registered version</Label>
+                      <Select
+                        value={String(viewedRegistryVersion ?? selectedTemplate.registeredVersion ?? "")}
+                        onValueChange={(value) => {
+                          const num = Number(value);
+                          setViewedRegistryVersion(
+                            selectedTemplate.registeredVersion != null && num === selectedTemplate.registeredVersion
+                              ? null
+                              : num,
+                          );
+                        }}
+                      >
+                        <SelectTrigger className="h-8 w-[10rem]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[...templateRegistryVersions]
+                            .sort((a, b) => b.version - a.version)
+                            .map((rv) => (
+                              <SelectItem key={rv.version} value={String(rv.version)}>
+                                v{rv.version}
+                                {rv.version === selectedTemplate.registeredVersion ? " · current" : ""}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {(templateVersionsLoading || viewedTemplateVersionLoading) && (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                  )}
+
+                  {isViewingOldTemplateVersion && (
+                    <p className="rounded-md border border-warning/30 bg-warning-muted p-2.5 text-xs text-muted-foreground">
+                      Viewing registered v{viewedRegistryVersion} — read-only. Select v
+                      {selectedTemplate.registeredVersion} to edit the working copy.
+                    </p>
+                  )}
 
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">Description</Label>
@@ -1442,7 +1540,11 @@ const Schemas = () => {
                   {verifyFor?.id === selectedTemplate.id && (
                     <VerifyPanel result={verifyFor.result} onDismiss={() => setVerifyFor(null)} />
                   )}
-                  <AvroEditorTabs buffer={buffer} emptyLabel="This template's Avro could not be parsed." />
+                  <AvroEditorTabs
+                    buffer={buffer}
+                    readOnly={isViewingOldTemplateVersion}
+                    emptyLabel="This template's Avro could not be parsed."
+                  />
                 </CardContent>
 
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t p-4">
@@ -1452,8 +1554,14 @@ const Schemas = () => {
                   <div className="flex gap-2">
                     <Button
                       size="sm"
-                      disabled={!templateDirty || !!buffer.rawError || saveMut.isPending}
-                      title={buffer.rawError ? `Cannot save: ${buffer.rawError}` : undefined}
+                      disabled={!templateDirty || !!buffer.rawError || saveMut.isPending || isViewingOldTemplateVersion}
+                      title={
+                        isViewingOldTemplateVersion
+                          ? `Viewing registered v${viewedRegistryVersion} — select v${selectedTemplate.registeredVersion} to edit and save the working copy.`
+                          : buffer.rawError
+                            ? `Cannot save: ${buffer.rawError}`
+                            : undefined
+                      }
                       onClick={handleSaveTemplate}
                     >
                       {saveMut.isPending ? (

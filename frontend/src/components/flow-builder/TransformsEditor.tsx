@@ -6,7 +6,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { AddBlockMenu } from "./AddBlockMenu";
 import { computeAddMenu, type AddMenuEntry } from "@/prototype/legality";
 import { uid } from "@/prototype/store";
@@ -40,7 +39,9 @@ const KIND_LABEL: Record<TransformKind, string> = {
 
 const KIND_HINT: Partial<Record<TransformKind, string>> = {};
 
-const ADDABLE: TransformKind[] = ["extract", "add_field", "remove_field", "set_from_attribute", "rename", "coerce", "dedup"];
+// Dedup is not offered here — it has its own always-visible panel below the
+// list (see DedupPanel) so it doesn't hide as a terse dropdown item.
+const ADDABLE: TransformKind[] = ["extract", "add_field", "remove_field", "set_from_attribute", "rename", "coerce"];
 
 function defaultConfig(kind: TransformKind): Record<string, unknown> {
   switch (kind) {
@@ -72,7 +73,10 @@ export interface TransformsEditorProps {
 
 export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches }: TransformsEditorProps) {
   const rules = block.transforms;
-  const hasDedup = rules.some((r) => r.kind === "dedup");
+  // Dedup is always pinned last (MVP ruling 12) — it never appears in the
+  // ordered rule list below; it has its own always-visible panel instead.
+  const dedupRule = rules.find((r) => r.kind === "dedup");
+  const nonDedupRules = rules.filter((r) => r.kind !== "dedup");
 
   const setRule = (id: string, patch: Partial<TransformRule>) =>
     onChange(rules.map((r) => (r.id === id ? { ...r, ...patch, config: { ...r.config, ...(patch.config ?? {}) } } : r)));
@@ -108,31 +112,25 @@ export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches
 
   return (
     <div className="space-y-2">
-      {rules.length === 0 && (
+      {nonDedupRules.length === 0 && (
         <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
           No transformations — records pass through shaped only by the adapter's parsing.
         </p>
       )}
 
-      {rules.map((rule, idx) => (
+      {nonDedupRules.map((rule, idx) => (
         <div key={rule.id} className="rounded-md border bg-muted/30 px-3 py-2">
           <div className="flex items-center gap-2">
-            {rule.kind === "dedup" && <Fingerprint className="h-3.5 w-3.5 text-muted-foreground" />}
             <span className="text-xs font-semibold">{KIND_LABEL[rule.kind]}</span>
-            {rule.kind === "dedup" && (
-              <Badge variant="outline" className="text-xs">
-                always last
-              </Badge>
-            )}
             <span className="ml-auto flex items-center gap-0.5">
-              <Button size="icon" variant="ghost" className="h-6 w-6" disabled={locked || idx === 0 || rule.kind === "dedup"} onClick={() => move(idx, -1)} title="Move up">
+              <Button size="icon" variant="ghost" className="h-6 w-6" disabled={locked || idx === 0} onClick={() => move(idx, -1)} title="Move up">
                 <ArrowUp className="h-3 w-3" />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
                 className="h-6 w-6"
-                disabled={locked || idx === rules.length - 1 || rule.kind === "dedup" || rules[idx + 1]?.kind === "dedup"}
+                disabled={locked || idx === nonDedupRules.length - 1}
                 onClick={() => move(idx, 1)}
                 title="Move down"
               >
@@ -192,7 +190,6 @@ export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches
                 </Select>
               </>
             )}
-            {rule.kind === "dedup" && <DedupFields rule={rule} locked={locked} setRule={setRule} />}
           </div>
         </div>
       ))}
@@ -207,14 +204,10 @@ export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches
           {ADDABLE.map((kind) => (
             <DropdownMenuItem
               key={kind}
-              disabled={kind === "dedup" && hasDedup}
               onClick={() => addRule(kind)}
               className={KIND_HINT[kind] ? "flex-col items-start gap-0.5 py-2" : undefined}
             >
-              <span>
-                {KIND_LABEL[kind]}
-                {kind === "dedup" && hasDedup ? " (already present)" : ""}
-              </span>
+              <span>{KIND_LABEL[kind]}</span>
               {KIND_HINT[kind] && <span className="text-xs text-muted-foreground">{KIND_HINT[kind]}</span>}
             </DropdownMenuItem>
           ))}
@@ -223,6 +216,75 @@ export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches
       <p className="text-xs leading-4 text-muted-foreground">
         Applied in order, after the adapter's parsing. Dropped records are intentional outcomes — counted, never errors.
       </p>
+
+      <DedupPanel
+        rule={dedupRule}
+        locked={locked}
+        onEnable={() => addRule("dedup")}
+        onDisable={() => dedupRule && remove(dedupRule.id)}
+        setRule={setRule}
+      />
+    </div>
+  );
+}
+
+/**
+ * Dedup is a transform like any other (MVP ruling 12 — always pinned last,
+ * one per block) but it earns a dedicated, always-visible panel instead of a
+ * terse dropdown entry so it's discoverable. Toggles between an "enable"
+ * prompt and the full editor depending on whether the rule exists.
+ */
+function DedupPanel({
+  rule,
+  locked,
+  onEnable,
+  onDisable,
+  setRule,
+}: {
+  rule: TransformRule | undefined;
+  locked: boolean;
+  onEnable: () => void;
+  onDisable: () => void;
+  setRule: (id: string, patch: Partial<TransformRule>) => void;
+}) {
+  return (
+    <div className="rounded-md border border-dashed bg-muted/20 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <Fingerprint className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold">Deduplication</span>
+        {rule && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto h-6 gap-1 text-xs text-destructive"
+            disabled={locked}
+            onClick={onDisable}
+          >
+            Disable
+          </Button>
+        )}
+      </div>
+
+      {rule ? (
+        <div className="mt-1.5">
+          <DedupFields rule={rule} locked={locked} setRule={setRule} />
+        </div>
+      ) : (
+        <>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">
+            Suppress records already seen within a time window — checked last, after every other transformation.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 h-7 gap-1 border-primary text-xs text-primary hover:bg-primary/10 hover:text-primary"
+            disabled={locked}
+            onClick={onEnable}
+          >
+            <Fingerprint className="h-3 w-3" /> Enable deduplication
+          </Button>
+        </>
+      )}
     </div>
   );
 }

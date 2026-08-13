@@ -130,6 +130,13 @@ function relativeTime(iso: string | undefined | null): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+/** Compact rendering of a dedup rule's windowHours for the collapsed-section summary. */
+function formatDedupWindow(hours: number): string {
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  const rounded = Math.round(hours * 10) / 10;
+  return `${rounded}h`;
+}
+
 /**
  * Whether a block gets the Test section — the rule is stated once, here.
  *
@@ -363,10 +370,15 @@ export function BlockForm(props: BlockFormProps) {
       : `Test failed ${relativeTime(block.testResult.testedAt)}`
     : "Not tested";
 
-  const transformSummary =
-    block.transforms.length === 0
-      ? "none"
-      : `${block.transforms.length} rule${block.transforms.length === 1 ? "" : "s"}`;
+  const transformSummary = (() => {
+    const dedupRule = block.transforms.find((r) => r.kind === "dedup");
+    const ruleCount = block.transforms.length - (dedupRule ? 1 : 0);
+    const ruleLabel = ruleCount === 0 ? "none" : `${ruleCount} rule${ruleCount === 1 ? "" : "s"}`;
+    if (!dedupRule) return ruleLabel;
+    const windowHours = (dedupRule.config.windowHours as number) ?? 24;
+    const dedupLabel = `dedup on (${formatDedupWindow(windowHours)})`;
+    return ruleCount === 0 ? dedupLabel : `${ruleLabel} · ${dedupLabel}`;
+  })();
 
   const entitySummary = block.entity
     ? isKafkaFamilyWrite

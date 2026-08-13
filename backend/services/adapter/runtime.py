@@ -551,6 +551,89 @@ async def get_topic_messages(db, flow_doc: Dict[str, Any], topic: str) -> Dict[s
     return {"messages": messages[:50]}
 
 
+# ---------------------------------------------------------- 3b. clear topic
+# MVP §19.7 "Three distinct, never-merged 'clear' verbs" -- Clear Topics
+# (Kafka records): owned topics only, adopted topics refused outright;
+# confirmation happens client-side (the dialog names the exact topic), the
+# server enforces count -> clear -> count in that order and audits a genuine
+# before/after pair, mirroring the alpha's `POST
+# /api/flows/{id}/kafka-messages/clear` (`docs/orchestration/analysis/
+# alpha-frontend.md`).
+
+
+class TopicClearRefused(Exception):
+    """The topic exists and belongs to this flow, but is an ADOPTED topic
+    (`FlowTopic.kind == "adopted"`) -- the router turns this into a 409.
+    Adopted topics are owned by whatever external producer created them;
+    this platform never clears them, even though it happily clears its own
+    materialized (and DLQ) topics."""
+
+
+class TopicClearFailed(Exception):
+    """A genuine engine failure -- no active Kafka connection, or the
+    count/empty call itself failed -- as opposed to a refusal. The router
+    turns this into a 502, same family as `NifiApplyError`/`ConnectApplyError`/
+    `lifecycle.LifecycleError` elsewhere in this router."""
+
+
+async def clear_topic(db, flow_doc: Dict[str, Any], topic: str) -> Dict[str, Any]:
+    """`POST /{id}/topics/clear`. Ownership uses the exact same
+    `_owned_topic_names` set `get_topic_messages` enforces above (an unowned
+    topic 404s via `TopicNotOwned`) -- the flow's DLQ topic is included
+    there too, so it clears through this same path (alpha parity: the DLQ
+    tab's "Clear DLQ" button targets its topic name here, same as the
+    Messages tab's "Clear topic").
+
+    An ADOPTED topic (present in `flow.topics` with `kind == "adopted"`)
+    is refused outright (`TopicClearRefused`, 409) -- MVP §19.7: "owned
+    topics only, adopted refused outright."
+
+    Execution order is count -> empty -> count against the real
+    Kafka/Kafbat cluster (`deployer/topics.py`'s `count_topic`/
+    `empty_topic`, the same helpers `get_flow_metrics`/`lifecycle.undeploy`
+    already use), auditing a genuine before/after pair ("Topics cleared")
+    once the clear itself succeeds -- a failed re-count after a successful
+    empty falls back to 0 (the only honest value once the broker has
+    confirmed the clear), rather than leaving `after` unset.
+    """
+    owned = _owned_topic_names(flow_doc)
+    if not topic or topic not in owned:
+        raise TopicNotOwned(f"Topic {topic!r} does not belong to this flow.")
+
+    flow = Flow(**flow_doc)
+    if any(t.name == topic and t.kind == "adopted" for t in flow.topics):
+        raise TopicClearRefused("Adopted topics are never cleared from here.")
+
+    connections = await _load_connections(db)
+    kafka_conn_doc = _active_connection(connections, "kafka")
+    if not kafka_conn_doc:
+        raise TopicClearFailed("No active Kafka connection is configured.")
+    kafka_conn = _kafka_conn_dict(kafka_conn_doc)
+
+    before_result = await topics_mod.count_topic(kafka_conn, topic)
+    if not before_result.get("ok"):
+        raise TopicClearFailed(before_result.get("error") or "Could not read the topic's current message count.")
+    before = _as_int(before_result.get("total_messages"))
+
+    empty_result = await topics_mod.empty_topic(kafka_conn, topic)
+    if not empty_result.get("ok"):
+        raise TopicClearFailed(empty_result.get("error") or "Failed to clear the topic.")
+
+    after_result = await topics_mod.count_topic(kafka_conn, topic)
+    after = _as_int(after_result.get("total_messages")) if after_result.get("ok") else 0
+
+    await audit(
+        db,
+        action="Topics cleared",
+        target=f"{flow.name} / {topic}",
+        status="Success",
+        details=f"{topic}: {before} -> {after} message(s) retained.",
+        object="Flow",
+    )
+
+    return {"topic": topic, "before": before, "after": after}
+
+
 # ================================================================ 4. runtime
 
 

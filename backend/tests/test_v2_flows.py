@@ -23,6 +23,7 @@ from db import get_db
 from routers.v2 import audit as v2_audit
 from routers.v2 import dashboard as v2_dashboard
 from routers.v2 import flows as v2_flows
+from services.adapter import runtime as runtime_svc
 from services.adapter.common import COLLECTIONS
 from tests.resilience.conftest import FaultInjectingCollection
 
@@ -673,3 +674,90 @@ def test_save_flow_blank_id_generates_one():
         assert body["id"].startswith("flow-")
     finally:
         client.close()
+
+
+# ------------------------------------------------------- topics/clear (T7.6)
+# MVP §19.7 "Clear Topics": owned topics only, adopted refused outright,
+# count -> clear -> count audited. `_valid_flow`'s `b2` block (kafka write,
+# entity="thing", flow name "Valid Flow") derives "raw.valid_flow.thing" --
+# reused below rather than materializing `topics` by hand, same as
+# test_v2_runtime.py's ownership-without-frontend-sync coverage.
+
+def test_clear_topic_not_owned_by_flow_404s():
+    fake_db = FakeDB()
+    fake_db.flows_v2.docs.append(_valid_flow(flow_id="flow-clear-404"))
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/flows/flow-clear-404/topics/clear", json={"topic": "not.owned"})
+        assert resp.status_code == 404, resp.text
+    finally:
+        _clear_overrides()
+
+
+def test_clear_topic_adopted_topic_refused_409():
+    fake_db = FakeDB()
+    flow = _valid_flow(
+        flow_id="flow-clear-adopted",
+        topics=[{"id": "t1", "kind": "adopted", "name": "external.upstream.topic", "sealed": True, "writerBlockId": None}],
+    )
+    fake_db.flows_v2.docs.append(flow)
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/flows/flow-clear-adopted/topics/clear", json={"topic": "external.upstream.topic"})
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["detail"] == "Adopted topics are never cleared from here."
+    finally:
+        _clear_overrides()
+
+
+def test_clear_topic_happy_path_counts_audited(monkeypatch):
+    fake_db = FakeDB()
+    fake_db.flows_v2.docs.append(_valid_flow(flow_id="flow-clear-happy"))
+    fake_db.connections_v2.docs.append(
+        {
+            "id": "c-kafka",
+            "type": "kafka",
+            "name": "Kafka",
+            "active": True,
+            "health": "Healthy",
+            "config": {"bootstrapServers": "kafka:9092", "mode": "native", "securityProtocol": "PLAINTEXT"},
+        }
+    )
+
+    calls = {"count": 0}
+
+    async def fake_count_topic(kafka_conn, topic):
+        assert topic == "raw.valid_flow.thing"
+        calls["count"] += 1
+        return {"ok": True, "total_messages": 42 if calls["count"] == 1 else 0}
+
+    async def fake_empty_topic(kafka_conn, topic):
+        assert topic == "raw.valid_flow.thing"
+        return {"ok": True, "topic": topic}
+
+    monkeypatch.setattr(runtime_svc.topics_mod, "count_topic", fake_count_topic)
+    monkeypatch.setattr(runtime_svc.topics_mod, "empty_topic", fake_empty_topic)
+
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/flows/flow-clear-happy/topics/clear", json={"topic": "raw.valid_flow.thing"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"topic": "raw.valid_flow.thing", "before": 42, "after": 0}
+        assert calls["count"] == 2  # before, then after
+
+        audited = [d for d in fake_db.audit_v2.docs if d["action"] == "Topics cleared"]
+        assert len(audited) == 1
+        assert audited[0]["target"] == "Valid Flow / raw.valid_flow.thing"
+        assert "42" in audited[0]["details"] and "0" in audited[0]["details"]
+    finally:
+        _clear_overrides()
+
+
+def test_clear_topic_on_nonexistent_flow_404s():
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/flows/does-not-exist/topics/clear", json={"topic": "x"})
+        assert resp.status_code == 404, resp.text
+    finally:
+        _clear_overrides()
