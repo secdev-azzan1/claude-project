@@ -3,7 +3,7 @@
 Statuses: NOT STARTED | IN PROGRESS | IMPLEMENTED | VERIFICATION FAILED |
 CORRECTION IN PROGRESS | VERIFIED | BLOCKED
 
-Last updated: 2026-08-13 (correction wave landed: 644 backend/157 frontend tests green; live re-verification R1-R8 running)
+Last updated: 2026-08-13 — COMPLETE. Backend 653/0, frontend 157/0; journeys A/E, B, C/D, R1-R8 all PASS; final audit done.
 
 | Task | Status | Notes |
 |---|---|---|
@@ -47,7 +47,7 @@ Last updated: 2026-08-13 (correction wave landed: 644 backend/157 frontend tests
 | T8.U11 Test block wiring | VERIFIED | delivered via T8.1 (testBlock->real endpoint) + T7.5 (endpoint); live probe: 10 records, detectedFields |
 | T9.1–T9.5 E2E journeys | VERIFIED | A+E PASS (dedup proven live; Iceberg snapshot; lifecycle+drift); B PASS (routing structural+behavioral, 90/39/45 exact); C+D PASS (APISIX egress, schema lifecycle). Defect corrections landed; live re-verification R1-R8 in flight |
 | T10.1 Reviews | VERIFIED | Opus review triaged: C2 refuted w/ live evidence; all other C/M findings fixed in correction wave (644 backend tests green) or documented as intended semantics (M3) |
-| T10.2 Final audit | NOT STARTED | |
+| T10.2 Final audit | VERIFIED | final-audit.md — every prompt § mapped to evidence; R1-R8 all PASS (R3 live-proven post-fix) |
 
 ## Blockers
 

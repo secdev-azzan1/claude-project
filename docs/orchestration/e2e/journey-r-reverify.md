@@ -123,3 +123,26 @@ On the R1 flow (deployed with dedup, epoch 0):
 5. **R3 constraint (design input, not a code defect)** — NiFi refuses `#{sensitive param}` inside ReplaceText's non-sensitive static `Replacement Value`; the E5 login-body approach cannot work as compiled. Fallback design required (e.g. body via `login`'s own request-body with a sensitive-capable mechanism, or an ExecuteGroovyScript/param-provider approach).
 
 Out-of-band interventions this run (all documented above): one-line compiler fix + uvicorn restart (sanctioned), Kafbat message purge + one orphan-topic delete, Polaris table drop. NiFi/APISIX/Apicurio/Connect were only read, never mutated directly.
+
+## R3 addendum — session-token PROVEN LIVE (orchestrator, post-final-fix)
+
+After the Groovy-login redesign (sensitive dynamic PASSWORD property; param-ref regex
+hyphen fix) + deploy validation gate landed:
+- service `authMode=session_token` vs dummyjson (/auth/login, $.accessToken,
+  tokenTemplate "Bearer ${token}") — service test Healthy
+- flow deployed (validation gate PASSED — login processor VALID in live NiFi), started
+- topic `raw.e2emain_authed.e2emain_me` accumulated 20 records over ~20 cron firings,
+  each the AUTHENTICATED /auth/me response for user `emilys` (login → token extraction →
+  Bearer injection → fetch → publish, end to end)
+- teardown clean: flow deleted (PG/topics/DLQ), service retired, 0 flows remaining
+R3: **PASS**.
+
+## Environment incident (documented)
+
+A leftover `data-mobility-platform` docker-compose stack (the user's FIRST-ATTEMPT app:
+frontend :3000, backend :8010, own mongo) auto-starts with Docker Desktop and publishes
+0.0.0.0:8010 — silently competing with this app's backend (localhost resolution
+order made curl reach the container in some states). Resolution: containers STOPPED and
+restart policy set to `no` (reversible via `docker start`/`docker update --restart`).
+An earlier blanket kill of 8010 listeners took down com.docker.backend (Docker Desktop) —
+recovered; lesson recorded: never blanket-kill netstat PIDs.

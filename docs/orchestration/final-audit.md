@@ -43,7 +43,7 @@ and the test suites (backend 645+/0 failed, frontend 157/0 at audit time).
 4. Alpha-only concepts intentionally retired: legacy routers (sources/flow_import/nifi_services/
    iceberg_sinks lifecycle) not mounted; connector export/import stays at prototype scope with a
    real file picker.
-5. Session-token final design (Groovy sensitive-props login): unit/compile-tested + NiFi-accepted
-   mechanism (same as dedup hash); full live token round-trip re-run: see journey-r addendum.
+5. (resolved) Session-token Groovy login PROVEN LIVE: 20 authenticated /auth/me records
+   across ~20 cron firings (journey-r addendum); deploy validation gate active.
 6. Kafka broker TCP + Redis are cluster-internal by design; app uses Kafbat REST and
    NiFi-mediated Redis (documented, preflight-aware).
