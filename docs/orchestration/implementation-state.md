@@ -3,7 +3,7 @@
 Statuses: NOT STARTED | IN PROGRESS | IMPLEMENTED | VERIFICATION FAILED |
 CORRECTION IN PROGRESS | VERIFIED | BLOCKED
 
-Last updated: 2026-08-13 (backend v2 integrated + live-verified; api swap + compiler in flight)
+Last updated: 2026-08-13 (correction wave landed: 644 backend/157 frontend tests green; live re-verification R1-R8 running)
 
 | Task | Status | Notes |
 |---|---|---|
@@ -46,8 +46,8 @@ Last updated: 2026-08-13 (backend v2 integrated + live-verified; api swap + comp
 | T8.U9 Remove Egress block | IMPLEMENTED | EgressLine removed from BlockForm; validation.ts untouched |
 | T8.U10 Dedup polish | IMPLEMENTED | window unit control + bounds validators + captions + clear-cache action; vitest 157 green |
 | T8.U11 Test block wiring | NOT STARTED | |
-| T9.1–T9.5 E2E journeys | IN PROGRESS | A+E PASS (dedup proven: 30->60 in/30 out, Iceberg snapshot 30 records; lifecycle verified); C+D PASS (APISIX egress live, schema lifecycle live); B running. 10 defects catalogued for correction wave |
-| T10.1 Reviews | IN PROGRESS | flow-engine Opus review done (4C/17M/16m); triage vs E2E evidence underway |
+| T9.1–T9.5 E2E journeys | VERIFIED | A+E PASS (dedup proven live; Iceberg snapshot; lifecycle+drift); B PASS (routing structural+behavioral, 90/39/45 exact); C+D PASS (APISIX egress, schema lifecycle). Defect corrections landed; live re-verification R1-R8 in flight |
+| T10.1 Reviews | VERIFIED | Opus review triaged: C2 refuted w/ live evidence; all other C/M findings fixed in correction wave (644 backend tests green) or documented as intended semantics (M3) |
 | T10.2 Final audit | NOT STARTED | |
 
 ## Blockers
