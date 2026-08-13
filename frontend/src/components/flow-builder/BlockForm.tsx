@@ -180,6 +180,10 @@ export interface BlockFormProps {
   onSetBranch: (blockId: string, patch: { name?: string; condition?: BranchCondition | null }) => void;
   onOpenCeremony: (blockId: string) => void;
   onSelectBlock: (blockId: string) => void;
+  /** Test needs the draft persisted first — a flow that only exists in the
+   *  builder has nothing server-side to probe. Resolves with the saved flow
+   *  (a no-op save if nothing changed); rejects with the save's own error. */
+  onEnsureSaved: () => Promise<Flow>;
 }
 
 export function BlockForm(props: BlockFormProps) {
@@ -195,6 +199,7 @@ export function BlockForm(props: BlockFormProps) {
     onDeleteBlock,
     onOpenCeremony,
     onSelectBlock,
+    onEnsureSaved,
   } = props;
   // kc's "Save is live" exception: kc blocks stay editable while deployed.
   const locked = flowLocked && block.adapter !== "kc";
@@ -566,6 +571,7 @@ branch: {block.branch.name}
                   block={block}
                   locked={locked}
                   service={selectedService}
+                  onEnsureSaved={onEnsureSaved}
                   onTested={(result: BlockTestResult) => onPatchBlock(block.id, { testResult: result })}
                   onAddExtraction={(field, path) => {
                     const attribute = field.replace(/^\[\d+\]$/, "item");
@@ -1133,6 +1139,37 @@ function HttpSettings({
   const headers = (cfg.headers as KvRow[]) ?? [];
   const query = (cfg.query as KvRow[]) ?? [];
 
+  // The base URL always comes from the bound service (existing or a saved
+  // "Set up here" private one) — never typed into the block. Path is only
+  // ever what's appended to it, and this is what the field's context line
+  // and the resolved preview key off.
+  const baseUrl = typeof service?.config?.baseUrl === "string" ? service.config.baseUrl : undefined;
+  const pathValue = (cfg.path as string) ?? "";
+  const pathHasScheme = /^https?:\/\//i.test(pathValue);
+  const pathStartsWithBase = !!baseUrl && pathValue.startsWith(baseUrl);
+  // A full URL that doesn't match the bound service's base gets a destructive
+  // hint instead of a silent auto-strip — stripping a base we can't identify
+  // as the right one would guess at the user's intent.
+  const showFullUrlHint = pathHasScheme && !pathStartsWithBase;
+
+  /**
+   * Shared by both the OpenAPI combobox and the plain path Input: if what
+   * came in starts with http(s):// AND matches the bound service's base URL,
+   * the base got typed/pasted where only the path belongs (the reported
+   * confusion — "aren't we already giving the url in the application
+   * services?"). Auto-strip it rather than reject it; anything else is left
+   * alone and flagged inline (and by validateBlock's httpPathIssue) instead.
+   */
+  const resolvePathInput = (raw: string): string => {
+    if (baseUrl && /^https?:\/\//i.test(raw) && raw.startsWith(baseUrl)) {
+      let stripped = raw.slice(baseUrl.length);
+      if (!stripped.startsWith("/")) stripped = `/${stripped}`;
+      toast.success("Base URL comes from the service — kept just the path.");
+      return stripped;
+    }
+    return raw;
+  };
+
   const advancedSummary = [
     headers.length > 0 ? `${headers.length} header${headers.length === 1 ? "" : "s"}` : null,
     query.length > 0 ? `${query.length} query param${query.length === 1 ? "" : "s"}` : null,
@@ -1146,6 +1183,19 @@ function HttpSettings({
   return (
     <div className="space-y-3">
       <OpenApiPanel block={block} locked={locked} onPatchConfig={onPatchConfig} />
+
+      {/* Answers the reported confusion directly — "aren't we already giving
+          the url in the application services?" — before the fields below can
+          raise it again. */}
+      {baseUrl ? (
+        <p className="text-xs text-muted-foreground">
+          Base URL — <span className="font-mono">{baseUrl}</span> (from service "{service?.name}")
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Select a service (or set one up) in Identity — its base URL prefixes the path below.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="grid gap-1.5">
@@ -1166,20 +1216,25 @@ function HttpSettings({
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">Per-request method for this block.</p>
         </div>
         <div className="grid min-w-[16rem] flex-1 gap-1.5">
           <Label>Path</Label>
+          <p className="text-xs text-muted-foreground">
+            Appended to the service's base URL — e.g. /users. The full request URL is shown below.
+          </p>
           {openapiSpecId ? (
             <OpenApiPathCombobox
               specId={openapiSpecId}
               locked={locked}
               value={(cfg.path as string) ?? ""}
-              placeholder="/api/v3/assets or /scans/${scan_id}"
+              placeholder="/users"
               onChange={(path) => {
                 // Free typing is always allowed — it clears the operation
                 // binding so a hand-edited path is never silently misreported
                 // as "from the doc" (flexibility rule).
-                const patch: Record<string, unknown> = { path };
+                const resolved = resolvePathInput(path);
+                const patch: Record<string, unknown> = { path: resolved };
                 if (cfg.openapiOperationId) patch.openapiOperationId = undefined;
                 onPatchConfig(block.id, patch);
               }}
@@ -1193,9 +1248,20 @@ function HttpSettings({
               className="font-mono text-xs"
               value={(cfg.path as string) ?? ""}
               disabled={locked}
-              placeholder="/api/v3/assets or /scans/${scan_id}"
-              onChange={(e) => onPatchConfig(block.id, { path: e.target.value })}
+              placeholder="/users"
+              onChange={(e) => onPatchConfig(block.id, { path: resolvePathInput(e.target.value) })}
             />
+          )}
+          {baseUrl && (
+            <p className="font-mono text-xs text-muted-foreground">
+              → {baseUrl}
+              {pathValue}
+            </p>
+          )}
+          {showFullUrlHint && (
+            <p className="text-xs text-destructive">
+              Enter only the path — the base URL comes from the selected service.
+            </p>
           )}
           {openapiOperationId && documentedParamCount > 0 && (
             <p className="text-xs text-muted-foreground">

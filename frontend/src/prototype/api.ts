@@ -181,8 +181,11 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   }
 }
 
-/** testBlock / clearDedupCache / forceRepairRuntime: these routes don't exist
- *  on the backend yet (404) or exist but 501 — both read as "engine pending". */
+/** forceRepairRuntime: this route doesn't exist on the backend yet (404) or
+ *  exists but 501 — both read as "engine pending". NOT used by testBlock or
+ *  clearDedupCache any more — those routes are real now, and a 404 from them
+ *  means something concrete ("Flow not found"), not "unimplemented"; blanket-
+ *  mapping their 404s to the pending message hid that real detail. */
 async function requestPendingAware<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   try {
     return await request<T>(path, opts);
@@ -460,7 +463,13 @@ export async function getPreflight(flow: Flow): Promise<PreflightCheck[]> {
 // -------------------------------------------------------------- block test
 
 export async function testBlock(flowId: string, blockId: string): Promise<FlowBlock["testResult"]> {
-  return requestPendingAware<FlowBlock["testResult"]>(`/api/v2/flows/${flowId}/blocks/${blockId}/test`, {
+  // Plain `request`, not `requestPendingAware`: the route is real (T7.5), so
+  // a 404 here means the backend's actual detail — most commonly "Flow not
+  // found" when the draft hasn't been saved yet — and that must reach the
+  // caller verbatim rather than being flattened into the "engine pending"
+  // message. `request` already turns a genuine 501 (adapter/mode not test-
+  // runnable yet) into that pending message on its own.
+  return request<FlowBlock["testResult"]>(`/api/v2/flows/${flowId}/blocks/${blockId}/test`, {
     method: "POST",
   });
 }
@@ -474,7 +483,9 @@ export async function clearDedupCache(flowId: string, blockId: string): Promise<
   // flush, not an instant one) and returns {blockId, dedupEpoch,
   // redeployRequired, message}; the mock's {cleared} shape is preserved by
   // reporting success as `cleared: true`.
-  await requestPendingAware(`/api/v2/flows/${flowId}/dedup-cache/clear?blockId=${encodeURIComponent(blockId)}`, {
+  // Plain `request` — see testBlock's comment above; the route is real (T7.4)
+  // so a 404's real detail (e.g. flow/block not found) must reach the caller.
+  await request(`/api/v2/flows/${flowId}/dedup-cache/clear?blockId=${encodeURIComponent(blockId)}`, {
     method: "POST",
   });
   return { cleared: true };

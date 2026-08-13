@@ -187,27 +187,52 @@ async def _topic_reservation_rows(
 ) -> List[Dict[str, Any]]:
     """M13: compiler-spec.md §8/§7.12 row 3 — the flow's derived topics (the
     plan's own `topics`, data + DLQ) must not collide with (a) another
-    flow's already-owned topics (`flows_v2.runtimeScopeMap.*.topics`,
-    checked flow-by-flow rather than re-deriving names for every other flow
-    — a real deployed ownership record beats a recomputed guess) or (b) a
-    live Kafka topic that exists but is not owned by THIS flow (best-effort
-    via the Kafbat listing — skipped silently, never a deploy blocker, when
-    the listing is unavailable). One row per derived name; a failing row
-    names the exact colliding topic, per the review's failure scenario
-    (two flows named identically both deriving `raw.asset_sync.asset`)."""
+    flow's owned topics or (b) a live Kafka topic that exists but is not
+    owned by THIS flow (best-effort via the Kafbat listing — skipped
+    silently, never a deploy blocker, when the listing is unavailable). One
+    row per derived name; a failing row names the exact colliding topic,
+    per the review's failure scenario (two flows named identically both
+    deriving `raw.asset_sync.asset`).
+
+    Ownership (both "this flow" and "every other flow") is the UNION of a
+    real deployed ownership record (`runtimeScopeMap.*.topics`, kept for
+    robustness against post-deploy block edits / custom-named legacy
+    topics a rename could no longer re-derive) and the DETERMINISTIC NAMING
+    WALK (`runtime._owned_topic_names`, the same derivation
+    `deployer._delete_candidate_data_topics` already reuses this same way)
+    over the flow's OWN CURRENT block definitions — never the scope map
+    alone. Redeploy-after-undeploy bug: `undeploy()` intentionally KEEPS a
+    flow's owned data topics (emptied, not deleted, per MVP §7.9) while
+    NULLING `runtimeScopeMap` (compiler-spec.md §7) -- a scope-map-only
+    ownership check therefore reads a just-undeployed flow's own leftover
+    topics as foreign on the very next redeploy and blocks it forever. A
+    topic this flow itself derives (data topics + its DLQ) must never
+    collide with itself, deployed or not -- and the same reasoning applies
+    symmetrically to every OTHER flow's topics, so an other flow's own
+    ownership is likewise re-derived here rather than trusted from its
+    scope map alone (an undeployed other flow would otherwise vanish from
+    this check too)."""
     derived_names = sorted({t.name for t in plan.topics})
     if not derived_names:
         return []
 
+    # Function-level import: runtime.py imports this module's connection-dict
+    # helpers at module scope, so a module-level import here would be circular
+    # (same reason `_delete_candidate_data_topics` below imports it locally).
+    from services.adapter.runtime import _owned_topic_names
+
     other_owned: Dict[str, str] = {}
     other_flow_docs = await db[COLLECTIONS.flows].find(
-        {"id": {"$ne": flow.id}}, {"_id": 0, "id": 1, "name": 1, "runtimeScopeMap": 1}
+        {"id": {"$ne": flow.id}}, {"_id": 0, "id": 1, "name": 1, "runtimeScopeMap": 1, "blocks": 1, "topics": 1}
     ).to_list(None)
     for doc in other_flow_docs:
         owner_name = doc.get("name") or doc.get("id") or "another flow"
+        owned_names: set = set()
         for entry in (doc.get("runtimeScopeMap") or {}).values():
-            for name in (entry or {}).get("topics") or []:
-                other_owned.setdefault(name, owner_name)
+            owned_names.update((entry or {}).get("topics") or [])
+        owned_names.update(_owned_topic_names(doc))
+        for name in owned_names:
+            other_owned.setdefault(name, owner_name)
 
     live_topics: Optional[set] = None
     kafka_conn_doc = _active_connection(connections, "kafka")
@@ -216,10 +241,14 @@ async def _topic_reservation_rows(
         if listing.get("ok"):
             live_topics = set(listing.get("topics") or [])
 
-    # This flow's own topics from its LAST deploy (name-frozen by M12, so a
-    # redeploy always re-derives the identical names) — a live topic that
-    # is already this flow's own is never a collision.
-    own_prior_topics = set(_owned_data_topic_names(flow_doc)) | {_dlq_topic_name(flow_doc)}
+    # This flow's own topics -- the UNION of its LAST deploy's recorded
+    # ownership (name-frozen by M12, so a redeploy always re-derives the
+    # identical names) and the deterministic naming walk over its current
+    # blocks, so a topic this flow derives is excluded here whether or not
+    # `runtimeScopeMap` currently reflects it (undeployed or never
+    # deployed) -- a live topic that is already this flow's own is never a
+    # collision.
+    own_prior_topics = set(_owned_data_topic_names(flow_doc)) | {_dlq_topic_name(flow_doc)} | _owned_topic_names(flow_doc)
 
     rows: List[Dict[str, Any]] = []
     for name in derived_names:

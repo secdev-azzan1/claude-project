@@ -277,6 +277,11 @@ def validate_block(
         path = (block.config or {}).get("path") or ""
         if not path:
             at("Set the request path.")
+        elif str(path).strip().lower().startswith(("http://", "https://")):
+            # Mirrors frontend httpPathIssue() — the bound service supplies the
+            # base URL; a full URL here compiles to base+url concatenation and
+            # an invalid InvokeHTTP target (user-reported live failure).
+            at("HTTP path must be a path (the service provides the base URL) — got a full URL.")
         missing = _unresolved_placeholders(flow, block)
         if missing:
             at(f"Unresolved ${{...}} values: {', '.join(missing)} — extract them upstream or define a flow variable.")

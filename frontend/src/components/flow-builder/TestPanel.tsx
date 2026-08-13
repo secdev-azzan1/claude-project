@@ -34,9 +34,22 @@ export interface TestPanelProps {
   onAddExtraction: (field: string, path?: string) => void;
   /** http blocks: set the response record path from a clicked array node. */
   onSetRecordPath?: (path: string) => void;
+  /** Persists the draft first (no-op if already saved) — a test against an
+   *  unsaved flow otherwise 404s server-side with no useful output. Rejects
+   *  with the save's own error when saving fails. */
+  onEnsureSaved: () => Promise<Flow>;
 }
 
-export function TestPanel({ flow, block, locked, service, onTested, onAddExtraction, onSetRecordPath }: TestPanelProps) {
+export function TestPanel({
+  flow,
+  block,
+  locked,
+  service,
+  onTested,
+  onAddExtraction,
+  onSetRecordPath,
+  onEnsureSaved,
+}: TestPanelProps) {
   const [testing, setTesting] = useState(false);
   const [placeholderDialog, setPlaceholderDialog] = useState<string[] | null>(null);
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
@@ -66,7 +79,17 @@ export function TestPanel({ flow, block, locked, service, onTested, onAddExtract
   const reallyRun = async () => {
     setTesting(true);
     try {
-      const result = await testBlock(flow.id, block.id);
+      // Testing saves first — a probe against a flow that only exists in the
+      // builder 404s server-side with nothing to show for it. Save failures
+      // (validation, etc.) are reported here and never reach testBlock.
+      let saved: Flow;
+      try {
+        saved = await onEnsureSaved();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Save failed — test not run");
+        return;
+      }
+      const result = await testBlock(saved.id, block.id);
       if (result) {
         onTested(result);
         if (result.ok)
@@ -136,6 +159,7 @@ export function TestPanel({ flow, block, locked, service, onTested, onAddExtract
           </span>
         )}
       </div>
+      <p className="text-xs text-muted-foreground">Testing saves the flow first.</p>
 
       {result && !result.ok && (
         <Alert variant="destructive">

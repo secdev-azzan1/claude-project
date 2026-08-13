@@ -95,6 +95,20 @@ export function dedupWindowIssue(windowHours: unknown): string | null {
     : null;
 }
 
+/**
+ * null = fine, string = the message to show (badge + inline). The service
+ * supplies the base URL for every http block — a path that starts with a
+ * scheme (http:// or https://) means the base URL got typed or pasted into
+ * Path, which compiles into a broken concatenated NiFi URL (baseUrl + full
+ * URL) at deploy time. Caught here so the builder badge and the backend save
+ * both surface it, not just the inline hint in HttpSettings.
+ */
+export function httpPathIssue(path: string): string | null {
+  return /^https?:\/\//i.test(path)
+    ? "HTTP path must be a path (the service provides the base URL) — got a full URL."
+    : null;
+}
+
 function isWrite(block: FlowBlock): boolean {
   return block.mode === "write" || block.adapter === "kafka_kc";
 }
@@ -184,6 +198,10 @@ export function validateBlock(
   if (block.adapter === "http") {
     const path = (block.config.path as string) ?? "";
     if (!path) at("Set the request path.");
+    else {
+      const pathIssue = httpPathIssue(path);
+      if (pathIssue) at(pathIssue);
+    }
     const missing = unresolvedPlaceholders(flow, block);
     if (missing.length > 0)
       at(`Unresolved \${...} values: ${missing.join(", ")} — extract them upstream or define a flow variable.`);

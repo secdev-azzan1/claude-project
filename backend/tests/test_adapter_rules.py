@@ -544,3 +544,24 @@ def test_import_smoke():
     import services.adapter.legality  # noqa: F401
     import services.adapter.naming  # noqa: F401
     import services.adapter.validation  # noqa: F401
+
+def test_http_full_url_in_path_rejected():
+    """Backend mirror of frontend httpPathIssue(): a full URL typed into the
+    http path field compiles to base+url concatenation and an invalid
+    InvokeHTTP target (user-reported live failure) — must be an issue."""
+    http_svc = AppService(id="svc-http", type="http", name="API", retired=False, health="Healthy")
+    root = FlowBlock(
+        id="b-r", adapter="http", mode="read", name="Read", parentId=None,
+        serviceId="svc-http",
+        config={"method": "GET", "path": "https://dummyjson.com/users"},
+        transforms=[],
+    )
+    out = FlowBlock(
+        id="b-w", adapter="kafka", mode="write", name="Out", parentId="b-r",
+        entity="thing", config={}, transforms=[],
+    )
+    f = Flow(id="f-url", name="Url Flow", state="Draft", enabled=True,
+             cron="0 12 * * *", blocks=[root, out], topics=[], variables=[],
+             servicePins={}, createdAt="", updatedAt="")
+    issues = validation.validate_flow(f, [http_svc], [])
+    assert any("got a full URL" in i.message for i in issues), [i.message for i in issues]

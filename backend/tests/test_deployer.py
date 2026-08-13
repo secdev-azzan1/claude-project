@@ -1120,12 +1120,166 @@ async def test_deploy_topic_reservation_skips_silently_when_kafka_listing_unavai
 
 
 @async_test
-async def test_deploy_refuses_when_topic_exists_live_and_unowned(monkeypatch):
+async def test_deploy_treats_live_topic_matching_its_own_derivation_as_owned(monkeypatch):
+    """M13 redeploy-after-undeploy fix (this replaces the old
+    `test_deploy_refuses_when_topic_exists_live_and_unowned`, whose premise
+    the fix intentionally changes -- see below): a live topic whose name is
+    exactly what THIS flow's own deterministic naming walk derives is now
+    always excluded from the "live and unowned" check, deployed before or
+    not. `runtimeScopeMap` cannot be trusted to tell "never deployed" apart
+    from "deployed, then undeployed (topic emptied but left live, MVP
+    §7.9)" -- `undeploy()` nulls it in both the leftover-topic AND the
+    never-existed cases alike, so a scope-map-only exclusion set reads a
+    just-undeployed flow's own topic as foreign and blocks its own
+    redeploy forever (the reported bug -- see
+    `test_deploy_redeploy_after_undeploy_excludes_own_leftover_topic`
+    below). Cross-flow uniqueness is guaranteed by the OTHER-flows side of
+    this same check instead (naming walk + scope map over every OTHER
+    flow -- see `test_deploy_refuses_when_other_flows_naming_walk_derives_same_topic`
+    and `test_deploy_refuses_when_topic_collides_with_another_flows_owned_topic`
+    below): once no other tracked flow claims a name, only this flow could
+    ever have derived it, so a coincidental live match is assumed to be
+    this flow reclaiming its own topic rather than a foreign collision."""
     fake_db = FakeDB()
     _seed_http_service(fake_db)
     _seed_core_connections(fake_db)
     flow_doc = _http_kafka_flow(flow_id="flow-live-collide-1")
     fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    async def fake_list_topics(kafka_conn):
+        return {"ok": True, "topics": ["raw.test_flow.thing", "some.unrelated.topic"]}
+
+    monkeypatch.setattr(topics, "list_topics", fake_list_topics)
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    result = await lifecycle.deploy(fake_db, flow_doc)
+    assert result["state"] == "Stopped"
+
+
+@async_test
+async def test_deploy_redeploy_after_undeploy_excludes_own_leftover_topic(monkeypatch):
+    """The reported bug, reproduced and fixed: deploy -> undeploy (per
+    MVP §7.9, `undeploy()` EMPTIES owned data topics but never deletes
+    them, and NULLS `runtimeScopeMap`) -> redeploy must not read its own
+    leftover topic as foreign. `flow_doc` here mirrors exactly what
+    `undeploy()` leaves behind (`state: "Draft"`, `deployedAt`/
+    `nifiProcessGroupId`/`runtimeScopeMap` all `None`) while the fake Kafka
+    listing mirrors the leftover, emptied-but-not-deleted topic still
+    being live -- before the fix this blocked the redeploy forever with
+    "already exists on the Kafka cluster and is not owned by this flow"."""
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(
+        flow_id="flow-undeploy-redeploy-1",
+        state="Draft", deployedAt=None, nifiProcessGroupId=None, runtimeScopeMap=None,
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    async def fake_list_topics(kafka_conn):
+        # undeploy() only empties owned data topics -- never deletes them.
+        return {"ok": True, "topics": ["raw.test_flow.thing"]}
+
+    monkeypatch.setattr(topics, "list_topics", fake_list_topics)
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    result = await lifecycle.deploy(fake_db, flow_doc)
+    assert result["state"] == "Stopped"
+    assert result["runtimeScopeMap"] is not None  # redeploy re-populated it
+
+
+@async_test
+async def test_deploy_refuses_when_other_flows_naming_walk_derives_same_topic(monkeypatch):
+    """M13 other-flows-side fix: another flow's ownership must be
+    re-derived via the same deterministic naming walk, not trusted from
+    its `runtimeScopeMap` alone -- an undeployed (or never-deployed) OTHER
+    flow's topics would otherwise vanish from this check too, letting a
+    second flow silently start publishing into (and reading DLQ off) the
+    first flow's topic (the exact M13 review failure scenario: two flows
+    named identically both deriving `raw.asset_sync.asset`)."""
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-naming-collide-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    # A DIFFERENT flow -- never deployed, no runtimeScopeMap record at all
+    # -- whose own blocks independently derive the identical topic name.
+    # Only catchable via the deterministic naming walk, not the scope map.
+    fake_db.flows_v2.docs.append({
+        "id": "flow-other-naming-1", "name": "Test Flow",
+        "blocks": [
+            {"id": "ob2", "adapter": "kafka", "mode": "write", "name": "Write Topic", "parentId": None,
+             "entity": "thing", "config": {}, "transforms": []},
+        ],
+        "topics": [], "runtimeScopeMap": None,
+    })
+
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    apply_calls = []
+
+    async def fail_if_called(*a, **k):
+        apply_calls.append((a, k))
+        raise AssertionError("apply_plan must not be called when a topic-reservation row fails")
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fail_if_called)
+
+    try:
+        await lifecycle.deploy(fake_db, flow_doc)
+        assert False, "expected DeployPreflightFailed"
+    except lifecycle.DeployPreflightFailed as exc:
+        failing = [r for r in exc.rows if not r["ok"]]
+        assert any("raw.test_flow.thing" in r["detail"] and "Test Flow" in r["detail"] for r in failing)
+
+    assert apply_calls == []
+
+
+@async_test
+async def test_deploy_refuses_when_topic_owned_by_different_deployed_flow_also_appears_live(monkeypatch):
+    """An unrelated, currently-deployed OTHER flow's own topic (recorded
+    in its `runtimeScopeMap`, not merely derivable by naming) must still
+    block -- with the existing "already owned by flow ..." message, not
+    the generic live-cluster message -- even when the live Kafka listing
+    independently confirms the same topic exists. The M13 fix's naming-
+    walk exclusion is scoped to the DEPLOYING flow's own derivation only;
+    it must never widen to swallow a genuine cross-flow collision."""
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-collide-live-2")
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    # Another flow, already deployed, that genuinely owns the exact topic
+    # this one would derive ("raw.test_flow.thing" -- both named "Test Flow").
+    fake_db.flows_v2.docs.append({
+        "id": "flow-other-owner-2", "name": "Some Other Flow",
+        "runtimeScopeMap": {"b2": {"topics": ["raw.test_flow.thing"], "connectorNames": []}},
+    })
+
     _patch_provenance_probes(monkeypatch)
     _patch_ensure_topics_ok(monkeypatch, [])
 
@@ -1147,7 +1301,10 @@ async def test_deploy_refuses_when_topic_exists_live_and_unowned(monkeypatch):
         assert False, "expected DeployPreflightFailed"
     except lifecycle.DeployPreflightFailed as exc:
         failing = [r for r in exc.rows if not r["ok"]]
-        assert any("raw.test_flow.thing" in r["detail"] and "already exists on the Kafka cluster" in r["detail"] for r in failing)
+        assert any(
+            "raw.test_flow.thing" in r["detail"] and "Some Other Flow" in r["detail"] and "already owned by flow" in r["detail"]
+            for r in failing
+        )
 
     assert apply_calls == []
 

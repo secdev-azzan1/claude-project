@@ -304,15 +304,26 @@ export default function FlowBuilder() {
     [draft],
   );
 
+  /** The one place that actually POSTs the draft — Save and the Test panel's
+   *  onEnsureSaved both funnel through this rather than each calling
+   *  saveFlow separately, so there is exactly one save path to keep honest. */
+  const persistDraft = useCallback(
+    async (current: Flow): Promise<Flow> => {
+      const saved = await saveFlow(current);
+      setDraft(saved);
+      setDirty(false);
+      queryClient.invalidateQueries({ queryKey: ["flows"] });
+      queryClient.invalidateQueries({ queryKey: ["flow", current.id] });
+      return saved;
+    },
+    [queryClient],
+  );
+
   const handleSave = async () => {
     if (!draft) return;
     setSaving(true);
     try {
-      const saved = await saveFlow(draft);
-      setDraft(saved);
-      setDirty(false);
-      queryClient.invalidateQueries({ queryKey: ["flows"] });
-      queryClient.invalidateQueries({ queryKey: ["flow", draft.id] });
+      await persistDraft(draft);
       toast.success("Draft saved");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");
@@ -320,6 +331,27 @@ export default function FlowBuilder() {
       setSaving(false);
     }
   };
+
+  /**
+   * Test needs the draft to exist server-side — a flow fresh out of
+   * createFlow() is only staged client-side (api.ts's stagedNewFlows) until
+   * its first saveFlow() succeeds. `dirty` is a reliable stand-in for "not
+   * yet persisted" here: a staged flow starts with zero blocks, so by the
+   * time any block has a Test button at all, placing that block already
+   * flipped `dirty`. Already-clean means already saved — return the draft
+   * as-is rather than round-tripping a no-op save. Throws on save failure so
+   * TestPanel can surface it and skip the test call.
+   */
+  const ensureSaved = useCallback(async (): Promise<Flow> => {
+    if (!draft) throw new Error("Nothing to save yet.");
+    if (!dirty) return draft;
+    setSaving(true);
+    try {
+      return await persistDraft(draft);
+    } finally {
+      setSaving(false);
+    }
+  }, [draft, dirty, persistDraft]);
 
   const execVerb = async (verb: FlowVerb) => {
     if (!draft) return;
@@ -645,6 +677,7 @@ export default function FlowBuilder() {
                     setCeremonyPrefill(null);
                     setCeremonyBlockId(id);
                   }}
+                  onEnsureSaved={ensureSaved}
                 />
               ) : draft.topics.some((t) => t.id === selectedId) ? (
                 <TopicDetails
