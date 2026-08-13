@@ -3,34 +3,34 @@
     "phases": {
       "locate_flow": {
         "ok": true,
-        "at": "2026-08-13T12:05:45.414Z"
+        "at": "2026-08-13T12:22:39.904Z"
       },
       "baseline": {
         "ok": true,
-        "at": "2026-08-13T12:06:53.542Z"
+        "at": "2026-08-13T12:23:48.836Z"
       },
       "restart": {
         "ok": true,
-        "at": "2026-08-13T12:06:55.542Z"
+        "at": "2026-08-13T12:23:50.709Z"
       },
       "dedup_suppression": {
         "ok": false,
-        "error": "Error: no NiFi activity observed within 330s of restart — cannot attribute a suppressed firing",
-        "at": "2026-08-13T12:15:11.877Z"
+        "error": "Error: NiFi processor stats showed no dedupe activity within 420s of restart — cannot attribute a suppressed firing",
+        "at": "2026-08-13T12:32:57.528Z"
       },
       "messages_ui": {
         "ok": false,
         "error": "skipped — an earlier phase failed",
-        "at": "2026-08-13T12:15:11.989Z"
+        "at": "2026-08-13T12:32:57.725Z"
       },
       "metrics_ui": {
         "ok": false,
         "error": "skipped — an earlier phase failed",
-        "at": "2026-08-13T12:15:11.991Z"
+        "at": "2026-08-13T12:32:57.726Z"
       },
       "stop": {
         "ok": true,
-        "at": "2026-08-13T12:15:13.696Z"
+        "at": "2026-08-13T12:32:58.961Z"
       }
     },
     "screenshots": [
@@ -43,7 +43,7 @@
       "baselineMetricsTopicCount": 30,
       "cronFiredEvidence": {
         "fired": false,
-        "records24hInStatusWindow": 0
+        "dedupeProcessors": null
       },
       "afterSecondFiring": {
         "messages": 30,
@@ -60,20 +60,20 @@
     "phases": {
       "probe": {
         "ok": true,
-        "at": "2026-08-13T12:15:15.631Z"
+        "at": "2026-08-13T12:33:06.663Z"
       },
       "resume_check": {
         "ok": true,
-        "at": "2026-08-13T12:15:41.889Z"
+        "at": "2026-08-13T12:33:32.932Z"
       },
       "messages_ui": {
         "ok": true,
-        "at": "2026-08-13T12:16:10.223Z"
+        "at": "2026-08-13T12:34:01.792Z"
       },
       "stop": {
         "ok": true,
         "note": "flow already Stopped from the prior run",
-        "at": "2026-08-13T12:16:10.264Z"
+        "at": "2026-08-13T12:34:01.840Z"
       }
     },
     "screenshots": [
@@ -155,11 +155,11 @@
     "phases": {
       "locate_flow": {
         "ok": true,
-        "at": "2026-08-13T12:16:36.861Z"
+        "at": "2026-08-13T12:34:28.181Z"
       },
       "messages_ui": {
         "ok": true,
-        "at": "2026-08-13T12:17:05.678Z"
+        "at": "2026-08-13T12:34:56.499Z"
       }
     },
     "screenshots": [

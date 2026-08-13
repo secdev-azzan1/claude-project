@@ -3093,9 +3093,9 @@
     },
     "drift": null,
     "deployedAt": "2026-08-13T11:38:04.632Z",
-    "lastRunAt": "2026-08-13T12:06:55.247Z",
+    "lastRunAt": "2026-08-13T12:23:50.373Z",
     "createdAt": "2026-08-13T11:37:40.927Z",
-    "updatedAt": "2026-08-13T12:15:13.383Z",
+    "updatedAt": "2026-08-13T12:32:58.663Z",
     "runtimeScopeMap": {
       "b-kpsjji": {
         "adapter": "http",

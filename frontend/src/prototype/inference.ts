@@ -622,13 +622,38 @@ const pascal = (value: string, fallback = "Nested") => {
 interface BuildContext {
   notes: InferenceNote[];
   hints: Record<string, "long" | "double" | "boolean" | "string">;
+  /** Every Avro record name emitted so far, so nested records never collide. */
+  usedRecordNames: Set<string>;
+}
+
+/**
+ * Turn a dotted field path (e.g. `company.address`, `address.coordinates`)
+ * into a PascalCase Avro record name (`CompanyAddress`, `AddressCoordinates`).
+ * Deriving the name from the FULL path rather than the leaf field name is
+ * what keeps two same-named nested objects at different paths (dummyjson
+ * users' `address` and `company.address`, each with their own `coordinates`)
+ * from generating two record types with the same Avro name — Avro rejects
+ * that as "redefined named type". As a final safety net for any residual
+ * collision (e.g. two paths that happen to pascal-case to the same string),
+ * the name is also deduped against every name already used in this schema.
+ */
+function recordNameForPath(path: string, ctx: BuildContext): string {
+  const base = pascal(path);
+  if (!ctx.usedRecordNames.has(base)) {
+    ctx.usedRecordNames.add(base);
+    return base;
+  }
+  let i = 2;
+  while (ctx.usedRecordNames.has(`${base}${i}`)) i += 1;
+  const unique = `${base}${i}`;
+  ctx.usedRecordNames.add(unique);
+  return unique;
 }
 
 /** Turn one merged observation into an Avro type (without the null union). */
 function observationToType(
   observation: Observation,
   path: string,
-  recordName: string,
   ctx: BuildContext,
 ): unknown {
   const shapes: string[] = [];
@@ -648,7 +673,7 @@ function observationToType(
   if (observation.objectCount > 0 && observation.object) {
     return {
       type: "record",
-      name: recordName,
+      name: recordNameForPath(path, ctx),
       fields: buildFields(observation.object, observation.objectCount, path, ctx),
     };
   }
@@ -662,7 +687,7 @@ function observationToType(
       });
       return { type: "array", items: "string" };
     }
-    const itemType = observationToType(observation.array, `${path}[]`, `${recordName}Item`, ctx);
+    const itemType = observationToType(observation.array, `${path}[]`, ctx);
     const itemNullable = observation.array.nulls > 0;
     if (itemNullable) {
       ctx.notes.push({ field: `${path}[]`, kind: "nullable", note: "contains null elements — the element type is a nullable union." });
@@ -721,7 +746,7 @@ function buildFields(
     const path = prefix ? `${prefix}.${name}` : name;
     const missing = total - observation.present;
     const nullable = missing > 0 || observation.nulls > 0;
-    const baseType = observationToType(observation, path, pascal(name), ctx);
+    const baseType = observationToType(observation, path, ctx);
 
     if (nullable) {
       const reason =
@@ -752,7 +777,11 @@ export function inferAvroFromRecords(
   options?: InferenceOptions,
 ): InferenceResult {
   const objects = records.filter(isPlainObject);
-  const ctx: BuildContext = { notes: [], hints: options?.stringColumnHints ?? {} };
+  const ctx: BuildContext = {
+    notes: [],
+    hints: options?.stringColumnHints ?? {},
+    usedRecordNames: new Set([recordName]),
+  };
 
   if (objects.length === 0) {
     return {

@@ -31,6 +31,78 @@ const JSON_FLOW = "dt json products";
 const XML_FLOW = "dt xml feed";
 const CSV_FLOW = "dt csv addresses";
 
+// NiFi REST evidence access (the mission's "GET the flow runtime -> find
+// processors -> NiFi REST" path): credentials come from backend/.env at
+// runtime — never inlined, never logged, never written to artifacts. The
+// backend itself runs ALLOW_INSECURE_TLS for this same endpoint, so TLS
+// verification is relaxed for the evidence reads too.
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = process.env.NODE_TLS_REJECT_UNAUTHORIZED ?? "0";
+function nifiEnv(): { url: string; username: string; password: string } | null {
+  try {
+    const env = fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../backend/.env"), "utf-8");
+    const pick = (k: string) => new RegExp(`^${k}=(.+)$`, "m").exec(env)?.[1].trim();
+    const url = pick("NIFI_URL");
+    const username = pick("NIFI_USERNAME");
+    const password = pick("NIFI_PASSWORD");
+    if (!url || !username || !password) return null;
+    return { url: url.replace(/\/$/, ""), username, password };
+  } catch {
+    return null;
+  }
+}
+async function nifiToken(): Promise<string | null> {
+  const env = nifiEnv();
+  if (!env) return null;
+  try {
+    const r = await fetch(`${env.url}/nifi-api/access/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `username=${encodeURIComponent(env.username)}&password=${encodeURIComponent(env.password)}`,
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!r.ok) return null;
+    return (await r.text()).trim();
+  } catch {
+    return null;
+  }
+}
+interface NifiProcStat { name: string; type: string; flowFilesIn: number; flowFilesOut: number; taskCount: number }
+/** Every processor's 5-min-window stats under the flow's process group. */
+async function nifiPgProcessorStats(pgId: string): Promise<NifiProcStat[] | null> {
+  const env = nifiEnv();
+  const token = await nifiToken();
+  if (!env || !token) return null;
+  try {
+    const r = await fetch(`${env.url}/nifi-api/flow/process-groups/${pgId}/status?recursive=true`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!r.ok) return null;
+    const d = (await r.json()) as Record<string, never>;
+    const out: NifiProcStat[] = [];
+    const walk = (pg: Record<string, unknown> | undefined) => {
+      const snap = (pg?.["aggregateSnapshot"] ?? {}) as Record<string, unknown>;
+      for (const p of (snap["processorStatusSnapshots"] as { processorStatusSnapshot?: Record<string, unknown> }[]) ?? []) {
+        const s = p.processorStatusSnapshot ?? {};
+        out.push({
+          name: String(s["name"] ?? ""),
+          type: String(s["type"] ?? ""),
+          flowFilesIn: Number(s["flowFilesIn"] ?? 0),
+          flowFilesOut: Number(s["flowFilesOut"] ?? 0),
+          taskCount: Number(s["taskCount"] ?? 0),
+        });
+      }
+      for (const c of (snap["processGroupStatusSnapshots"] as { processGroupStatusSnapshot?: Record<string, unknown> }[]) ?? []) {
+        walk(c.processGroupStatusSnapshot);
+      }
+    };
+    walk((d["processGroupStatus"] ?? {}) as Record<string, unknown>);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 const tokenize = (s: string) =>
   s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 const rx = (s: string) => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -384,30 +456,43 @@ test("R1 json — restart, second firing suppressed by dedup, messages+metrics U
   });
 
   await runPhase(k, "dedup_suppression", async () => {
-    // Wait for PROOF the cron fired and processed records after restart:
-    // records24h is the flow PG's flowFilesOut in NiFi's live status window —
-    // ~0 right after restart (the flow sat stopped for >5 min), >0 once the
-    // firing ran the fetch/split/dedup chain. Then allow publish time and
-    // assert the topic did NOT grow (all 30 re-fetched products are dedup
-    // cache hits from run 1 — the 24h Redis window is still warm).
-    const deadline = Date.now() + 330_000;
+    // POSITIVE proof the cron fired after restart, read from NiFi's own
+    // per-processor 5-minute status window (the backend's metrics endpoint
+    // cannot show it: a suppressed firing never crosses any process-group
+    // boundary, so every PG-level in/out stays 0 — learned in run 3).
+    // A firing shows up as fetch/split/dedupe processors with flowFilesIn>0;
+    // suppression then shows as the topic count NOT growing (every
+    // re-fetched product is a dedup cache hit — identity "id", 24h Redis
+    // window still warm from run 1's publish).
+    const f = await flowByName(JSON_FLOW);
+    const pgId = f.nifiProcessGroupId as string;
+    const statsBefore = await nifiPgProcessorStats(pgId);
+    const deadline = Date.now() + 420_000; // >2 cron windows
     let fired = false;
-    let records24h: unknown = null;
+    let firedStats: NifiProcStat[] | null = null;
     while (Date.now() < deadline) {
-      const m = await apiMetrics(flowId);
-      if (m && m["available"] === true) {
-        records24h = m["records24h"];
-        if (typeof records24h === "number" && records24h > 0) {
+      const stats = await nifiPgProcessorStats(pgId);
+      if (stats) {
+        const dedupe = stats.filter((s) => /dedupe/i.test(s.name));
+        const activity = stats.some((s) => s.flowFilesIn > 0 || s.taskCount > 0);
+        const dedupeSaw = dedupe.some((s) => s.flowFilesIn > 0);
+        if (activity && dedupeSaw) {
           fired = true;
+          firedStats = stats;
           break;
         }
       }
-      await sleep(20_000);
+      await sleep(30_000);
     }
-    e.data!["cronFiredEvidence"] = { fired, records24hInStatusWindow: records24h };
-    await sleep(60_000); // publish margin after the observed activity
+    e.data!["cronFiredEvidence"] = {
+      fired,
+      dedupeProcessors: firedStats?.filter((s) => /dedupe|split|fetch|publish/i.test(s.name)) ?? null,
+    };
+    saveLedger();
+    await sleep(45_000); // publish margin after the observed activity
     const c1 = (await apiMessages(flowId, topic)).length;
     const m1 = await apiMetrics(flowId);
+    const statsAfter = await nifiPgProcessorStats(pgId);
     e.data!["afterSecondFiring"] = {
       messages: c1,
       metricsTopicCount: metricTopicCount(m1, topic),
@@ -417,12 +502,14 @@ test("R1 json — restart, second firing suppressed by dedup, messages+metrics U
       JSON.stringify(
         {
           note:
-            "run 1 published 30 products at ~11:39Z then the flow was stopped; this restart re-fetches the same 30 " +
-            "products — every one a dedup cache hit (identity field: id, 24h window, Redis). Suppression is proven " +
-            "by the topic count NOT growing across the restart firing.",
-          baseline: { messages: c0, metrics: m0 },
-          cronFiredEvidence: e.data!["cronFiredEvidence"],
-          after: { messages: c1, metrics: m1 },
+            "run 1 published 30 products then the flow was stopped; this restart re-fetches the same 30 products — " +
+            "every one a dedup cache hit (identity field: id, 24h window, Redis). The NiFi per-processor stats " +
+            "(5-min window) prove the firing happened; the static topic count proves every record was suppressed.",
+          baseline: { messages: c0, metricsTopicCount: metricTopicCount(m0, topic) },
+          nifiProcessorStatsBeforeFiring: statsBefore,
+          nifiProcessorStatsAtFiring: firedStats,
+          nifiProcessorStatsAfterMargin: statsAfter,
+          after: { messages: c1, metricsTopicCount: metricTopicCount(m1, topic), metricsRaw: m1 },
         },
         null,
         2,
@@ -430,7 +517,7 @@ test("R1 json — restart, second firing suppressed by dedup, messages+metrics U
       "utf-8",
     );
     saveLedger();
-    if (!fired) throw new Error("no NiFi activity observed within 330s of restart — cannot attribute a suppressed firing");
+    if (!fired) throw new Error("NiFi processor stats showed no dedupe activity within 420s of restart — cannot attribute a suppressed firing");
     if (c1 !== c0) throw new Error(`dedup FAILED to suppress: messages count changed ${c0} -> ${c1}`);
   });
 

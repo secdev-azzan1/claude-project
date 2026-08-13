@@ -1,49 +1,16 @@
 {
-  "note": "run 1 published 30 products at ~11:39Z then the flow was stopped; this restart re-fetches the same 30 products — every one a dedup cache hit (identity field: id, 24h window, Redis). Suppression is proven by the topic count NOT growing across the restart firing.",
+  "note": "run 1 published 30 products then the flow was stopped; this restart re-fetches the same 30 products — every one a dedup cache hit (identity field: id, 24h window, Redis). The NiFi per-processor stats (5-min window) prove the firing happened; the static topic count proves every record was suppressed.",
   "baseline": {
     "messages": 30,
-    "metrics": {
-      "available": true,
-      "flowId": "flow-loypce",
-      "records24h": 0,
-      "errors24h": 0,
-      "queued": 0,
-      "perBlock": [
-        {
-          "blockId": "b-kpsjji",
-          "label": "http · New http read",
-          "recordsIn": 0,
-          "recordsOut": 0,
-          "queued": 0
-        },
-        {
-          "blockId": "b-b01ip8",
-          "label": "kafka · New kafka write",
-          "recordsIn": 0,
-          "recordsOut": 0,
-          "queued": 0
-        }
-      ],
-      "topicCounts": [
-        {
-          "topic": "dlq.dt_json_products",
-          "messages": 0
-        },
-        {
-          "topic": "raw.dt_json_products.dt_product",
-          "messages": 30
-        }
-      ],
-      "lastRunOutcome": null
-    }
+    "metricsTopicCount": 30
   },
-  "cronFiredEvidence": {
-    "fired": false,
-    "records24hInStatusWindow": 0
-  },
+  "nifiProcessorStatsBeforeFiring": [],
+  "nifiProcessorStatsAtFiring": null,
+  "nifiProcessorStatsAfterMargin": [],
   "after": {
     "messages": 30,
-    "metrics": {
+    "metricsTopicCount": 30,
+    "metricsRaw": {
       "available": true,
       "flowId": "flow-loypce",
       "records24h": 0,

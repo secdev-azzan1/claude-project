@@ -7,13 +7,13 @@
 # Test info
 
 - Name: datatypes-remediation.spec.ts >> R4 final — all three dt flows present (API + Flows page), overall verdict
-- Location: e2e\datatypes-remediation.spec.ts:634:1
+- Location: e2e\datatypes-remediation.spec.ts:721:1
 
 # Error details
 
 ```
 Error: remediation failures:
-json/dedup_suppression: Error: no NiFi activity observed within 330s of restart — cannot attribute a suppressed firing
+json/dedup_suppression: Error: NiFi processor stats showed no dedupe activity within 420s of restart — cannot attribute a suppressed firing
 json/messages_ui: skipped — an earlier phase failed
 json/metrics_ui: skipped — an earlier phase failed
 
@@ -24,18 +24,10 @@ expect(received).toEqual(expected) // deep equality
 
 - Array []
 + Array [
-+   "json/dedup_suppression: Error: no NiFi activity observed within 330s of restart — cannot attribute a suppressed firing",
++   "json/dedup_suppression: Error: NiFi processor stats showed no dedupe activity within 420s of restart — cannot attribute a suppressed firing",
 +   "json/messages_ui: skipped — an earlier phase failed",
 +   "json/metrics_ui: skipped — an earlier phase failed",
 + ]
-```
-
-```
-Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\kaifm\Desktop\claude-project\frontend\e2e\artifacts\test-output\.playwright-artifacts-0\traces\78aa221cb99bf0e472dc-808e5e008321ec3e16df-recording1.network'
-```
-
-```
-Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\kaifm\Desktop\claude-project\frontend\e2e\artifacts\test-output\.playwright-artifacts-0\traces\78aa221cb99bf0e472dc-808e5e008321ec3e16df-recording1.network'
 ```
 
 # Page snapshot
@@ -223,206 +215,108 @@ Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, open '
 # Test source
 
 ```ts
-  232 |   await page.getByPlaceholder("*/15 * * * *").fill(CRON);
-  233 |   await expect(page.getByText("5 fields required")).toHaveCount(0);
-  234 |   await expect(page.getByText(/^Next:/)).toBeVisible();
-  235 | }
-  236 | async function selectHttpReadNode() {
-  237 |   await page.locator(".react-flow__node", { hasText: "New http read" }).first().click();
-  238 | }
-  239 | async function addKafkaWriteChild(k: string, entity: string, expectedTopic: string, shotName: string) {
-  240 |   await selectHttpReadNode();
-  241 |   await page.locator('button[title^="Add a block after"]').click();
-  242 |   await page.getByRole("menuitem", { name: /kafka · write/ }).click();
-  243 |   await page.locator(".react-flow__node").filter({ hasText: "kafka · write" }).first().click();
-  244 |   await page.getByPlaceholder("asset · incident · order…").fill(entity);
-  245 |   await expect(page.getByText(expectedTopic).first()).toBeVisible();
-  246 |   await shot(k, shotName);
-  247 | }
-  248 | async function saveFlow() {
-  249 |   await page.getByRole("button", { name: "Save", exact: true }).click();
-  250 |   await expect(page.getByText("Draft saved").first()).toBeVisible();
-  251 |   await expect(page.getByText(/Deploy unavailable/)).toHaveCount(0);
-  252 | }
-  253 | async function deployFlow(k: string, shotName: string) {
-  254 |   await page.getByRole("button", { name: "Deploy", exact: true }).click();
-  255 |   const dlg = page.getByRole("dialog").filter({ hasText: "Deploy preflight" });
-  256 |   await expect(dlg).toBeVisible();
-  257 |   await expect(dlg.locator("li").first()).toBeVisible({ timeout: 30_000 });
-  258 |   await expect(dlg.locator("svg.text-destructive")).toHaveCount(0);
-  259 |   await shot(k, `${shotName}-preflight`);
-  260 |   const deployBtn = dlg.getByRole("button", { name: "Deploy" });
-  261 |   await expect(deployBtn).toBeEnabled();
-  262 |   await deployBtn.click();
-  263 |   await expect(page.getByText("Deployed — the flow is built stopped").first()).toBeVisible({ timeout: 240_000 });
-  264 |   await expect(page.locator('span[aria-label="Stopped"]').first()).toBeVisible({ timeout: 30_000 });
-  265 |   entry(k).deployed = true;
-  266 |   await shot(k, `${shotName}-deployed`);
-  267 | }
-  268 | async function enableAndStart(k: string, shotName: string) {
-  269 |   await page.getByRole("button", { name: "More" }).click();
-  270 |   await page.getByRole("menuitem", { name: "Enable" }).click();
-  271 |   await page.keyboard.press("Escape");
-  272 |   const startBtn = page.getByRole("button", { name: "Start", exact: true });
-  273 |   await expect(startBtn).toBeEnabled({ timeout: 20_000 });
-  274 |   await startBtn.click();
-  275 |   await expect(page.getByText("Flow started").first()).toBeVisible({ timeout: 120_000 });
-  276 |   await expect(page.locator('span[aria-label="Running"]').first()).toBeVisible({ timeout: 30_000 });
-  277 |   entry(k).started = true;
-  278 |   await shot(k, `${shotName}-started`);
-  279 | }
-  280 | async function stopFlowUI(k: string, flowId: string, shotName: string) {
-  281 |   try {
-  282 |     await page.goto(`/flow-builder/${flowId}`);
-  283 |     await page.getByRole("button", { name: "Stop", exact: true }).click();
-  284 |     await expect(page.getByText("Stopped — queues retained").first()).toBeVisible({ timeout: 120_000 });
-  285 |     await shot(k, shotName);
-  286 |     entry(k).phases["stop"] = { ok: true, at: new Date().toISOString() };
-  287 |   } catch (e) {
-  288 |     try {
-  289 |       const r = await fetch(`${BACKEND}/api/v2/flows/${flowId}/verbs/stop`, { method: "POST" });
-  290 |       entry(k).phases["stop"] = { ok: r.ok, note: `UI stop failed — API fallback -> ${r.status}`, at: new Date().toISOString() };
-  291 |     } catch (e2) {
-  292 |       entry(k).phases["stop"] = { ok: false, error: `UI and API stop both failed: ${String(e2).slice(0, 200)}`, at: new Date().toISOString() };
-  293 |     }
-  294 |   }
-  295 |   saveLedger();
-  296 | }
-  297 | /** The sheet opens via the row's "Overview" (eye) button — run-1 lesson. */
-  298 | async function openFlowSheet(flowName: string) {
-  299 |   await page.goto("/flows");
-  300 |   const row = page.getByRole("row").filter({ hasText: flowName }).first();
-  301 |   await expect(row).toBeVisible();
-  302 |   await row.getByRole("button", { name: "Overview" }).click();
-  303 | }
-  304 | async function verifyMessagesTabUI(k: string, flowName: string, topic: string, shotName: string) {
-  305 |   await openFlowSheet(flowName);
-  306 |   await expect(page.getByRole("tab", { name: "Messages" })).toBeVisible();
-  307 |   await page.getByRole("tab", { name: "Messages" }).click();
-  308 |   const topicSelect = page.getByRole("combobox").filter({ hasText: /raw\.|Pick a topic/ }).first();
-  309 |   await topicSelect.click();
-  310 |   await page.getByRole("option", { name: topic }).click();
-  311 |   await expect(page.getByText(/offset \d+/).first()).toBeVisible({ timeout: 30_000 });
-  312 |   await shot(k, shotName);
-  313 |   await page.keyboard.press("Escape");
-  314 | }
-  315 | 
-  316 | // ------------------------------------------------------------------ fixtures
-  317 | test.beforeAll(async ({ browser }) => {
-  318 |   fs.mkdirSync(ART, { recursive: true });
-  319 |   context = await browser.newContext({ baseURL: FRONTEND, viewport: { width: 1680, height: 1000 } });
-  320 |   page = await context.newPage();
-  321 |   page.on("console", (m) => {
-  322 |     if (m.type() === "error") consoleErrors.push(m.text());
-  323 |   });
-  324 |   page.on("pageerror", (e) => consoleErrors.push(`pageerror: ${String(e)}`));
-  325 | });
-  326 | 
-  327 | test.afterAll(async () => {
-  328 |   if (consoleErrors.length > 0) {
-  329 |     fs.writeFileSync(path.join(ART, "console-errors-remediation.txt"), consoleErrors.join("\n---\n"), "utf-8");
-  330 |   }
-  331 |   saveLedger();
-> 332 |   await context?.close();
-      |                  ^ Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\kaifm\Desktop\claude-project\frontend\e2e\artifacts\test-output\.playwright-artifacts-0\traces\78aa221cb99bf0e472dc-808e5e008321ec3e16df-recording1.network'
-  333 | });
-  334 | 
-  335 | // =====================================================================
-  336 | // R1 — JSON dedup suppression + missing UI evidence on the existing flow
-  337 | // =====================================================================
-  338 | test("R1 json — restart, second firing suppressed by dedup, messages+metrics UI, stop", async () => {
-  339 |   test.setTimeout(1_100_000);
-  340 |   const k = "json";
-  341 |   const e = entry(k);
-  342 |   const topic = `raw.${tokenize(JSON_FLOW)}.dt_product`;
-  343 |   e.flowName = JSON_FLOW;
-  344 |   e.topic = topic;
-  345 |   saveLedger();
-  346 | 
-  347 |   let flowId = "";
-  348 |   await runPhase(k, "locate_flow", async () => {
-  349 |     const f = await flowByName(JSON_FLOW);
-  350 |     flowId = f.id;
-  351 |     e.flowId = f.id;
-  352 |     if (!f.nifiProcessGroupId) throw new Error(`${JSON_FLOW} is not deployed — cannot verify dedup`);
-  353 |     saveLedger();
-  354 |   });
-  355 | 
-  356 |   let c0 = 0;
-  357 |   let m0: Record<string, unknown> | null = null;
-  358 |   await runPhase(k, "baseline", async () => {
-  359 |     c0 = (await apiMessages(flowId, topic)).length;
-  360 |     m0 = await apiMetrics(flowId);
-  361 |     e.data!["baselineMessages"] = c0;
-  362 |     e.data!["baselineMetricsTopicCount"] = metricTopicCount(m0, topic);
-  363 |     saveLedger();
-  364 |     if (c0 === 0) throw new Error(`expected the run-1 records (~30) on ${topic}, found 0`);
-  365 |   });
-  366 | 
-  367 |   await runPhase(k, "restart", async () => {
-  368 |     // Start from the FLOWS PAGE row button. The flow-builder toolbar on a
-  369 |     // fresh page load keeps Start disabled ("Runtime connections
-  370 |     // unavailable") because api.ts's module-level connections cache fills
-  371 |     // asynchronously and nothing re-renders the toolbar afterwards — the
-  372 |     // Flows page recomputes the guard after its own queries land, so its row
-  373 |     // Start button reflects the true (healthy) state. Debugged live with
-  374 |     // e2e/debug-check-start.mjs; noted as a UI quirk in the journey doc.
-  375 |     await page.goto("/flows");
-  376 |     const row = page.getByRole("row").filter({ hasText: JSON_FLOW }).first();
-  377 |     await expect(row).toBeVisible();
-  378 |     const rowStart = row.getByRole("button", { name: "Start", exact: true });
-  379 |     await expect(rowStart).toBeEnabled({ timeout: 30_000 });
-  380 |     await rowStart.click();
-  381 |     await expect(page.getByText(`Started — ${JSON_FLOW}`).first()).toBeVisible({ timeout: 120_000 });
-  382 |     e.started = true;
-  383 |     await shot(k, "08b-json-restarted-for-dedup");
-  384 |   });
-  385 | 
-  386 |   await runPhase(k, "dedup_suppression", async () => {
-  387 |     // Wait for PROOF the cron fired and processed records after restart:
-  388 |     // records24h is the flow PG's flowFilesOut in NiFi's live status window —
-  389 |     // ~0 right after restart (the flow sat stopped for >5 min), >0 once the
-  390 |     // firing ran the fetch/split/dedup chain. Then allow publish time and
-  391 |     // assert the topic did NOT grow (all 30 re-fetched products are dedup
-  392 |     // cache hits from run 1 — the 24h Redis window is still warm).
-  393 |     const deadline = Date.now() + 330_000;
-  394 |     let fired = false;
-  395 |     let records24h: unknown = null;
-  396 |     while (Date.now() < deadline) {
-  397 |       const m = await apiMetrics(flowId);
-  398 |       if (m && m["available"] === true) {
-  399 |         records24h = m["records24h"];
-  400 |         if (typeof records24h === "number" && records24h > 0) {
-  401 |           fired = true;
-  402 |           break;
-  403 |         }
-  404 |       }
-  405 |       await sleep(20_000);
-  406 |     }
-  407 |     e.data!["cronFiredEvidence"] = { fired, records24hInStatusWindow: records24h };
-  408 |     await sleep(60_000); // publish margin after the observed activity
-  409 |     const c1 = (await apiMessages(flowId, topic)).length;
-  410 |     const m1 = await apiMetrics(flowId);
-  411 |     e.data!["afterSecondFiring"] = {
-  412 |       messages: c1,
-  413 |       metricsTopicCount: metricTopicCount(m1, topic),
-  414 |     };
-  415 |     fs.writeFileSync(
-  416 |       path.join(ART, "json-dedup-evidence.json"),
-  417 |       JSON.stringify(
-  418 |         {
-  419 |           note:
-  420 |             "run 1 published 30 products at ~11:39Z then the flow was stopped; this restart re-fetches the same 30 " +
-  421 |             "products — every one a dedup cache hit (identity field: id, 24h window, Redis). Suppression is proven " +
-  422 |             "by the topic count NOT growing across the restart firing.",
-  423 |           baseline: { messages: c0, metrics: m0 },
-  424 |           cronFiredEvidence: e.data!["cronFiredEvidence"],
-  425 |           after: { messages: c1, metrics: m1 },
-  426 |         },
-  427 |         null,
-  428 |         2,
-  429 |       ),
-  430 |       "utf-8",
-  431 |     );
-  432 |     saveLedger();
+  647 | 
+  648 |     await runPhase(k, "enable_start", async () => {
+  649 |       await enableAndStart(k, "24-csv");
+  650 |     });
+  651 | 
+  652 |     await runPhase(k, "records", async () => {
+  653 |       const msgs = await pollStableMessages(flowId, topic, 300_000);
+  654 |       if (msgs.length === 0) {
+  655 |         await captureDefectEvidence(k, flowId);
+  656 |         throw new Error(`no messages on ${topic} within 300s of Start (cron ${CRON}) — defect-csv.json captured`);
+  657 |       }
+  658 |       const sample = parseNewestMessage(msgs);
+  659 |       e.data!["firstBatchCount"] = msgs.length;
+  660 |       e.data!["sample"] = sample;
+  661 |       e.data!["sampleFields"] = Object.keys(sample);
+  662 |       fs.writeFileSync(path.join(ART, "csv-sample-messages.json"), JSON.stringify(msgs.slice(0, 5), null, 2), "utf-8");
+  663 |       saveLedger();
+  664 |       const present = headerCells.filter((h) => h in sample);
+  665 |       if (present.length < Math.min(3, headerCells.length)) {
+  666 |         throw new Error(
+  667 |           `message is not a JSON object keyed by the CSV header columns. header=${JSON.stringify(headerCells)} sampleKeys=${JSON.stringify(Object.keys(sample))}`,
+  668 |         );
+  669 |       }
+  670 |     });
+  671 |   }
+  672 | 
+  673 |   await runPhase(k, "messages_ui", async () => {
+  674 |     await verifyMessagesTabUI(k, CSV_FLOW, topic, "25-csv-messages-ui");
+  675 |   });
+  676 | 
+  677 |   if (e.started) {
+  678 |     await stopFlowUI(k, flowId, "26-csv-stopped");
+  679 |   } else if (alreadyVerified && flowId) {
+  680 |     // Resumed path: make sure the prior run's flow is not left running.
+  681 |     const f = (await apiFlows()).find((x) => x.id === flowId);
+  682 |     if (f?.state === "Running" || f?.state === "Paused") {
+  683 |       await stopFlowUI(k, flowId, "26-csv-stopped");
+  684 |     } else {
+  685 |       entry(k).phases["stop"] = { ok: true, note: `flow already ${f?.state ?? "unknown"} from the prior run`, at: new Date().toISOString() };
+  686 |       saveLedger();
+  687 |     }
+  688 |   }
+  689 | });
+  690 | 
+  691 | // =====================================================================
+  692 | // R3 — XML Messages-tab UI evidence (flow already verified + stopped)
+  693 | // =====================================================================
+  694 | test("R3 xml — Messages tab UI evidence on the stopped dt xml feed", async () => {
+  695 |   test.setTimeout(300_000);
+  696 |   const k = "xml";
+  697 |   const e = entry(k);
+  698 |   const topic = `raw.${tokenize(XML_FLOW)}.dt_item`;
+  699 |   e.flowName = XML_FLOW;
+  700 |   e.topic = topic;
+  701 |   saveLedger();
+  702 | 
+  703 |   await runPhase(k, "locate_flow", async () => {
+  704 |     const f = await flowByName(XML_FLOW);
+  705 |     e.flowId = f.id;
+  706 |     if (!f.nifiProcessGroupId) throw new Error(`${XML_FLOW} is not deployed`);
+  707 |     const msgs = await apiMessages(f.id, topic);
+  708 |     e.data!["messagesOnTopic"] = msgs.length;
+  709 |     saveLedger();
+  710 |     if (msgs.length === 0) throw new Error(`expected run-1 records on ${topic}, found 0`);
+  711 |   });
+  712 | 
+  713 |   await runPhase(k, "messages_ui", async () => {
+  714 |     await verifyMessagesTabUI(k, XML_FLOW, topic, "35-xml-messages-ui");
+  715 |   });
+  716 | });
+  717 | 
+  718 | // =====================================================================
+  719 | // R4 — final evidence + verdict
+  720 | // =====================================================================
+  721 | test("R4 final — all three dt flows present (API + Flows page), overall verdict", async () => {
+  722 |   test.setTimeout(300_000);
+  723 | 
+  724 |   const flows = await apiFlows();
+  725 |   fs.writeFileSync(path.join(ART, "flows-final.json"), JSON.stringify(flows, null, 2), "utf-8");
+  726 |   for (const name of [JSON_FLOW, CSV_FLOW, XML_FLOW]) {
+  727 |     const f = flows.find((x) => x.name === name);
+  728 |     expect.soft(f, `${name} missing from GET /api/v2/flows/`).toBeTruthy();
+  729 |     expect.soft(f?.nifiProcessGroupId, `${name} should be left DEPLOYED`).toBeTruthy();
+  730 |     expect.soft(f?.state, `${name} should be left Stopped`).toBe("Stopped");
+  731 |   }
+  732 | 
+  733 |   await page.goto("/flows");
+  734 |   await page.getByPlaceholder("Search flows, entities, topics…").fill("dt");
+  735 |   for (const name of [JSON_FLOW, CSV_FLOW, XML_FLOW]) {
+  736 |     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+  737 |   }
+  738 |   await page.screenshot({ path: path.join(ART, "40-final-flows-page.png"), fullPage: true });
+  739 |   saveLedger();
+  740 | 
+  741 |   const failures: string[] = [];
+  742 |   for (const [k, e] of Object.entries(LEDGER)) {
+  743 |     for (const [phase, p] of Object.entries(e.phases)) {
+  744 |       if (!p.ok) failures.push(`${k}/${phase}: ${p.error ?? "failed"}`);
+  745 |     }
+  746 |   }
+> 747 |   expect(failures, `remediation failures:\n${failures.join("\n")}`).toEqual([]);
+      |                                                                     ^ Error: remediation failures:
+  748 | });
+  749 | 
 ```

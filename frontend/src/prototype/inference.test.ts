@@ -272,6 +272,138 @@ describe("inferAvroFromRecords", () => {
   });
 });
 
+// ------------------------------------------- nested record name collisions
+//
+// Regression coverage for the ceremony's B4 defect: dummyjson `/users`
+// carries two same-named nested objects — root `address` and
+// `company.address` — each with its own nested `coordinates`. Naming a
+// nested record after the leaf field name alone ("address" -> "Address")
+// generates the SAME Avro name twice, which fastavro/the registry reject as
+// "redefined named type" on approve. The fix derives nested record names
+// from the full field path instead, so `address` -> "Address" and
+// `company.address` -> "CompanyAddress" never collide.
+
+/** Two real (trimmed) `dummyjson.com/users` records: the exact shape that 422'd. */
+const DUMMYJSON_USERS = [
+  {
+    id: 1,
+    firstName: "Emily",
+    hair: { color: "Brown", type: "Curly" },
+    address: {
+      address: "626 Main Street",
+      city: "Phoenix",
+      coordinates: { lat: -77.16213, lng: -92.084824 },
+    },
+    bank: { cardType: "Diners Club International", iban: "GB74MH2UZLR9TRPHYNU8F8" },
+    company: {
+      name: "Dooley, Kozey and Cronin",
+      address: {
+        address: "263 Tenth Street",
+        city: "San Francisco",
+        coordinates: { lat: 71.814525, lng: -161.150263 },
+      },
+    },
+    crypto: { coin: "Bitcoin", wallet: "0xb9fc2fe63b2a6c003f1c324c3bfa53259162181a" },
+  },
+  {
+    id: 2,
+    firstName: "Michael",
+    hair: { color: "Green", type: "Straight" },
+    address: {
+      address: "385 Fifth Street",
+      city: "Houston",
+      coordinates: { lat: 22.815468, lng: 115.608581 },
+    },
+    bank: { cardType: "JCB", iban: "DE26362283149158045865" },
+    company: {
+      name: "Spinka - Dickinson",
+      address: {
+        address: "395 Main Street",
+        city: "Los Angeles",
+        coordinates: { lat: 79.098326, lng: -119.624845 },
+      },
+    },
+    crypto: { coin: "Bitcoin", wallet: "0xb9fc2fe63b2a6c003f1c324c3bfa53259162181a" },
+  },
+];
+
+/** Every Avro named-type (`record`) name reachable from an Avro type, recursively. */
+function collectNamedTypeNames(type: unknown, out: string[] = []): string[] {
+  if (Array.isArray(type)) {
+    type.forEach((branch) => collectNamedTypeNames(branch, out));
+    return out;
+  }
+  if (type && typeof type === "object") {
+    const t = type as Record<string, unknown>;
+    if (t.type === "record") {
+      out.push(t.name as string);
+      (t.fields as { type: unknown }[]).forEach((f) => collectNamedTypeNames(f.type, out));
+    } else if (t.type === "array") {
+      collectNamedTypeNames(t.items, out);
+    }
+  }
+  return out;
+}
+
+const unwrapNullable = (type: unknown): unknown => (Array.isArray(type) ? type.find((t) => t !== "null") : type);
+
+describe("inferAvroFromRecords — nested record name collisions (dummyjson users shape)", () => {
+  it("names every nested record after its full path, so same-named nested objects at different paths never collide", () => {
+    const { record } = inferAvroFromRecords(DUMMYJSON_USERS, "ice_user", "raw.ice_users");
+
+    const names = collectNamedTypeNames(record);
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names).size).toBe(names.length); // no "redefined named type"
+
+    const byName = Object.fromEntries(record.fields.map((f) => [f.name, f.type]));
+
+    const addressType = unwrapNullable(byName.address) as { name: string; fields: { name: string; type: unknown }[] };
+    expect(addressType.name).toBe("Address");
+    const addressCoordinates = unwrapNullable(
+      addressType.fields.find((f) => f.name === "coordinates")?.type,
+    ) as { name: string };
+    expect(addressCoordinates.name).toBe("AddressCoordinates");
+
+    const companyType = unwrapNullable(byName.company) as { fields: { name: string; type: unknown }[] };
+    const companyAddressType = unwrapNullable(
+      companyType.fields.find((f) => f.name === "address")?.type,
+    ) as { name: string; fields: { name: string; type: unknown }[] };
+    expect(companyAddressType.name).toBe("CompanyAddress");
+    const companyAddressCoordinates = unwrapNullable(
+      companyAddressType.fields.find((f) => f.name === "coordinates")?.type,
+    ) as { name: string };
+    expect(companyAddressCoordinates.name).toBe("CompanyAddressCoordinates");
+
+    // The two "address" record types (and the two "coordinates" record types
+    // nested inside them) are distinct names, not the same name twice.
+    expect(addressType.name).not.toBe(companyAddressType.name);
+    expect(addressCoordinates.name).not.toBe(companyAddressCoordinates.name);
+  });
+
+  it("still fits every sample record after the rename (existing re-validation helper)", () => {
+    const { record } = inferAvroFromRecords(DUMMYJSON_USERS, "ice_user", "raw.ice_users");
+    const result = validateRecordsAgainstAvro(DUMMYJSON_USERS, record);
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain("All 2 sample record(s) still fit");
+  });
+
+  it("still dedupes further on a residual collision (safety net) even when two paths pascal-case the same", () => {
+    // "a.b_c" and "a_b.c" both pascal-case to "ABC" -- an adversarial input the
+    // full-path scheme alone cannot tell apart. The uniqueness pass catches it.
+    const { record } = inferAvroFromRecords(
+      [
+        { a: { b_c: { x: 1 } }, a_b: { c: { y: 2 } } },
+        { a: { b_c: { x: 3 } }, a_b: { c: { y: 4 } } },
+      ],
+      "r",
+      "ns",
+    );
+    const names = collectNamedTypeNames(record);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.filter((n) => n === "ABC").length).toBeLessThanOrEqual(1);
+  });
+});
+
 // ------------------------------------------------------------ re-validation
 
 describe("validateRecordsAgainstAvro", () => {
