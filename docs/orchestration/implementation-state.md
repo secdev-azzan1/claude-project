@@ -46,8 +46,8 @@ Last updated: 2026-08-13 (backend v2 integrated + live-verified; api swap + comp
 | T8.U9 Remove Egress block | IMPLEMENTED | EgressLine removed from BlockForm; validation.ts untouched |
 | T8.U10 Dedup polish | IMPLEMENTED | window unit control + bounds validators + captions + clear-cache action; vitest 157 green |
 | T8.U11 Test block wiring | NOT STARTED | |
-| T9.1–T9.5 E2E journeys | NOT STARTED | |
-| T10.1 Reviews | NOT STARTED | |
+| T9.1–T9.5 E2E journeys | IN PROGRESS | A+E PASS (dedup proven: 30->60 in/30 out, Iceberg snapshot 30 records; lifecycle verified); C+D PASS (APISIX egress live, schema lifecycle live); B running. 10 defects catalogued for correction wave |
+| T10.1 Reviews | IN PROGRESS | flow-engine Opus review done (4C/17M/16m); triage vs E2E evidence underway |
 | T10.2 Final audit | NOT STARTED | |
 
 ## Blockers

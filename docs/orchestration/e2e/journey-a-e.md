@@ -66,3 +66,109 @@ Naming (derived): flowToken `e2ea_users` · topic `raw.e2ea_users.e2ea_user` · 
 - `POST /verbs/redeploy` → **200**, state Stopped, deployedAt 01:31:11.727Z, new PG ids (root f8bde0ca…), connector re-upserted. Connector config verified via Connect REST: full REST-catalog config (type=rest, credential, oauth2-server-uri, scope, S3FileIO, endpoint/keys/path-style/region) + platform-locked keys correct (topics, iceberg.tables=bronze.e2ea_user, Avro converter → Apicurio ccompat, as-confluent=true).
 - `GET /{id}/messages?topic=raw.e2ea_users.e2ea_user` → **200** `{"messages":[]}` after the topics-array fix.
 - **PASS (with 2 defects + 1 parity finding documented; workarounds applied through public API only)**
+
+### Step 6 — Start + run 1
+- `POST /verbs/start` → 200, state **Running**, lastRunAt 01:32:47.239Z. NiFi: all 13 components RUNNING; trigger = CRON_DRIVEN `0 */2 * * * *` on PRIMARY (correct 5→6-field conversion). Connect connector resumed: connector RUNNING, task 0 RUNNING.
+- Cron fired 01:34:00Z. `GET /metrics` → `{available:true, perBlock:[b1 out=30, b2 in=30], topicCounts:[raw.e2ea_users.e2ea_user=30, dlq.e2ea_users=0]}`. **30 records after run 1, exactly as expected** (dummyjson default page).
+- **PASS**
+
+### Step 7 — DEDUP PROOF (run 2)
+NiFi processor + connection statistics (REST `/flow/processors/{id}/status`, `/flow/process-groups/{id}/status`), DetectDuplicate id f8be7c69…:
+
+| Moment | detect flowFilesIn | detect flowFilesOut | non-duplicate conn (detect→out port b2) | detect→dlq | topic count |
+|---|---|---|---|---|---|
+| after run 1 (01:35Z) | 30 | 30 | 30 | 0 | 30 |
+| after run 2 (01:36Z) | **60** | **30** | **30** (unchanged) | 0 | **30** (unchanged) |
+
+- Poll log: detect in/out was `30 30` at 01:35:48Z and `60 30` at 01:35:59Z — the second fetch of the same 30 users entered DetectDuplicate and **all 30 were routed to `duplicate` (auto-terminated, counted)**: in−out = 30 duplicates suppressed in NiFi itself.
+- Topic message count after run 2: **still 30** (metrics topicCounts). DLQ still 0. `dedupe__hash → dlq` and `dedupe__detect → dlq` connections both at 0 — no dedup failures.
+- **PASS — dedup suppression proven with NiFi component counters**
+
+### Step 8 — Kafka Connect + Iceberg destination
+- After start: connector `e2ea_users.b2.kafka_kc` RUNNING; task 0 then **FAILED** with: `Tolerance exceeded in error handler … Caused by: com.microsoft.kiota.ApiException: service returned status code 404 but no response body was found` at `io.apicurio.registry.resolver…getByContentId`.
+
+**DEFECT 2b (blocking for destination, backend compiler — no user workaround):** `build_kafka_kc_connector` sets `value.converter.apicurio.registry.url` to the **ccompat** URL (`…/apis/ccompat/v7`). The Apicurio `AvroConverter` (registry 3.x kiota SDK resolver) requires the **core registry API** URL. Proof: ccompat schema id for our subject = 13; `GET https://apicurio.datapasc.com/apis/ccompat/v7/ids/contentIds/13` → **404** (exactly what the resolver hits), while `GET https://apicurio.datapasc.com/apis/registry/v3/ids/contentIds/13` → **200** with our schema. Because `value.converter*` is a platform-locked prefix (stripped from user sinkConfig by `_merge_locked`), the platform API offers **no** user-level workaround — must be fixed in `connectors.py` (emit `https://…/apis/registry/v3` for the converter while NiFi's ConfluentSchemaRegistry CS correctly keeps ccompat).
+- Diagnostic surgery (out-of-band, documented): `PUT /connectors/e2ea_users.b2.kafka_kc/config` with only that URL corrected → 200; `POST /restart?includeTasks=true&onlyFailed=true` → 202. Task 0 → **RUNNING** and stayed RUNNING (polled 01:38:27–01:39:11Z).
+- Destination proof: Polaris `GET /api/catalog/v1/bronze/namespaces/bronze/tables` → `bronze.e2ea_user` **auto-created**; table metadata shows 1 snapshot, op `append`, **`total-records: 30`** (ts 1786585186435 ≈ 01:39:46Z). End-to-end delivery: dummyjson → NiFi (dedup) → Kafka (Avro+registry) → Connect → Iceberg, 30 unique records.
+- **PASS (destination proven; connector config defect documented — our defect, not environment)**
+
+### Step 9 — UI state
+- `GET /flows/flow-e2ea1` → state **Running**, enabled true.
+- `GET /metrics` → `available:true`, per-block numbers (b1 http out=30, b2 kafka_kc in=30), topicCounts present.
+- `GET /dlq` → `{"records":[]}` (empty — correct).
+- `GET /runtime` → reachable:true, 13 components grouped b1=9/b2=4, all RUNNING, 9 controller services, 1 connector, **drift findings: 0**.
+- **PASS**
+
+---
+
+## Journey E (same flow)
+
+### Step 10 — pause / resume
+- `POST /verbs/pause` → 200, state **Paused** (01:41:41Z audit). NiFi states after pause: `trigger STOPPED`; `init/fetch/dedupe__detect/b2 publish` all still RUNNING — exactly "trigger only" semantics.
+- `POST /verbs/resume` → 200, state **Running**; trigger RUNNING again (01:41:52Z audit).
+- **PASS**
+
+### Step 11 — stop_clear
+- `POST /verbs/stop_clear` → 200, state **Stopped**. NiFi flow PG status: `queued: 0 (0 bytes)`, trigger STOPPED.
+- Audit 01:42:37.275Z: **"Flow stopped and cleared … Dropped 0 queued record(s) across 21 connection(s)."** — the drop count is audited (0 because the flow was idle at stop).
+- **PASS**
+
+### Step 12 — redeploy from stopped
+- `POST /verbs/redeploy` → 200, state Stopped, deployedAt 01:44:13.130Z. **PG recreated with new component ids** (root PG f8bde0ca… → f8c9c940…; DetectDuplicate f8be7c69… → f8ca6735…).
+- Topic **PRESERVED with data**: `raw.e2ea_users.e2ea_user` still **30 messages** after redeploy (metrics topicCounts) — redeploy does not wipe data topics. DLQ intact at 0.
+- **PASS**
+
+### Step 13 — drift detection
+**13a — out-of-band rename:** `PUT /nifi-api/process-groups/{pg}` name → `e2ea_drifted` (200). `GET /runtime` → reachable:true, **NO drift findings**.
+
+**FINDING 5 (gap, medium):** the runtime reader (`runtime.py::read_runtime`) locates the PG **by id** and only ever emits `process_group_missing` findings — an out-of-band PG rename (and by extension the `property_edited` / `component_state_changed` / `out_of_band_edit` kinds declared in types.ts `DriftKind`) is never detected. Verdict recorded: **rename invisible to drift detection**. (Renamed back to `e2ea_users` — 200.)
+
+**13b — out-of-band delete:** deleting the PG required stop-all + disable-all-CS first (NiFi 409: "…schema_ref_writer… cannot be deleted because it is not disabled" — captured), then `DELETE /nifi-api/process-groups/{pg}` → 200.
+- `GET /runtime` → drift finding: kind **`process_group_missing`**, verdict **`really_deleted`**, repairable true, verdictDetail: "The active NiFi connection points at the same instance (root process group fingerprint matches) … the process group is gone there — it was deleted outside the platform." Fingerprint disambiguation works.
+- `POST /runtime/repair` → 200: `clearedFindings: 1`, orphans `[]` (correct — really_deleted leaves nothing to orphan), runtime `processGroupId: null`.
+- Flow doc after repair: state **Draft**, deployedAt null, nifiProcessGroupId null. Audit 01:46:44.786Z: **"Runtime force repaired … 1 finding(s) resolved, 0 orphan(s) recorded."**
+- **PASS (delete/repair path); rename detection recorded as FINDING 5**
+
+### Step 14 — cleanup
+- `DELETE /api/v2/flows/flow-e2ea1` → 200 `{ok:true}`; `GET /flows/flow-e2ea1` → 404. Audit "Flow deleted".
+- Kafka: after fresh Kafbat login, **no e2ea topics remain** — both `raw.e2ea_users.e2ea_user` and `dlq.e2ea_users` deleted by the flow delete (earlier 302 responses were unauthenticated-session redirects, not topic state).
+- NiFi: **no e2ea PGs under root**.
+- Kafka Connect: connector `e2ea_users.b2.kafka_kc` **still existed** after flow delete (GET /status → 200).
+
+**DEFECT 6 (teardown residue, backend):** `lifecycle.delete()` only runs `undeploy()` — the sole place connectors are deleted — when `deployedAt` or `nifiProcessGroupId` is set. After `runtime/repair` returns a flow to Draft (both nulled, `runtimeScopeMap` retained), DELETE removes topics + docs but **leaves the flow's Kafka Connect connectors orphaned**, and no orphan record is written for them. Evidence: connector 200 post-delete. Cleaned out-of-band (`DELETE /connectors/e2ea_users.b2.kafka_kc` → 204); Connect then shows no e2ea connectors.
+- Services: `POST /services/{id}/retire` → both `svc-vxgkzn` and `svc-lrogto` retired:true, audited.
+- Schema: flow delete leaves the approved-schema doc + registry subject behind (by design — schemas have their own lifecycle); cleaned via `DELETE /api/v2/schemas/schema-ijbes6` → 200 `{ok:true, registryDeleted:true}`; ccompat subjects now contain **no e2ea entries**.
+- **PASS (with DEFECT 6 documented; environment left fully clean)**
+
+---
+
+## Final summary
+
+| # | Step | Result |
+|---|------|--------|
+| 1 | HTTP service create + test | PASS |
+| 2 | Iceberg sink service create + test | PASS (config fix: `kind=iceberg_catalog`, catalogUrl needs `/api/catalog`) |
+| 3 | Flow creation + validation | PASS |
+| 4 | Schema infer/approve + Apicurio proof | PASS |
+| 5 | Deploy + NiFi structure verification | PASS after workaround (DEFECT 1) |
+| 6 | Start + run 1 (30 records) | PASS |
+| 7 | Dedup proof (run 2 suppressed) | **PASS — 60 in / 30 out, 30 duplicates dropped, topic stays 30** |
+| 8 | Connect + Iceberg destination | PASS after out-of-band fix (DEFECTS 2/2b); 30 records committed to `bronze.e2ea_user` |
+| 9 | UI state (flow/metrics/dlq/runtime) | PASS |
+| 10 | pause / resume | PASS |
+| 11 | stop_clear (audited drop counts) | PASS |
+| 12 | redeploy (topic preserved) | PASS |
+| 13 | drift rename / delete / repair | PASS for delete+repair; rename undetected (FINDING 5) |
+| 14 | delete + retire + sweep | PASS with connector residue (DEFECT 6), cleaned |
+
+## Defects & findings
+
+1. **DEFECT (blocking)** — `kafka_client.py::ensure_topic_exists`: kafbat mode never creates topics (verify-only). Every deploy with a new topic fails 502 in this environment. Spec §3.4 requires auto-create via Kafbat (`POST /api/clusters/{cluster}/topics` works — proven).
+2. **DEFECT (blocking, destination)** — `compiler/connectors.py::build_kafka_kc_connector` (iceberg): omits `iceberg.catalog.type=rest`, OAuth (`credential`/`oauth2-server-uri`/`scope`) and all S3 keys (`io-impl`, endpoint, keys, path-style, region) despite the service record carrying them and spec §5 requiring them → task fails with `ClassNotFoundException: org.apache.iceberg.hive.HiveCatalog`. Workaroundable via user `sinkConfig` (prefix not locked).
+   - **2b (no workaround)** — same builder sets `value.converter.apicurio.registry.url` to the ccompat URL; Apicurio AvroConverter needs the core API (`/apis/registry/v3`). `{ccompat}/ids/contentIds/13` → 404 vs `{v3}/ids/contentIds/13` → 200 proven. `value.converter*` is platform-locked, so only a compiler fix can resolve it.
+3. **FINDING (parity, medium)** — `GET /{id}/messages` ownership comes from `flow.topics`, which only the frontend materializes (api.ts `syncTopics`); server-side save doesn't sync it, so API-created flows 404 on their own topics until the client mirrors the frontend. DLQ topic is never viewable through this endpoint (by design; `/dlq` covers it).
+4. **NOTE (mission-brief)** — sink kind must be `iceberg_catalog` (not `iceberg`); Polaris catalogUrl needs the `/api/catalog` prefix; kafka_kc blocks need `serviceId` set in addition to `config.sinkServiceId`; non-empty `sinkConfig` must include `connector.class`.
+5. **FINDING (gap, medium)** — drift detection only emits `process_group_missing`; out-of-band renames/property edits are invisible (types.ts declares richer DriftKind values the reader never produces).
+6. **DEFECT (teardown)** — flow delete after runtime/repair leaves Kafka Connect connectors orphaned (undeploy — the only connector-deleting step — is skipped when deployedAt/nifiProcessGroupId are null), with no orphan record.
+
+Out-of-band interventions (all documented above, none touching source code): Kafbat topic pre-creation (defect 1), Connect connector URL patch + restart (defect 2b), NiFi PG rename/delete (drift test itself), leftover connector deletion (defect 6). Zero source files modified; uvicorn untouched.

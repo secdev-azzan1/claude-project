@@ -309,6 +309,71 @@ async def _kafbat_topic_message_count(
         return {"ok": False, "error": f"Kafbat topic count failed: {str(e)[:200]}", "error_code": "KAFBAT_TOPIC_COUNT_FAILED"}
 
 
+async def _kafbat_create_topic(
+    kafbat_url: str,
+    kafbat_username: Optional[str],
+    kafbat_password: Optional[str],
+    topic: str,
+    partitions: int = 6,
+    replication_factor: int = 3,
+) -> Dict[str, Any]:
+    """Create `topic` via the Kafbat management REST API (POST .../topics).
+
+    E2E-verification finding (2026-08-13, journey-b): `ensure_topic_exists`'s
+    kafbat-mode branch only ever called `_kafbat_topic_message_count` (a
+    read-only existence check) and never attempted creation, so a brand-new
+    topic could never be created in an environment where the broker is only
+    reachable via Kafbat (see this module's own docstring / topics.py's).
+    Every flow deploy that needed a not-yet-existing topic failed with
+    "Topic creation failed" -- reproduced live against
+    https://kafbat.datapasc.com for journeys A/B/C simultaneously (see
+    docs/orchestration/e2e/journey-b.md for the audit-log evidence).
+
+    Replication factor is clamped to the cluster's actual registered broker
+    count (`/api/clusters[0].brokerCount`) -- this cluster reports exactly 1
+    broker, so the function's own `replication_factor=3` default (mirrored
+    from `_ensure_topic_exists_sync`'s signature, presumably written for a
+    3-broker production topology) is rejected by Kafka outright
+    (`InvalidReplicationFactorException`, confirmed live via a direct POST
+    probe) unless clamped down to what's actually registered.
+    """
+    base = (kafbat_url or "").rstrip("/")
+    if not base:
+        return {"ok": False, "error": "Kafbat URL not configured.", "error_code": "KAFBAT_NOT_CONFIGURED"}
+
+    try:
+        async with httpx.AsyncClient(verify=tls_verify_enabled(), timeout=15.0, follow_redirects=True) as client:
+            await _kafbat_login(client, base, kafbat_username, kafbat_password)
+            clusters_resp = await client.get(f"{base}/api/clusters")
+            if clusters_resp.status_code != 200:
+                return {"ok": False, "error": f"Could not list Kafbat clusters: {clusters_resp.status_code}", "error_code": "KAFBAT_CLUSTER_NOT_FOUND"}
+            clusters = clusters_resp.json() or []
+            if not clusters:
+                return {"ok": False, "error": "No Kafbat cluster registered.", "error_code": "KAFBAT_CLUSTER_NOT_FOUND"}
+            cluster = clusters[0].get("name") or clusters[0].get("id")
+            if not cluster:
+                return {"ok": False, "error": "Could not determine Kafbat cluster name.", "error_code": "KAFBAT_CLUSTER_NOT_FOUND"}
+            broker_count = clusters[0].get("brokerCount") or replication_factor
+            try:
+                rf = max(1, min(int(replication_factor), int(broker_count)))
+            except (TypeError, ValueError):
+                rf = 1
+
+            resp = await client.post(
+                f"{base}/api/clusters/{quote(cluster, safe='')}/topics",
+                json={"name": topic, "partitions": partitions, "replicationFactor": rf},
+            )
+            if resp.status_code in (200, 201):
+                return {"ok": True, "created": True, "topic": topic, "source": "kafbat"}
+            if resp.status_code == 409:
+                # Already exists -- idempotent, same convention as
+                # topics.py's delete_topic() treating a 404 on delete as ok.
+                return {"ok": True, "created": False, "topic": topic, "source": "kafbat", "message": "Topic already existed."}
+            return {"ok": False, "error": f"Kafbat topic create returned {resp.status_code}: {resp.text[:300]}", "error_code": "KAFBAT_CREATE_FAILED"}
+    except Exception as e:
+        return {"ok": False, "error": f"Kafbat topic create failed: {str(e)[:200]}", "error_code": "KAFBAT_CREATE_FAILED"}
+
+
 async def _kafbat_recent_topic_messages(
     kafbat_url: str,
     kafbat_username: Optional[str],
@@ -1078,11 +1143,39 @@ async def ensure_topic_exists(
                 "message": f"Topic '{topic}' exists (verified via Kafbat; creation skipped).",
                 "source": "kafbat",
             }
+        if fallback.get("error_code") != "TOPIC_NOT_FOUND":
+            return {
+                "ok": False,
+                "created": False,
+                "error": fallback.get("error") or f"Kafka topic '{topic}' could not be verified via Kafbat.",
+                "error_code": fallback.get("error_code") or "KAFBAT_TOPIC_VERIFY_FAILED",
+            }
+        # Not found (rather than unreachable/erroring) -- actually create it.
+        # See `_kafbat_create_topic`'s docstring for why this branch did not
+        # exist before (E2E journey-b finding, 2026-08-13).
+        created = await _kafbat_create_topic(
+            kafbat_url,
+            conn.get("kafbat_username"),
+            conn.get("kafbat_password"),
+            topic,
+            partitions=partitions,
+            replication_factor=replication_factor,
+        )
+        if created.get("ok"):
+            return {
+                "ok": True,
+                "created": bool(created.get("created")),
+                "message": (
+                    f"Topic '{topic}' created via Kafbat." if created.get("created")
+                    else f"Topic '{topic}' already existed (Kafbat)."
+                ),
+                "source": "kafbat",
+            }
         return {
             "ok": False,
             "created": False,
-            "error": fallback.get("error") or f"Kafka topic '{topic}' could not be verified via Kafbat.",
-            "error_code": fallback.get("error_code") or "KAFBAT_TOPIC_VERIFY_FAILED",
+            "error": created.get("error") or f"Kafka topic '{topic}' could not be created via Kafbat.",
+            "error_code": created.get("error_code") or "KAFBAT_CREATE_FAILED",
         }
 
     security_protocol = conn.get("security_protocol") or "PLAINTEXT"
