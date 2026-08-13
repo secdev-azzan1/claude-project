@@ -309,7 +309,10 @@ def test_delete_deployed_flow_tears_down_and_removes():
     NiFi/Connect/Kafka step is a no-op skip (no active connection to act
     against). E7: a deletion step that could not even be attempted (no
     active kafka connection to delete the DLQ topic through) is now
-    recorded as an orphan rather than silently dropped."""
+    recorded as an orphan rather than silently dropped. Journey-R teardown
+    gap: the flow's DERIVED data topic (`raw.valid_flow.thing`, from the
+    naming walk over its own blocks — the scope map never recorded it) is
+    now an undeletable orphan too, not silently forgotten."""
     fake_db = FakeDB()
     fake_db.flows_v2.docs.append(
         _valid_flow(flow_id="flow-del-2", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z")
@@ -322,7 +325,8 @@ def test_delete_deployed_flow_tears_down_and_removes():
         assert body["ok"] is True
         assert body["id"] == "flow-del-2"
         assert body["orphans"] == [
-            {"kind": "topic", "ref": "dlq.valid_flow", "reason": "No active kafka connection is configured."}
+            {"kind": "topic", "ref": "dlq.valid_flow", "reason": "No active kafka connection is configured."},
+            {"kind": "topic", "ref": "raw.valid_flow.thing", "reason": "No active kafka connection is configured."},
         ]
         assert fake_db.flows_v2.docs == []
         actions = [e["action"] for e in fake_db.audit_v2.docs]

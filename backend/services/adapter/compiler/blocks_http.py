@@ -425,71 +425,125 @@ def _build_trigger(flow: "Flow") -> ProcessorSpec:
     )
 
 
+# R3 (docs/orchestration/e2e/journey-r-reverify.md): the session-token login
+# as ONE ExecuteGroovyScript. Credentials/URL/token-path arrive as DYNAMIC
+# properties (PropertyValue bindings, read exactly like the dedup hash
+# script's SRC/EXCLUDES/IDENTITY_FIELDS in transforms.py); PASSWORD's value
+# is a `#{sensitive param}` reference, which the deployer's
+# `_sensitive_dynamic_props` (nifi_apply.py) automatically lists in the
+# processor's `sensitiveDynamicPropertyNames` — the one NiFi mechanism that
+# legally carries a sensitive parameter into a processor property.
+# JSON-escaping of the credential values happens in-script via
+# `JsonOutput.toJson`, never by string concatenation. TOKEN_PATH is resolved
+# as a simple `$.a.b` dot-path (`tokenize('.')` — literal split, no regex).
+# NiFi 2.9 runs Java 21, so java.net.http.HttpClient is available.
+GROOVY_SESSION_LOGIN_SCRIPT = """import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def flowFile = session.get()
+if (!flowFile) return
+try {
+    def username = (binding.hasVariable('USERNAME') ? (USERNAME.value ?: '') : '')
+    def password = (binding.hasVariable('PASSWORD') ? (PASSWORD.value ?: '') : '')
+    def loginUrl = (binding.hasVariable('LOGIN_URL') ? (LOGIN_URL.value ?: '') : '')
+    def tokenPath = (binding.hasVariable('TOKEN_PATH') ? (TOKEN_PATH.value ?: '') : '')
+
+    def body = JsonOutput.toJson([username: username, password: password])
+    def client = java.net.http.HttpClient.newBuilder()
+        .connectTimeout(java.time.Duration.ofSeconds(10))
+        .build()
+    def request = java.net.http.HttpRequest.newBuilder()
+        .uri(java.net.URI.create(loginUrl))
+        .timeout(java.time.Duration.ofSeconds(10))
+        .header('Content-Type', 'application/json')
+        .header('Accept', 'application/json')
+        .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body, java.nio.charset.StandardCharsets.UTF_8))
+        .build()
+    def response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        log.error('session-token login failed: HTTP ' + response.statusCode() + ' from ' + loginUrl)
+        session.transfer(flowFile, REL_FAILURE)
+        return
+    }
+    def parsed = new JsonSlurper().parseText(response.body())
+    def path = tokenPath.trim()
+    if (path.startsWith('$')) { path = path.substring(1) }
+    def cur = parsed
+    for (seg in path.tokenize('.')) {
+        cur = (cur instanceof Map) ? cur.get(seg) : null
+        if (cur == null) { break }
+    }
+    def token = (cur == null) ? '' : cur.toString()
+    if (token.isEmpty()) {
+        log.error('session-token login: token path ' + tokenPath + ' resolved to nothing in the login response')
+        session.transfer(flowFile, REL_FAILURE)
+        return
+    }
+    flowFile = session.putAttribute(flowFile, 'session.token', token)
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    log.error('session-token login failed: ' + e.message, e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+"""
+
+
 def _build_session_login(builder: "BlockBuilder", *, service: AppService, add_param, source_key: str) -> Tail:
-    """session_token login chain (E5 — rewritten after the live Journey C
-    failure): seed -> `login_body` (`ReplaceText`, Always Replace, JSON body
-    `{"username":"#{...}","password":"#{...}"}` with both credentials as
-    parameters, password sensitive) -> `login` (`InvokeHTTP` POST with
-    Request Body Enabled + Content-Type application/json) ->
-    `extract_token` (`EvaluateJsonPath` -> `session.token`).
+    """session_token login step (R3 redesign — journey-r-reverify.md): seed
+    -> `login` (ONE `ExecuteGroovyScript`, `GROOVY_SESSION_LOGIN_SCRIPT`
+    above) -> `session.token` attribute on REL_SUCCESS.
 
-    The previous Basic-Auth-property approach (`Request Username`/`Request
-    Password`) was PROVEN BROKEN live: session-token login APIs (dummyjson's
-    `/auth/login`, and the pattern generally) require a JSON body and ignore
-    Basic-Auth headers — NiFi's bulletin captured the exact 400
-    ("Username and password required"). The service's own Test button
-    (`_test_http_session_token`) already POSTs a JSON body; the compiled flow
-    now matches it.
+    Why not the previous ReplaceText-JSON-body + InvokeHTTP + EvaluateJsonPath
+    chain (E5): PROVEN UNDEPLOYABLE live. NiFi refuses a `#{sensitive param}`
+    reference inside a non-sensitive STATIC property — `login_body`'s
+    `Replacement Value` validated as
+      "cannot reference Parameter 'svc_..._password' because the Sensitivity
+       of the parameter does not match the Sensitivity of the property"
+    and `sensitiveDynamicPropertyNames` cannot help a static descriptor. The
+    only compiled construct that legally receives a sensitive parameter into
+    a processor is a SENSITIVE DYNAMIC property — exactly what
+    ExecuteGroovyScript's binding-style dynamic properties are (the dedup
+    hash script's mechanism, already applied live-verified by
+    `nifi_apply._sensitive_dynamic_props`). So the whole login (body build +
+    POST + token extraction) collapses into one Groovy step whose PASSWORD
+    dynamic property carries the sensitive reference.
 
-    M7: `login` auto-terminates ONLY `Original`; `Failure`/`Retry`/`No Retry`
-    are connected to `run_failure__log` — exactly one disposition per
-    relationship (the builder-level invariant enforces this at compile time).
-
-    Run failures (login_body/login/extract_token) are NOT record failures —
-    no DLQ record is fabricated; they surface via the error-level log.
+    Wire: trigger/seed -> `login` -> (success) -> fetch (the caller links the
+    returned tail; fetch keeps the tokenTemplate-injected header value based
+    on `${session.token}`). `failure` (non-2xx login, missing token, script
+    error) is a RUN failure, not a record failure — routed to
+    `run_failure__log`, never DLQ'd, exactly one disposition per relationship
+    (the builder-level invariant checker enforces it).
     """
     sid = service.id
     login_path = str(service.config.get("loginPath", "/login"))
-    base_expr = f"#{{svc_{sid}_base_url}}"
+    token_path = str(service.config.get("tokenPath", "$.token"))
 
+    add_param(f"svc_{sid}_base_url", str(service.config.get("baseUrl", "")), False)
     add_param(f"svc_{sid}_username", str(service.config.get("username", "")), False)
     add_param(f"svc_{sid}_password", service.config.get("password"), True)
-    body = f'{{"username":"#{{svc_{sid}_username}}","password":"#{{svc_{sid}_password}}"}}'
-    builder.add_processor(
-        ProcessorSpec(key="login_body", name="login_body", type="org.apache.nifi.processors.standard.ReplaceText",
-                      properties={"Replacement Strategy": "Always Replace", "Replacement Value": body,
-                                  "Evaluation Mode": "Entire text", "Character Set": "UTF-8"})
-    )
-    builder.link(source_key, "login_body", ["success"] if source_key != "inputPort" else [])
 
-    props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": "POST",
-                              "HTTP URL": f"{base_expr}{login_path}",
-                              "Request Body Enabled": "true",
-                              "Request Content-Type": "application/json"}
     builder.add_processor(
-        ProcessorSpec(key="login", name="login", type="org.apache.nifi.processors.standard.InvokeHTTP",
-                      properties=props, autoTerminate=["Original"])
+        ProcessorSpec(key="login", name="login", type="org.apache.nifi.processors.groovyx.ExecuteGroovyScript",
+                      properties={
+                          "Script Body": GROOVY_SESSION_LOGIN_SCRIPT,
+                          "Failure Strategy": "rollback",
+                          "LOGIN_URL": f"#{{svc_{sid}_base_url}}{login_path}",
+                          "TOKEN_PATH": token_path,
+                          "USERNAME": f"#{{svc_{sid}_username}}",
+                          "PASSWORD": f"#{{svc_{sid}_password}}",
+                      })
     )
-    builder.link("login_body", "login", ["success"])
-
-    token_path = str(service.config.get("tokenPath", "$.token"))
-    builder.add_processor(
-        ProcessorSpec(key="extract_token", name="extract_token", type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                      properties={"Destination": "flowfile-attribute", "Return Type": "scalar",
-                                  "Path Not Found Behavior": "warn", "session.token": token_path})
-    )
-    builder.link("login", "extract_token", ["Response"])
+    builder.link(source_key, "login", ["success"] if source_key != "inputPort" else [])
 
     builder.add_processor(
         ProcessorSpec(key="run_failure__log", name="run_failure__log",
                       type="org.apache.nifi.processors.standard.LogAttribute",
                       properties={"Log Level": "error", "Log Payload": "false"}, autoTerminate=["success"])
     )
-    # Run failures (login chain) are NOT record failures -- no DLQ record.
-    builder.link("login_body", "run_failure__log", ["failure"])
-    builder.link("login", "run_failure__log", ["Failure", "Retry", "No Retry"])
-    builder.link("extract_token", "run_failure__log", ["failure", "unmatched"])
-    return "extract_token", "matched"
+    # Run failures (login) are NOT record failures -- no DLQ record.
+    builder.link("login", "run_failure__log", ["failure"])
+    return "login", "success"
 
 
 _EVALUATE_JSON_PATH = "org.apache.nifi.processors.standard.EvaluateJsonPath"
@@ -505,7 +559,7 @@ def _build_pagination(
 
     if ptype == "offset" or ptype == "page":
         page_meta_type = _EVALUATE_JSON_PATH
-        page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
+        page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "json",
                             "Path Not Found Behavior": "ignore", "probe": _probe_path(record_path)}
         cond = "${probe:isEmpty():not()}"
         next_props = (

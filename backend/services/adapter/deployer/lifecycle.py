@@ -701,6 +701,31 @@ def _owned_data_topic_names(flow_doc: Dict[str, Any]) -> List[str]:
     return names
 
 
+def _delete_candidate_data_topics(flow_doc: Dict[str, Any]) -> List[str]:
+    """Every data topic `delete()` must remove, DLQ excluded (the caller
+    lists the DLQ separately, always first).
+
+    Journey-R teardown gap (journey-r-reverify.md, cleanup item 2 /
+    DEFECT-6 family): `undeploy()` nulls `runtimeScopeMap`, so a flow
+    deleted from post-undeploy Draft state used to find NO owned data
+    topics via `_owned_data_topic_names` and leave `raw.<flow>.<entity>`
+    alive on the cluster (proven live: `raw.e2er_fresh.e2er_product`
+    survived while the DLQ — derived independently — was deleted). The
+    candidates are therefore the UNION of the scope map's recorded
+    ownership (real deploy-time record, kept for robustness against
+    post-deploy block edits) and the deterministic naming walk over the
+    flow's own blocks (`runtime._owned_topic_names`, the same derivation
+    the compiler/messages endpoints use) — the walk needs no deploy state
+    at all, closing the gap."""
+    # Function-level import: runtime.py imports this module's connection-dict
+    # helpers at module scope, so a module-level import here would be circular.
+    from services.adapter.runtime import _owned_topic_names
+
+    dlq = _dlq_topic_name(flow_doc)
+    names = set(_owned_data_topic_names(flow_doc)) | set(_owned_topic_names(flow_doc))
+    return sorted(n for n in names if n != dlq)
+
+
 def _dedup_epoch_bump_updates(flow: Flow) -> Dict[str, Any]:
     """M10: undeploy must clear dedup caches per MVP §7.9 — the same epoch-
     bump mechanism `clear_dedup_cache()` uses (Redis is not reachable from
@@ -768,9 +793,14 @@ async def delete(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     best-effort attempted regardless of whether `undeploy()` ran, and any
     individual failure is recorded as an orphan entry rather than silently
     dropped (`lifecycle.py` MINOR 13 in the review: `delete_topic` failures
-    used to be swallowed outright)."""
+    used to be swallowed outright).
+
+    Journey-R teardown gap: owned data topics are derived via
+    `_delete_candidate_data_topics` (scope map UNION naming walk) rather
+    than the scope map alone, so a delete AFTER undeploy (scope map already
+    nulled) still removes the flow's `raw.*` topics."""
     flow = Flow(**flow_doc)
-    owned_topics = _owned_data_topic_names(flow_doc)
+    owned_topics = _delete_candidate_data_topics(flow_doc)
     dlq_topic = _dlq_topic_name(flow_doc)
     connector_names = _all_connector_names(flow_doc)
     orphans: List[Dict[str, Any]] = []

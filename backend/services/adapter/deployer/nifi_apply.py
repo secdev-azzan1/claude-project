@@ -153,6 +153,12 @@ async def apply_plan(nifi_conn: Dict[str, Any], plan: DeploymentPlan) -> Applied
             await _apply_intra_connections(url, auth, groups[group.blockId], group, components[group.blockId])
 
         await _apply_port_links(url, auth, flow_pg_id, plan.rootGroup.connections, groups, components)
+
+        # R3-F1 (journey-r-reverify.md): all-or-nothing deploy — an INVALID
+        # processor anywhere in the just-built PG fails the whole apply (and
+        # the except below tears the PG down), instead of reporting a
+        # successful deploy for a flow that can never start.
+        await _await_valid_processors(url, auth, plan, components)
     except Exception as exc:
         logger.error("Applying plan for flow %s failed — deleting partial process group %s: %s", plan.flowId, flow_pg_id, exc)
         try:
@@ -295,7 +301,12 @@ async def _delete_pg_by_name(url: str, auth: Dict[str, Any], parent_pg_id: str, 
 
 # ---------------------------------------------------------- controller services
 
-_PARAM_REF_RE = re.compile(r"#\{([A-Za-z0-9_]+)\}")
+# Parameter names may embed a service id, and service ids contain hyphens
+# (`svc_svc-pw4309_password`) — the original `[A-Za-z0-9_]+` class silently
+# missed every such reference, so a sensitive-parameter reference inside a
+# dynamic property (e.g. the R3 session-login `PASSWORD`) never made it into
+# `sensitiveDynamicPropertyNames` and NiFi rejected the processor.
+_PARAM_REF_RE = re.compile(r"#\{([A-Za-z0-9_.-]+)\}")
 # Static, predefined-sensitive properties this compiler ever emits a
 # `#{sensitive_param}` reference into. NiFi rejects listing a STATIC
 # property in `sensitiveDynamicPropertyNames` (it isn't dynamic), so these
@@ -468,6 +479,78 @@ async def _apply_processors(url: str, auth: Dict[str, Any], gid: str, group: Blo
         if not pid:
             raise NifiApplyError(f"Failed to create processor {proc.name!r} ({proc.type}) in group {group.name!r}.")
         out_components[proc.key] = pid
+
+
+# ------------------------------------------------------------- validation gate
+
+# Validation is ASYNC in NiFi — a processor is created VALIDATING and only
+# settles to VALID/INVALID moments later, so the gate polls briefly before
+# judging. Module-level so tests can shrink the window.
+_VALIDATION_GATE_TIMEOUT_SECS = 10.0
+_VALIDATION_GATE_POLL_SECS = 1.0
+
+
+async def _await_valid_processors(
+    url: str, auth: Dict[str, Any], plan: DeploymentPlan, components: Dict[str, Dict[str, str]],
+) -> None:
+    """R3-F1 deploy validation gate (journey-r-reverify.md): after apply
+    builds everything, read every created processor's `validationStatus`
+    and refuse the deploy if ANY is INVALID — before this gate, a flow
+    whose compiled processor could never validate (the session-token
+    `login_body` sensitive-parameter case, proven live) still reported a
+    200/Stopped deploy and only failed at `start`.
+
+    Judged on `validationStatus` alone — every processor is deliberately
+    left STOPPED by apply (compiler-spec §7), so run state is never part of
+    the verdict ("merely stopped" is fine, INVALID is not). Poll loop:
+    VALIDATING keeps polling until `_VALIDATION_GATE_TIMEOUT_SECS`; still
+    VALIDATING at the deadline with nothing INVALID passes (the gate exists
+    to catch PROVEN-invalid processors, not to fail on an indeterminate
+    state). An unreadable processor GET is skipped best-effort — it never
+    fails the gate by itself. Raises `NifiApplyError` naming each INVALID
+    component and its validation errors, so the caller's teardown+502 path
+    surfaces the reasons."""
+    targets: List[Tuple[str, str, str]] = []
+    for group in plan.rootGroup.childGroups:
+        comp_map = components.get(group.blockId) or {}
+        for proc in group.processors:
+            pid = comp_map.get(proc.key)
+            if pid:
+                targets.append((group.name, proc.name, pid))
+    if not targets:
+        return
+
+    deadline = asyncio.get_event_loop().time() + _VALIDATION_GATE_TIMEOUT_SECS
+    invalid: List[Tuple[str, str, List[str]]] = []
+    while True:
+        invalid = []
+        validating = False
+        for group_name, proc_name, pid in targets:
+            r = await nifi_api_request(url, "GET", f"/nifi-api/processors/{pid}", **auth)
+            if not r.get("ok"):
+                continue  # best-effort read; never fails the gate by itself
+            comp = (r.get("data") or {}).get("component") or {}
+            status = str(comp.get("validationStatus") or "").upper()
+            if status == "VALIDATING":
+                validating = True
+            elif status == "INVALID":
+                errors = [str(e) for e in (comp.get("validationErrors") or [])]
+                invalid.append((group_name, proc_name, errors))
+        if not invalid and not validating:
+            return
+        if asyncio.get_event_loop().time() >= deadline:
+            break
+        await asyncio.sleep(_VALIDATION_GATE_POLL_SECS)
+
+    if invalid:
+        details = "; ".join(
+            f"{group_name}/{proc_name}: {'; '.join(errors) if errors else 'no validation detail from NiFi'}"
+            for group_name, proc_name, errors in invalid
+        )
+        raise NifiApplyError(
+            f"Deploy refused — {len(invalid)} processor(s) failed NiFi validation after apply "
+            f"(all-or-nothing deploy): {details}"
+        )
 
 
 # --------------------------------------------------------------------------- ports

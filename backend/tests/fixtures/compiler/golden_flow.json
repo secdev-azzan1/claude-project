@@ -134,7 +134,7 @@
             "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
             "properties": {
               "Destination": "flowfile-attribute",
-              "Return Type": "scalar",
+              "Return Type": "json",
               "Path Not Found Behavior": "ignore",
               "probe": "$.resources[0]"
             },

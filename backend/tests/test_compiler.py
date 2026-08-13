@@ -383,46 +383,54 @@ def test_session_token_login_ahead_of_fetch():
     group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-fetch")
     keys = [p.key for p in group.processors]
 
-    assert "login_body" in keys and "login" in keys and "extract_token" in keys and "fetch" in keys
-    assert keys.index("login_body") < keys.index("login") < keys.index("extract_token") < keys.index("fetch")
+    # R3 (journey-r-reverify.md): ONE ExecuteGroovyScript login step. The
+    # previous ReplaceText-JSON-body chain was PROVEN UNDEPLOYABLE live —
+    # NiFi refuses a `#{sensitive param}` reference inside a non-sensitive
+    # STATIC property ("the Sensitivity of the parameter does not match the
+    # Sensitivity of the property"), and `sensitiveDynamicPropertyNames`
+    # cannot cover a static descriptor. Only a SENSITIVE DYNAMIC property
+    # (ExecuteGroovyScript's binding mechanism, same as the dedup hash
+    # script) can legally carry the password.
+    assert "login" in keys and "fetch" in keys
+    assert "login_body" not in keys and "extract_token" not in keys
+    assert keys.index("login") < keys.index("fetch")
 
-    # E5: the login credentials travel as a JSON request BODY rendered by a
-    # ReplaceText step (both values parameter references, password sensitive)
-    # — the Basic-Auth-property approach was proven broken live.
-    body = next(p for p in group.processors if p.key == "login_body")
-    assert body.type == "org.apache.nifi.processors.standard.ReplaceText"
-    assert body.properties["Replacement Strategy"] == "Always Replace"
-    assert body.properties["Replacement Value"] == (
-        '{"username":"#{svc_svc-fs_username}","password":"#{svc_svc-fs_password}"}'
-    )
+    login = next(p for p in group.processors if p.key == "login")
+    assert login.type == "org.apache.nifi.processors.groovyx.ExecuteGroovyScript"
+    assert login.properties["LOGIN_URL"] == "#{svc_svc-fs_base_url}/phoenix/rest/h5/sec/login"
+    assert login.properties["TOKEN_PATH"] == "$.sessionToken"
+    assert login.properties["USERNAME"] == "#{svc_svc-fs_username}"
+    assert login.properties["PASSWORD"] == "#{svc_svc-fs_password}"
+    assert "Request Username" not in login.properties  # no Basic-Auth props
+    assert "Request Password" not in login.properties
+
     pw_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-fs_password")
     assert pw_param.sensitive is True
 
-    login = next(p for p in group.processors if p.key == "login")
-    assert login.type == "org.apache.nifi.processors.standard.InvokeHTTP"
-    assert login.properties["HTTP URL"] == "#{svc_svc-fs_base_url}/phoenix/rest/h5/sec/login"
-    assert login.properties["HTTP Method"] == "POST"
-    assert login.properties["Request Body Enabled"] == "true"
-    assert login.properties["Request Content-Type"] == "application/json"
-    assert "Request Username" not in login.properties  # Basic Auth removed (E5)
-    assert "Request Password" not in login.properties
-    # M7: exactly one disposition per relationship — Original auto-terminates,
-    # Failure/Retry/No Retry are connected (to run_failure__log), never both.
-    assert login.autoTerminate == ["Original"]
-    login_failure_conns = [c for c in group.connections if c.from_ == "login" and c.to == "run_failure__log"]
-    assert login_failure_conns and set(login_failure_conns[0].relationships) == {"Failure", "Retry", "No Retry"}
+    # The deployer lists PASSWORD (and ONLY it) in the processor's
+    # sensitiveDynamicPropertyNames — assert with the real nifi_apply helper
+    # so the compiler test breaks if the two modules ever drift apart.
+    from services.adapter.deployer.nifi_apply import _sensitive_dynamic_props
+    sensitive_names = {p.name for p in plan.parameterContext.parameters if p.sensitive}
+    assert _sensitive_dynamic_props(login.properties, sensitive_names) == ["PASSWORD"]
 
-    extract_token = next(p for p in group.processors if p.key == "extract_token")
-    assert extract_token.properties["session.token"] == "$.sessionToken"
+    # The Groovy script does the whole login: POST JSON body, parse, resolve
+    # the token dot-path, set `session.token`, REL_FAILURE on any run failure.
+    script = login.properties["Script Body"]
+    assert "JsonOutput.toJson([username: username, password: password])" in script
+    assert "JsonSlurper" in script
+    assert "session.token" in script
+    assert "REL_SUCCESS" in script and "REL_FAILURE" in script
+
+    # success feeds fetch; failure is a RUN failure -> run_failure__log,
+    # never a DLQ record. Exactly one disposition per relationship (M7).
+    assert any(c.from_ == "login" and c.to == "fetch" and c.relationships == ["success"] for c in group.connections)
+    fail_conns = [c for c in group.connections if c.from_ == "login" and c.to == "run_failure__log"]
+    assert fail_conns and fail_conns[0].relationships == ["failure"]
+    assert not any(c.from_ == "login" and c.to == "dlq" for c in group.connections)
 
     fetch = next(p for p in group.processors if p.key == "fetch")
     assert fetch.properties["Authorization"] == "${session.token}"  # injection header on the fetch call
-
-    # Login-chain failures are run failures, not record failures -- no DLQ record.
-    dlq_from_login = [c for c in group.connections if c.from_ in ("login_body", "login", "extract_token") and c.to == "dlq"]
-    assert dlq_from_login == []
-    assert any(c.to == "run_failure__log" for c in group.connections if c.from_ == "login_body")
-    assert any(c.to == "run_failure__log" for c in group.connections if c.from_ == "extract_token")
 
 
 def test_session_token_header_honors_token_template():
@@ -933,6 +941,46 @@ def test_pagination_cursor_template_on_fetch_url():
     assert page_meta.properties["next_cursor"] == "$.meta.next"
     nxt = next(p for p in group.processors if p.key == "next")
     assert nxt.properties["cursor"] == "${next_cursor}"
+
+
+def test_pagination_offset_page_meta_probe_return_type_json():
+    """R2-D1 regression (journey-r-reverify.md): the offset/page probe
+    (`$.items[0]`) evaluates to a JSON OBJECT — EvaluateJsonPath with
+    `Return Type: scalar` routes any non-scalar result to `failure`
+    (attribute destination), so the continuation check never ran: every
+    offset/page-paginated read froze after page 1 AND fabricated the raw
+    page into the DLQ on every run. Proven live (30-and-frozen), then
+    194/194 with `Return Type: json`."""
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "offset", "fields": {"offsetParam": "offset", "limitParam": "limit", "limitValue": "30"}}
+    ), http_svc_ctx())
+    page_meta = next(p for p in _read_group(plan).processors if p.key == "page_meta")
+    assert page_meta.properties["Return Type"] == "json"
+    assert page_meta.properties["probe"] == "$.items[0]"  # object-valued probe
+
+
+def test_pagination_page_page_meta_probe_return_type_json():
+    """Same R2-D1 regression guard for the `page` style — it shares the
+    offset branch's object-valued probe in `_build_pagination`."""
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "page", "fields": {"pageParam": "page", "sizeParam": "size", "firstPage": "1", "sizeValue": "50"}}
+    ), http_svc_ctx())
+    page_meta = next(p for p in _read_group(plan).processors if p.key == "page_meta")
+    assert page_meta.properties["Return Type"] == "json"
+
+
+def test_pagination_cursor_and_next_url_page_meta_stay_scalar():
+    """The cursor/next_url probes (`next_cursor`/`next_url`) genuinely ARE
+    scalars — the R2-D1 fix must not leak into those branches."""
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "cursor", "fields": {"cursorParam": "cursor", "cursorPath": "$.meta.next"}}
+    ), http_svc_ctx())
+    page_meta = next(p for p in _read_group(plan).processors if p.key == "page_meta")
+    assert page_meta.properties["Return Type"] == "scalar"
+
+    plan = compile_flow(_paginated_read_flow({"type": "next_url", "fields": {"urlPath": "$.next"}}), http_svc_ctx())
+    page_meta = next(p for p in _read_group(plan).processors if p.key == "page_meta")
+    assert page_meta.properties["Return Type"] == "scalar"
 
 
 def test_pagination_next_url_keeps_request_url_attribute():

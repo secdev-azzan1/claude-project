@@ -751,6 +751,49 @@ async def test_delete_still_undeploys_when_deployed_and_records_no_double_connec
     assert result["orphans"] == []
 
 
+# ------------------------------------------------- 7b. Journey-R teardown gap: delete after undeploy
+
+
+@async_test
+async def test_delete_after_undeploy_still_deletes_derived_data_topics(monkeypatch):
+    """Journey-R teardown gap (journey-r-reverify.md cleanup item 2):
+    `undeploy()` nulls `runtimeScopeMap`, so deleting the flow from its
+    post-undeploy Draft state used to find NO owned data topics and leave
+    `raw.<flow>.<entity>` alive on the cluster (proven live:
+    `raw.e2er_fresh.e2er_product` survived; the DLQ, derived independently,
+    was deleted). `delete()` now derives the data topics via the naming
+    walk regardless of deploy state."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(
+        flow_id="flow-post-undeploy-1", state="Draft",
+        deployedAt=None, nifiProcessGroupId=None, runtimeScopeMap=None,  # undeploy() already ran
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fail_if_undeploy_called(*args, **kwargs):
+        raise AssertionError("undeploy() must not run for an already-undeployed flow")
+
+    monkeypatch.setattr(lifecycle, "undeploy", fail_if_undeploy_called)
+
+    delete_topic_calls = []
+
+    async def fake_delete_topic(kafka_conn, name):
+        delete_topic_calls.append(name)
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    result = await lifecycle.delete(fake_db, flow_doc)
+
+    # The data topic comes from the naming walk (blocks), NOT the (nulled) scope map.
+    assert "raw.test_flow.thing" in delete_topic_calls
+    assert "dlq.test_flow" in delete_topic_calls
+    assert result["ok"] is True
+    assert result["orphans"] == []
+    assert fake_db.flows_v2.docs == []
+
+
 # ------------------------------------------------------------------ 8. M10: undeploy clears dedup
 
 
@@ -913,6 +956,71 @@ async def test_deploy_dedup_config_unchanged_no_warning_no_bump(monkeypatch):
 
     assert not second.get("preflightWarnings")
     assert (second["blocks"][1]["transforms"][0]["config"].get("dedupEpoch") or 0) == 0
+
+
+# ------------------------------------------------------- 9b. R3-F1: post-apply validation gate
+
+
+@async_test
+async def test_deploy_fails_when_processor_invalid_after_apply(monkeypatch):
+    """R3-F1 (journey-r-reverify.md): deploy() must NOT report success while
+    a compiled processor is INVALID in NiFi (proven live — the session-token
+    flow's login step could never validate, yet deploy returned 200/Stopped
+    and the failure only surfaced at start). The gate runs inside the REAL
+    `apply_plan` here (only `nifi_api_request` is faked): INVALID ->
+    best-effort PG teardown -> NifiApplyError -> LifecycleError (502 at the
+    router), and NO deployed state is persisted."""
+    from tests.test_nifi_apply import FakeNifi
+
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-invalid-proc-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    fake = FakeNifi(invalid_processor_names={"fetch"},
+                    validation_errors=["'HTTP URL' is invalid because the property cannot be resolved."])
+    monkeypatch.setattr(nifi_apply, "nifi_api_request", fake.request)
+
+    async def fake_root_pg(*args, **kwargs):
+        return "root-pg"
+
+    monkeypatch.setattr(nifi_apply, "get_nifi_root_process_group_id", fake_root_pg)
+    monkeypatch.setattr(nifi_apply, "_VALIDATION_GATE_TIMEOUT_SECS", 0.0)
+    monkeypatch.setattr(nifi_apply, "_VALIDATION_GATE_POLL_SECS", 0.0)
+
+    async def fake_cs_config(url, cs_id, **kwargs):
+        return {"state": "ENABLED", "validation_errors": []}
+
+    monkeypatch.setattr(nifi_apply.nifi_flow_manager, "get_controller_service_config", fake_cs_config)
+
+    teardown_calls = []
+
+    async def fake_delete_flow_pg(conn, pg_id):
+        teardown_calls.append(pg_id)
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    try:
+        await lifecycle.deploy(fake_db, flow_doc)
+        assert False, "expected LifecycleError"
+    except lifecycle.LifecycleError as exc:
+        msg = str(exc)
+        assert "fetch" in msg  # component named in the surfaced 502 reason
+        assert "'HTTP URL' is invalid" in msg
+
+    assert len(teardown_calls) == 1  # the created PG was torn down
+
+    stored = fake_db.flows_v2.docs[0]
+    assert stored["state"] == "Draft"  # never flipped to Stopped/deployed
+    assert stored.get("nifiProcessGroupId") is None
+    assert stored.get("runtimeScopeMap") is None
+    assert stored.get("deployedAt") is None
+    failed_events = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deploy failed"]
+    assert len(failed_events) == 1
 
 
 # ------------------------------------------------------- 10. M13: topic reservation
