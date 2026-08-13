@@ -16,3 +16,19 @@ Records actual evidence for anything marked VERIFIED. No entry = not verified.
 - transforms.py: unused `List` import; connectors.py: unused `Optional` import.
 - dlq.py build() + routing.py wire_children(): unused `flow` params (tidy or use).
 - blocks_jdbc.py compile_entry(): stub signature parity noted as intentional — keep.
+
+## Flow-engine review triage (Opus review, 2026-08-13)
+
+Full review: reviews/flow-engine-review.md (4 CRITICAL / 17 MAJOR / 16 MINOR).
+Confirmed-correct areas: dedup ordering/hash/TTL/namespace, routing multi-processor
+structure+EL, terminal enforcement, secrets, scope map, determinism, naming parity.
+
+Empirical cross-checks pending from E2E journeys:
+- C1 (cron translation malformed): Journey A DID deploy+later verbs with cron */2 — severity
+  may be "wrong schedule" rather than "cannot deploy"; verify actual GenerateFlowFile
+  scheduling + firing behavior from Journey A evidence, then fix translation regardless.
+- C2 (RouteOnAttribute failure rel): Journey B (routing) will confirm live.
+- C3 (QueryDatabaseTableRecord failure rel): no jdbc journey — fix from review directly.
+- C4 (pagination attr never re-evaluated): journeys don't use pagination — fix from review
+  + targeted live retest of one paginated flow.
+Correction wave to follow E2E completion; M-findings triaged with it.

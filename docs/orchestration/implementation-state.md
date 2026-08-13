@@ -29,20 +29,20 @@ Last updated: 2026-08-13 (backend v2 integrated + live-verified; api swap + comp
 | T5.3 Granular delete | IMPLEMENTED | version delete (registry best-effort, last-version rule) + whole delete (deployed-flow 409) |
 | T5.4 Upload inference | IMPLEMENTED | /infer multipart json/ndjson/csv/xlsx/xml + recordPath + suggestions |
 | T6.1 OpenAPI port | IMPLEMENTED | routers/v2/openapi.py; 9/9 tests; suite 362 pass (1 pre-existing env fail) |
-| T7.1 Compiler IR | IMPLEMENTED | 7/7 tests incl golden+determinism; jdbc/kafka-read/http-write stubs pending; branch-key collision guarded |
-| T7.2 NiFi deployer | IN PROGRESS | agent running (live NiFi integration test mandated) |
-| T7.3 Connect deployer | IN PROGRESS | same agent |
-| T7.4 Verbs | IN PROGRESS | same agent; dedup-cache clear via epoch namespace |
-| T7.5 Runtime/metrics/test | NOT STARTED | |
-| T8.1 api.ts swap | IN PROGRESS | agent running |
+| T7.1 Compiler IR | IMPLEMENTED | 7/7 tests; stub-fill agent running (jdbc/kafka-read/http-write/lookup/csv-xml) |
+| T7.2 NiFi deployer | VERIFIED | LIVE apply+teardown on nifi.datapasc.com (dmp_ci_smoke: 2 block PGs, 8 procs, CS enabled); recursive CS-disable fix |
+| T7.3 Connect deployer | IMPLEMENTED | connect_apply.py; live check in E2E |
+| T7.4 Verbs | IMPLEMENTED | lifecycle.py all verbs + preflight + dedup epoch clear; suite 554 pass |
+| T7.5 Runtime/metrics/test | IN PROGRESS | agent running |
+| T8.1 api.ts swap | VERIFIED | 66 exports mapped; 14-test live smoke incl. full flow write path; vitest 157 green |
 | T8.U1 Dashboard sink card | IMPLEMENTED | label+hint trimmed; vitest 148 green |
 | T8.U2 APISIX UI edits | IMPLEMENTED | ConnectionHeader card removed; cert dialog; allowlist polish w/ admin gate |
 | T8.U3 Schemas editor consistency | IMPLEMENTED | all 5 changes; new api fns saveApprovedSchemaDraft/deleteApprovedSchemaVersion/deleteApprovedSchema; vitest 148 green |
 | T8.U4 New-schema upload/infer | IMPLEMENTED | SampleInferencePanel shared w/ ceremony; two-path New template; vitest 148 green |
-| T8.U5 Verify/Register actions | NOT STARTED | |
+| T8.U5 Verify/Register actions | VERIFIED | live: verify+compat checks, register -> global id 45; vitest 157 green |
 | T8.U6 Flows page changes | IMPLEMENTED | Deploy direct button; Root column removed; Overview rebuilt (Deployment/Entity outputs/Blocks/Topics) |
 | T8.U7 Service "Set up here" | IMPLEMENTED | ToggleGroup 2-mode ServiceSelector; sink pickers share it; vitest 148 green |
-| T8.U8 OpenAPI upload UI | NOT STARTED | |
+| T8.U8 OpenAPI upload UI | VERIFIED | live parse/search/detail verified; combobox path picker; operationsCount projection bug found+fixed w/ regression test |
 | T8.U9 Remove Egress block | IMPLEMENTED | EgressLine removed from BlockForm; validation.ts untouched |
 | T8.U10 Dedup polish | IMPLEMENTED | window unit control + bounds validators + captions + clear-cache action; vitest 157 green |
 | T8.U11 Test block wiring | NOT STARTED | |
