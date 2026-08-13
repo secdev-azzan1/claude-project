@@ -61,10 +61,13 @@ import {
   listFlows,
   listSchemaTemplates,
   listSchemas,
+  registerSchema,
   saveApprovedAsTemplate,
   saveApprovedSchemaDraft,
   saveSchemaTemplate,
   stageCeremonyDraft,
+  verifySchema,
+  type VerifySchemaResult,
 } from "@/prototype/api";
 import type { InferenceReport } from "@/prototype/inference";
 import type { ApprovedSchema, Flow, SchemaApproval, SchemaProvenance, SchemaTemplate } from "@/prototype/types";
@@ -79,6 +82,7 @@ import {
   Search,
   ShieldCheck,
   Trash2,
+  UploadCloud,
   Wand2,
   X,
 } from "lucide-react";
@@ -123,6 +127,17 @@ const PROVENANCE_META: Record<
 };
 
 const PROVENANCE_ORDER: SchemaProvenance[] = ["sample_run", "uploaded", "manual"];
+
+/** "Security incident envelope" -> "security-incident-envelope-value" — a starting
+ *  point for the Register dialog's subject, never forced on the user. */
+const suggestSubject = (name: string): string => {
+  const token = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${token || "schema"}-value`;
+};
 
 // ------------------------------------------------------------------- checks
 
@@ -271,6 +286,72 @@ function CheckPanel({ lines }: { lines: CheckLine[] }) {
 }
 
 /**
+ * Backend `/api/v2/schemas/verify` results, rendered where the buffer they
+ * judge is. Independent of the ceremony's local `checkAvroRecord` — this is
+ * the live registry's own read, structural + (when a subject was given)
+ * compatibility against the latest registered version.
+ */
+function VerifyPanel({ result, onDismiss }: { result: VerifySchemaResult; onDismiss: () => void }) {
+  const failed = result.issues.length;
+  return (
+    <div
+      className={cn(
+        "mb-3 space-y-1 rounded-md border p-2.5",
+        failed > 0 ? "border-destructive/40 bg-destructive/5" : "border-success/40 bg-success-muted",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium">
+          {failed > 0 ? `${failed} structural issue(s) found` : "Schema is valid"}
+        </p>
+        <button
+          type="button"
+          className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Dismiss"
+          onClick={onDismiss}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {failed > 0 ? (
+        <ul className="space-y-1">
+          {result.issues.map((issue, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-xs text-destructive">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{issue}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>Structurally valid Avro — it parses and normalises.</span>
+        </p>
+      )}
+      {result.compatibility.checked && (
+        <p
+          className={cn(
+            "flex items-start gap-1.5 text-xs",
+            result.compatibility.compatible ? "text-muted-foreground" : "text-destructive",
+          )}
+        >
+          {result.compatibility.compatible ? (
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          )}
+          <span>
+            {result.compatibility.compatible
+              ? "Compatible with latest registered version."
+              : result.compatibility.message}
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
  * Summary of a "New template → Infer from sample files" run, shown once above
  * the freshly created template's editor. Purely transient client-side state —
  * dismissing it (or navigating to a different artifact) loses nothing that
@@ -381,6 +462,11 @@ const Schemas = () => {
   const [ceremonyPickerFor, setCeremonyPickerFor] = useState<SchemaTemplate | null>(null);
   /** Structural check results, shown against the artifact that produced them. */
   const [checkFor, setCheckFor] = useState<{ id: string; lines: CheckLine[] } | null>(null);
+  /** Live backend `/verify` results — independent of the ceremony's local check. */
+  const [verifyFor, setVerifyFor] = useState<{ id: string; result: VerifySchemaResult } | null>(null);
+  /** Template being registered directly (independently of any flow ceremony). */
+  const [registerFor, setRegisterFor] = useState<SchemaTemplate | null>(null);
+  const [registerSubject, setRegisterSubject] = useState("");
 
   // ─── artifact list ────────────────────────────────────────────────────
   const artifacts = useMemo<Artifact[]>(() => {
@@ -507,6 +593,7 @@ const Schemas = () => {
   useEffect(() => {
     setApprovalVersion(null);
     setCheckFor(null);
+    setVerifyFor(null);
   }, [selected?.id]);
 
   useEffect(() => {
@@ -603,6 +690,36 @@ const Schemas = () => {
       setDeleteTarget(null);
       setSelectedId("");
       void invalidateSchemas();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Independent of the ceremony: structural validation + (when a subject is
+  // known) a registry compatibility check, WITHOUT registering anything.
+  const verifyMut = useMutation({
+    mutationFn: (vars: { id: string; avro: unknown; subject?: string }) => verifySchema(vars.avro, vars.subject),
+    onSuccess: (result, vars) => {
+      setVerifyFor({ id: vars.id, result });
+      if (!result.ok) {
+        toast.error(`${result.issues.length} structural issue(s) found.`);
+      } else if (result.compatibility.checked && result.compatibility.compatible === false) {
+        toast.error("Valid, but not compatible with the latest registered version.");
+      } else {
+        toast.success("Schema is valid.");
+      }
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  // Independent of the ceremony: registers straight to the registry.
+  const registerMut = useMutation({
+    mutationFn: (vars: { subject: string; avro: unknown; templateId?: string }) =>
+      registerSchema(vars.subject, vars.avro, vars.templateId),
+    onSuccess: (result) => {
+      toast.success(`Registered — ${result.subject} (global id ${result.globalId})`);
+      setRegisterFor(null);
+      void invalidateSchemas();
+      void invalidateTemplates();
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -725,12 +842,28 @@ const Schemas = () => {
       )
       .map((f) => f.name);
 
-  const runCheck = (id: string) => {
-    const lines = checkAvroRecord(buffer.record, buffer.rawError ?? null);
-    setCheckFor({ id, lines });
-    const failures = lines.filter((l) => l.level === "fail").length;
-    if (failures === 0) toast.success("Checks passed — this shape can be registered.");
-    else toast.error(`${failures} problem(s) would stop registration.`);
+  /**
+   * Ask the live backend to verify the current buffer: structural Avro
+   * validation, plus — when `subject` is known — a registry compatibility
+   * check against its latest version. Registers nothing.
+   */
+  const runVerify = (id: string, subject?: string) => {
+    if (buffer.rawError) {
+      toast.error(`Cannot verify: ${buffer.rawError}`);
+      return;
+    }
+    if (!buffer.record) {
+      toast.error("There is no valid Avro record to verify.");
+      return;
+    }
+    verifyMut.mutate({ id, avro: buffer.record, subject });
+  };
+
+  /** Open the independent Register dialog, pre-filled from the template's
+   *  last direct registration (if any) or a tokenized suggestion. */
+  const openRegisterForTemplate = (template: SchemaTemplate) => {
+    setRegisterFor(template);
+    setRegisterSubject(template.registeredSubject || suggestSubject(template.name));
   };
 
   /**
@@ -979,8 +1112,23 @@ const Schemas = () => {
                           >
                             <Wand2 className="h-3.5 w-3.5" /> Register new version…
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => runCheck(selectedSchema.id)}>
-                            <ShieldCheck className="h-3.5 w-3.5" /> Check
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!!buffer.rawError || verifyMut.isPending}
+                            title={
+                              buffer.rawError
+                                ? `Cannot verify: ${buffer.rawError}`
+                                : "Structural validation plus a registry compatibility check against the latest registered version — registers nothing"
+                            }
+                            onClick={() => runVerify(selectedSchema.id, selectedSchema.subject)}
+                          >
+                            {verifyMut.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                            )}
+                            Verify
                           </Button>
                           <Button
                             size="sm"
@@ -1096,6 +1244,9 @@ const Schemas = () => {
                   )}
 
                   {checkFor?.id === selectedSchema.id && <CheckPanel lines={checkFor.lines} />}
+                  {verifyFor?.id === selectedSchema.id && (
+                    <VerifyPanel result={verifyFor.result} onDismiss={() => setVerifyFor(null)} />
+                  )}
 
                   <AvroEditorTabs
                     buffer={buffer}
@@ -1145,6 +1296,32 @@ const Schemas = () => {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={!!buffer.rawError || verifyMut.isPending}
+                        title={
+                          buffer.rawError
+                            ? `Cannot verify: ${buffer.rawError}`
+                            : "Structural validation plus a registry compatibility check against the latest registered version — registers nothing"
+                        }
+                        onClick={() => runVerify(selectedTemplate.id, selectedTemplate.registeredSubject)}
+                      >
+                        {verifyMut.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                        )}
+                        Verify
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title="Register the current buffer to the registry immediately — independent of any flow ceremony"
+                        onClick={() => openRegisterForTemplate(selectedTemplate)}
+                      >
+                        <UploadCloud className="h-3.5 w-3.5" /> Register…
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         onClick={() => setDeleteTarget({ kind: "template", template: selectedTemplate })}
                       >
                         <Trash2 className="h-3.5 w-3.5" /> Delete
@@ -1171,6 +1348,9 @@ const Schemas = () => {
                     />
                   )}
                   {checkFor?.id === selectedTemplate.id && <CheckPanel lines={checkFor.lines} />}
+                  {verifyFor?.id === selectedTemplate.id && (
+                    <VerifyPanel result={verifyFor.result} onDismiss={() => setVerifyFor(null)} />
+                  )}
                   <AvroEditorTabs buffer={buffer} emptyLabel="This template's Avro could not be parsed." />
                 </CardContent>
 
@@ -1326,6 +1506,52 @@ const Schemas = () => {
             >
               {saveAsTemplateMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Save to library
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ------------------------------------------------------- independent register */}
+      <Dialog open={!!registerFor} onOpenChange={(open) => !open && setRegisterFor(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Register “{registerFor?.name}”</DialogTitle>
+            <DialogDescription>
+              This registers the current buffer to the registry immediately, under the subject below —
+              independently of any flow ceremony. It does not create an approved schema or bind this template to a
+              flow.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Subject</Label>
+            <Input
+              value={registerSubject}
+              onChange={(event) => setRegisterSubject(event.target.value)}
+              placeholder="topic-name-value"
+              className="font-mono"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegisterFor(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                registerMut.isPending || !registerSubject.trim() || !buffer.record || !!buffer.rawError
+              }
+              title={buffer.rawError ? `Cannot register: ${buffer.rawError}` : undefined}
+              onClick={() =>
+                registerFor &&
+                buffer.record &&
+                registerMut.mutate({
+                  subject: registerSubject.trim(),
+                  avro: buffer.record,
+                  templateId: registerFor.id,
+                })
+              }
+            >
+              {registerMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Register
             </Button>
           </DialogFooter>
         </DialogContent>

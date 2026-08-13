@@ -530,6 +530,8 @@ function toSchemaTemplate(doc: Record<string, unknown>): SchemaTemplate {
     rawAvro: avro ? JSON.stringify(avro, null, 2) : "",
     createdAt: doc.createdAt as string,
     updatedAt: doc.updatedAt as string,
+    ...(doc.registeredSubject ? { registeredSubject: doc.registeredSubject as string } : {}),
+    ...(doc.registryGlobalId != null ? { registryGlobalId: doc.registryGlobalId as number } : {}),
   };
 }
 
@@ -612,6 +614,53 @@ export async function deleteApprovedSchemaVersion(schemaId: string, version: num
 /** Delete an approved schema entirely — every approval, gone with it. */
 export async function deleteApprovedSchema(schemaId: string): Promise<void> {
   await request(`/api/v2/schemas/${schemaId}`, { method: "DELETE" });
+}
+
+// ---------------------------------------- verify / register (independent)
+// Neither of these goes through the ceremony: `verify` is a read-only check
+// (structural + optional registry compatibility), `register` writes straight
+// to the registry. Both operate on whatever buffer the caller hands them.
+
+export interface VerifySchemaResult {
+  ok: boolean;
+  /** Structural Avro problems, if any — empty when `ok`. */
+  issues: string[];
+  compatibility: {
+    /** False when no subject was given, the schema was structurally invalid, or no registry connection exists. */
+    checked: boolean;
+    compatible: boolean | null;
+    message: string;
+  };
+}
+
+/** Structural Avro validation, plus — when `subject` is given — a registry
+ *  compatibility check against its latest version. Registers nothing. */
+export async function verifySchema(avro: unknown, subject?: string): Promise<VerifySchemaResult> {
+  return request<VerifySchemaResult>("/api/v2/schemas/verify", {
+    method: "POST",
+    body: { avro, ...(subject ? { subject } : {}) },
+  });
+}
+
+export interface RegisterSchemaResult {
+  globalId: number;
+  subject: string;
+  /** The registry's own version marker — shape varies by registry backend (string or number). */
+  version: string | number | null;
+}
+
+/** Register `avro` under `subject` directly, no ceremony. When `templateId`
+ *  is given, the backend also stamps the template with `registeredSubject` /
+ *  `registryGlobalId` so a later Register pre-fills from it. */
+export async function registerSchema(
+  subject: string,
+  avro: unknown,
+  templateId?: string,
+): Promise<RegisterSchemaResult> {
+  return request<RegisterSchemaResult>("/api/v2/schemas/register", {
+    method: "POST",
+    body: { subject, avro, ...(templateId ? { templateId } : {}) },
+  });
 }
 
 // ------------------------------------------------------- library templates

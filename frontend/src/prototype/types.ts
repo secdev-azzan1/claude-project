@@ -208,6 +208,15 @@ export interface SchemaTemplate {
   rawAvro: string; // pretty-printed Avro JSON; MUST parse via normalizeAvroRecord
   createdAt: string;
   updatedAt: string;
+  /**
+   * Set once this template has been registered directly (via the
+   * independent "Register…" action, not a ceremony) — the registry
+   * subject it was last registered under. Pre-fills the Register dialog's
+   * subject field on subsequent registrations.
+   */
+  registeredSubject?: string;
+  /** Global id from the most recent direct registration, alongside `registeredSubject`. */
+  registryGlobalId?: number;
 }
 
 // ------------------------------------------------------------ connections
