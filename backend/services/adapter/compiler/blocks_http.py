@@ -1,11 +1,10 @@
 """`http` adapter compilation — compiler-spec.md §3.1.
 
-FULL scope for T7.1: `read` mode only (GET), all six auth modes, proxy
-egress base-URL swap, all four pagination styles, JSON response parsing
-(split and no-split). `write`/`lookup` modes raise `NotImplementedError` —
-they land in a follow-up task (csv/xml/text response parsing likewise).
+FULL scope: all three modes (read/write/lookup), all six auth modes, proxy
+egress base-URL swap, all four pagination styles (read only), json/csv/xml
+response parsing.
 
-Design used throughout: `fetch`'s "HTTP URL" property is ALWAYS
+Design used throughout (read mode): `fetch`'s "HTTP URL" property is ALWAYS
 `${request.url}` — `init` seeds `request.url` to an EL template containing
 the literal (unevaluated) `${offset}`/`${page}`/`${cursor}` placeholders for
 the first three pagination styles (NiFi re-evaluates the template fresh each
@@ -16,25 +15,39 @@ absolute URL each iteration, since there is no query template to re-evaluate.
 
 Response parsing runs BEFORE the pagination-continue check (compiler-spec
 §3.1 lists parsing at step 5, pagination at step 6): `fetch`'s `Response`
-relationship goes to `SplitJson` (when `split: true`) or directly onward
-(when `split: false`); `SplitJson`'s `split` relationship feeds the record
-chain unconditionally, while its `original` relationship (or, when not
-splitting, a second connection off `fetch`'s own `Response` relationship)
-feeds `page_meta` — matching the rapid7-securado/sentinelone reference flows'
-"decouple pagination-continue from per-record processing" shape (see
+relationship goes to `_parse_response()` (json: `SplitJson` directly;
+csv/xml: `ConvertRecord` CSVReader/XMLReader -> JsonRecordSetWriter first,
+landing every format on the same per-record JSON shape the rest of the
+compiler assumes, THEN `SplitJson` — see that function's docstring for why
+`SplitXml` was NOT picked for xml) or directly onward (when `split: false`);
+`SplitJson`'s `split` relationship feeds the record chain unconditionally,
+while its `original` relationship (or, when not splitting, a second
+connection off `fetch`'s own `Response` relationship) feeds `page_meta` —
+matching the rapid7-securado/sentinelone reference flows' "decouple
+pagination-continue from per-record processing" shape (see
 `docs/orchestration/analysis/nifi-reference-flows.md` §4.7/§5.7).
+
+`write`/`lookup` modes (both new): entry point is still the public
+`compile_read()` — `compile_flow.py` always calls that one name regardless
+of `block.mode` — so it dispatches internally to `_compile_write()` /
+`_compile_lookup()`. See those functions' docstrings for the write-mode
+"chain continues with" (`writeForwards`) design and the lookup-mode
+response-merge design, including the honest limitation the lookup chain
+documents (no true two-flowfile-lineage merge — NiFi has no join primitive
+in scope here).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+import re
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from models.adapter import AppService, FlowBlock
 from services.adapter.validation import block_proxy_id
 from services.adapter.naming import tokenize
 
-from .ir import CompileError, ControllerServiceSpec, ProcessorSpec
-from .transforms import Tail
+from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, ensure_json_record_services
+from .transforms import Tail, cron_or_period
 
 if TYPE_CHECKING:  # pragma: no cover
     from models.adapter import Flow
@@ -168,6 +181,92 @@ def _probe_path(record_path: str) -> str:
     return rp
 
 
+def _ensure_csv_reader(builder: "BlockBuilder") -> str:
+    """Add (once per group) a generic `CSVReader` CS. `Schema Access
+    Strategy: infer-schema` (matching `ir.ensure_json_record_services`'s own
+    JSON reader) rather than the reference flows' `schema-name` strategy —
+    an ad-hoc http response has no registered Avro schema to bind to."""
+    key = "cs_csv_reader"
+    if not builder.has_cs(key):
+        builder.add_cs(
+            ControllerServiceSpec(
+                key=key, name="csv_reader", type="org.apache.nifi.csv.CSVReader",
+                properties={"Schema Access Strategy": "infer-schema", "Treat First Line as Header": "true"},
+            )
+        )
+    return key
+
+
+def _ensure_xml_reader(builder: "BlockBuilder") -> str:
+    """Add (once per group) a generic `XMLReader` CS. Same `infer-schema`
+    rationale as `_ensure_csv_reader`; `Expect Records as Array: false`
+    matches the task brief's explicit instruction for the analogous kafka
+    xml-parse path (blocks_kafka.py)."""
+    key = "cs_xml_reader"
+    if not builder.has_cs(key):
+        builder.add_cs(
+            ControllerServiceSpec(
+                key=key, name="xml_reader", type="org.apache.nifi.xml.XMLReader",
+                properties={"Schema Access Strategy": "infer-schema", "Expect Records as Array": "false"},
+            )
+        )
+    return key
+
+
+def _parse_response(
+    builder: "BlockBuilder", *, source: Tail, response_format: str, split: bool, record_path: str, ptype: str,
+) -> "Tuple[Tail, Tail]":
+    """`source`'s content -> `(record_tail, original_tail)`.
+
+    json feeds `SplitJson` directly. csv/xml first go through `ConvertRecord`
+    (`CSVReader`/`XMLReader` -> `JsonRecordSetWriter`) so every response
+    format lands on the same per-record JSON shape the rest of the compiler
+    (transforms/dedup/routing, all JSON-record-oriented via
+    `ir.ensure_json_record_services`) assumes, THEN `SplitJson` — picked over
+    `SplitXml` for xml specifically (compiler-spec §3.1 item 5 allows either;
+    this is the documented choice) so csv and xml share one code path instead
+    of xml alone needing a structurally different downstream shape.
+    `original_tail` feeds pagination's `page_meta` step (read mode only —
+    write mode always calls this with `ptype="none"`, so `original` always
+    auto-terminates, matching read's own "no pagination configured" case).
+
+    Shared by `compile_read` (its own `fetch` -> `Response`) and
+    `_compile_write`'s `writeForwards: "response"` branch (its `write`
+    InvokeHTTP's own `Response`) — this is the "route Response through the
+    same parse chain builder as read" the task brief asks for.
+    """
+    src_key, src_rel = source
+    if response_format == "json":
+        parse_source: Tail = source
+    elif response_format in ("csv", "xml"):
+        reader_key = _ensure_csv_reader(builder) if response_format == "csv" else _ensure_xml_reader(builder)
+        _, writer_key = ensure_json_record_services(builder)
+        builder.add_processor(
+            ProcessorSpec(key="convert", name="convert", type="org.apache.nifi.processors.standard.ConvertRecord",
+                          properties={"Record Reader": reader_key, "Record Writer": writer_key})
+        )
+        builder.link(src_key, "convert", [src_rel])
+        builder.to_dlq("convert", "failure")
+        parse_source = ("convert", "success")
+    else:
+        raise NotImplementedError(
+            f"http response format {response_format!r} is not implemented (json/csv/xml only)"
+        )
+
+    if not split:
+        return parse_source, parse_source
+
+    p_key, p_rel = parse_source
+    builder.add_processor(
+        ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitJson",
+                      properties={"JsonPath Expression": record_path},
+                      autoTerminate=(["original"] if ptype == "none" else []))
+    )
+    builder.link(p_key, "split", [p_rel])
+    builder.to_dlq("split", "failure")
+    return ("split", "split"), ("split", "original")
+
+
 def compile_read(
     builder: "BlockBuilder",
     *,
@@ -178,16 +277,16 @@ def compile_read(
     is_root: bool,
     add_param,
 ) -> Tail:
+    if block.mode == "write":
+        return _compile_write(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
+                              is_root=is_root, add_param=add_param)
+    if block.mode == "lookup":
+        return _compile_lookup(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
+                               is_root=is_root, add_param=add_param)
     if block.mode != "read":
-        raise NotImplementedError(
-            f"http {block.mode} is not implemented yet (T7.1 scope: http read only) — block {block.id}"
-        )
-    response_format = block.config.get("responseFormat", "json")
-    if response_format != "json":
-        raise NotImplementedError(
-            f"http response format {response_format!r} is not implemented yet "
-            f"(T7.1 scope: json only) — block {block.id}"
-        )
+        raise CompileError(f"Unknown http mode {block.mode!r} on block {block.id}")
+
+    response_format = str(block.config.get("responseFormat", "json"))
 
     service = _service_for(block, ctx)
     pagination = block.config.get("pagination") or {"type": "none", "fields": {}}
@@ -262,19 +361,10 @@ def compile_read(
     builder.to_dlq("fetch", "Failure")
 
     # ---- response parsing --------------------------------------------------
-    if split:
-        builder.add_processor(
-            ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitJson",
-                          properties={"JsonPath Expression": record_path},
-                          autoTerminate=(["original"] if ptype == "none" else []))
-        )
-        builder.link("fetch", "split", ["Response"])
-        builder.to_dlq("split", "failure")
-        record_tail: Tail = ("split", "split")
-        original_tail: Tail = ("split", "original")
-    else:
-        record_tail = ("fetch", "Response")
-        original_tail = ("fetch", "Response")
+    record_tail, original_tail = _parse_response(
+        builder, source=("fetch", "Response"), response_format=response_format, split=split,
+        record_path=record_path, ptype=ptype,
+    )
 
     # ---- pagination ----------------------------------------------------------
     if ptype != "none":
@@ -285,25 +375,13 @@ def compile_read(
 
 
 def _build_trigger(flow: "Flow") -> ProcessorSpec:
-    period, strategy = _cron_or_period(flow.cron)
+    period, strategy = cron_or_period(flow.cron)
     return ProcessorSpec(
         key="trigger", name="trigger", type="org.apache.nifi.processors.standard.GenerateFlowFile",
         properties={"File Size": "0B", "Batch Size": "1", "Unique FlowFiles": "false", "Custom Text": "{}",
                     "Character Set": "UTF-8", "Data Format": "Text"},
         schedulingPeriod=period, schedulingStrategy=strategy, runOnPrimary=True,
     )
-
-
-def _cron_or_period(cron: Optional[str]) -> Tuple[str, str]:
-    """5-field UTC cron -> NiFi cron (`sec min hour dom mon dow`), per
-    compiler-spec §3.1: `0 <min> <hour> <dom> <mon> <dow>`."""
-    if not cron:
-        return "1 hour", "TIMER_DRIVEN"
-    fields = cron.strip().split()
-    if len(fields) != 5:
-        raise CompileError(f"Cron must be a 5-field expression (UTC), got {cron!r}")
-    minute, hour, dom, mon, dow = fields
-    return f"0 {minute} {hour} {dom} {mon} {dow}", "CRON_DRIVEN"
 
 
 def _build_session_login(builder: "BlockBuilder", *, service: AppService, add_param, source_key: str) -> Tail:
@@ -417,3 +495,209 @@ def _build_pagination(
     )
     builder.link("has_more", "next", ["continue"])
     builder.link("next", loop_target, ["success"])
+
+
+# ------------------------------------------------------------- write / lookup
+
+
+_EL_FIELD_RE = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}")
+
+# Bare `${...}` tokens that are NiFi/compiler built-ins, not record fields —
+# excluded from the "promote to attribute via JsonPath" extraction so we
+# never try to `$.uuid` a flowfile's own `uuid` attribute out of its JSON
+# content. Deliberately small and explicit rather than clever pattern
+# matching (mirrors this module's "keep it simple, document it" pattern).
+_EL_BUILTIN_DENY = {
+    "uuid", "now", "filename", "mime.type", "session.token", "request.url",
+    "offset", "limit", "page", "page_size", "cursor", "page_count",
+}
+
+
+def _el_field_refs(template: str) -> List[str]:
+    """Every distinct bare `${field}` reference in `template` that is NOT a
+    known built-in — the record fields a body/path template needs promoted
+    to flowfile attributes before NiFi's own EL evaluates the template."""
+    seen: List[str] = []
+    for m in _EL_FIELD_RE.finditer(template or ""):
+        name = m.group(1)
+        if name in _EL_BUILTIN_DENY or name in seen:
+            continue
+        seen.append(name)
+    return seen
+
+
+def _extract_fields(builder: "BlockBuilder", *, key: str, fields: List[str], source: Tail) -> Tail:
+    """One `EvaluateJsonPath` promoting each of `fields` (record JsonPath
+    `$.<field>`) to a same-named flowfile attribute — mirrors routing.py's
+    `route_fields` exactly (same property shape, same `Path Not Found
+    Behavior: ignore` + `autoTerminate=["unmatched"]` + DLQ-on-failure, same
+    `(key, "matched")` return convention), reused here so a write's body
+    template / a lookup's path template can reference `${field}` over the
+    parent record via NiFi EL."""
+    props: Dict[str, Any] = {"Destination": "flowfile-attribute", "Path Not Found Behavior": "ignore",
+                              "Return Type": "scalar"}
+    for f in fields:
+        props[f] = f"$.{f}"
+    builder.add_processor(
+        ProcessorSpec(key=key, name=key, type=_EVALUATE_JSON_PATH, properties=props, autoTerminate=["unmatched"])
+    )
+    src_key, src_rel = source
+    builder.link(src_key, key, [src_rel] if src_rel else [])
+    builder.to_dlq(key, "failure")
+    return key, "matched"
+
+
+def _compile_write(
+    builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
+    is_root: bool, add_param,
+) -> Tail:
+    """compiler-spec §3.1 item 7: request-body materialization ahead of a
+    POST/PUT/PATCH `InvokeHTTP`, then "chain continues with" (`writeForwards`
+    config, BlockForm.tsx) honored on the outbound connection:
+      - `"original"` (default): `write`'s `Original` relationship (the
+        pre-POST record, untouched) continues the chain — `Response` is
+        unused, auto-terminated.
+      - `"response"`: `write`'s `Response` relationship is routed through
+        the SAME `_parse_response()` json/csv/xml parse-chain builder read
+        mode uses (compiler-spec's literal "route Response through the same
+        parse chain builder as read") — `Original` is unused, auto-terminated.
+    Root-legal (compute_root_menu lists "http-write" — "a POST whose
+    response is the data to process", i.e. root http-write only really makes
+    sense with `writeForwards: "response"`, but both values compile either
+    way): a trigger seeds it exactly like read mode, same `_build_trigger`.
+    """
+    service = _service_for(block, ctx)
+    method = str(block.config.get("method") or "POST").upper()
+    if method not in ("POST", "PUT", "PATCH"):
+        raise CompileError(f"http write block {block.id!r} has invalid method {method!r} (POST/PUT/PATCH only)")
+    path = str(block.config.get("path", ""))
+    body_template = str(block.config.get("bodyTemplate", "") or "")
+    write_forwards = str(block.config.get("writeForwards", "original") or "original")
+
+    if is_root:
+        builder.add_processor(_build_trigger(flow))
+        entry_key = "trigger"
+    else:
+        entry_key = "inputPort"
+
+    builder.add_processor(
+        ProcessorSpec(key="init", name="init", type=_UPDATE_ATTRIBUTE, properties={"mime.type": "application/json"})
+    )
+    builder.link(entry_key, "init", ["success"] if entry_key == "trigger" else [])
+    source: Tail = ("init", "success")
+
+    if service.config.get("authMode") == "session_token":
+        source = _build_session_login(builder, service=service, add_param=add_param, source_key="init")
+
+    fields = _el_field_refs(body_template)
+    if fields:
+        source = _extract_fields(builder, key="extract_body_fields", fields=fields, source=source)
+
+    builder.add_processor(
+        ProcessorSpec(key="render_body", name="render_body", type="org.apache.nifi.processors.standard.ReplaceText",
+                      properties={"Replacement Strategy": "Always Replace", "Replacement Value": body_template,
+                                  "Evaluation Mode": "Entire text", "Character Set": "UTF-8"})
+    )
+    builder.link(source[0], "render_body", [source[1]])
+    builder.to_dlq("render_body", "failure")
+
+    base_expr = _base_url_expr(block=block, service=service, ctx=ctx, add_param=add_param)
+    invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": method, "HTTP URL": f"{base_expr}{path}",
+                                     "Request Body Enabled": "true"}
+    if service.config.get("authMode") == "session_token":
+        header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
+        invoke_props[header] = "${session.token}"
+    else:
+        _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
+
+    unused_relationship = "Response" if write_forwards != "response" else "Original"
+    builder.add_processor(
+        ProcessorSpec(key="write", name="write", type="org.apache.nifi.processors.standard.InvokeHTTP",
+                      properties=invoke_props, autoTerminate=["No Retry", "Retry", unused_relationship])
+    )
+    builder.link("render_body", "write", ["success"])
+    builder.to_dlq("write", "Failure")
+
+    if write_forwards == "response":
+        record_path = str(block.config.get("recordPath", "$"))
+        split = bool(block.config.get("split", True))
+        response_format = str(block.config.get("responseFormat", "json"))
+        record_tail, _original_tail = _parse_response(
+            builder, source=("write", "Response"), response_format=response_format, split=split,
+            record_path=record_path, ptype="none",
+        )
+        return record_tail
+    return "write", "Original"
+
+
+def _compile_lookup(
+    builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
+    is_root: bool, add_param,
+) -> Tail:
+    """compiler-spec §3.1 item 8: `InvokeHTTP` GET (path params interpolated
+    from the parent record's own fields, same `${field}` -> attribute
+    promotion `_compile_write` uses for its body template) -> `EvaluateJsonPath`
+    (the whole response body, promoted to one `lookup_value` attribute) ->
+    `UpdateRecord` writing `/<joinField>_lookup = ${lookup_value}`.
+
+    HONEST LIMITATION (flagged for live E2E / a follow-up design pass): this
+    chain continues on the *lookup response's own* flowfile lineage, not a
+    genuine two-lineage merge back onto the calling parent record. NiFi has
+    no join primitive in scope here (`MergeContent`/`Wait`+`Notify` are
+    neither mentioned in the task brief nor implemented) — a single flowfile
+    cannot simultaneously carry "the original record" AND "the response" as
+    two independent contents to merge. "Merging under the configured join
+    field" is therefore implemented as reshaping the RESPONSE itself under
+    `/<joinField>_lookup`, which is the simplest reading of the brief's
+    literal 3-step description (InvokeHTTP -> EvaluateJsonPath -> UpdateRecord)
+    that NiFi can actually execute without additional processors the task
+    didn't ask for.
+    """
+    if is_root:
+        raise CompileError(f"http lookup block {block.id!r} cannot be a flow root")
+    service = _service_for(block, ctx)
+    path = str(block.config.get("path", ""))
+    join_field = str(block.config.get("lookupJoinField") or "id")
+
+    source: Tail = ("inputPort", "")
+    if service.config.get("authMode") == "session_token":
+        source = _build_session_login(builder, service=service, add_param=add_param, source_key="inputPort")
+
+    fields = _el_field_refs(path)
+    if fields:
+        source = _extract_fields(builder, key="extract_path_fields", fields=fields, source=source)
+
+    base_expr = _base_url_expr(block=block, service=service, ctx=ctx, add_param=add_param)
+    invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": "GET", "HTTP URL": f"{base_expr}{path}"}
+    if service.config.get("authMode") == "session_token":
+        header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
+        invoke_props[header] = "${session.token}"
+    else:
+        _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
+
+    builder.add_processor(
+        ProcessorSpec(key="lookup_fetch", name="lookup_fetch", type="org.apache.nifi.processors.standard.InvokeHTTP",
+                      properties=invoke_props, autoTerminate=["No Retry", "Retry", "Original"])
+    )
+    builder.link(source[0], "lookup_fetch", [source[1]] if source[1] else [])
+    builder.to_dlq("lookup_fetch", "Failure")
+
+    builder.add_processor(
+        ProcessorSpec(key="lookup_extract", name="lookup_extract", type=_EVALUATE_JSON_PATH,
+                      properties={"Destination": "flowfile-attribute", "Return Type": "json",
+                                  "Path Not Found Behavior": "ignore", "lookup_value": "$"},
+                      autoTerminate=["unmatched"])
+    )
+    builder.link("lookup_fetch", "lookup_extract", ["Response"])
+    builder.to_dlq("lookup_extract", "failure")
+
+    reader_key, writer_key = ensure_json_record_services(builder)
+    builder.add_processor(
+        ProcessorSpec(key="lookup_merge", name="lookup_merge", type="org.apache.nifi.processors.standard.UpdateRecord",
+                      properties={"Record Reader": reader_key, "Record Writer": writer_key,
+                                  "Replacement Value Strategy": "literal-value",
+                                  f"/{join_field}_lookup": "${lookup_value}"})
+    )
+    builder.link("lookup_extract", "lookup_merge", ["matched"])
+    builder.to_dlq("lookup_merge", "failure")
+    return "lookup_merge", "success"

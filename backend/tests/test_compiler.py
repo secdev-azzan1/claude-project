@@ -24,6 +24,7 @@ from models.adapter import (  # noqa: E402
     BranchInfo,
     Flow,
     FlowBlock,
+    FlowTopic,
     PlatformConnection,
     TransformRule,
 )
@@ -410,3 +411,347 @@ def test_determinism():
     routing_result_1 = compile_flow(routing_flow(), routing_ctx()).to_json()
     routing_result_2 = compile_flow(routing_flow(), routing_ctx()).to_json()
     assert routing_result_1 == routing_result_2
+
+
+# --------------------------------------------------------------------------
+# 8. jdbc
+# --------------------------------------------------------------------------
+
+
+def jdbc_flow() -> Flow:
+    """Root jdbc read (incremental, watermark) -> child jdbc write, both on
+    the same postgres service -- exercises the shared DBCPConnectionPool CS
+    reuse across two block groups' own `_ensure_db_pool` calls too."""
+    return Flow(
+        id="flow-jdbc", name="Jdbc Flow", cron="0 */2 * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="jdbc", mode="read", name="Read Assets", parentId=None, serviceId="svc-db",
+                config={"table": "cmdb_assets", "columns": ["id", "hostname", "updated_at"],
+                        "incremental": True, "watermarkColumn": "updated_at", "initialPosition": "oldest"},
+            ),
+            FlowBlock(
+                id="b-write", adapter="jdbc", mode="write", name="Write Assets", parentId="b-read",
+                serviceId="svc-db", entity="asset", config={"table": "assets_mirror"},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def jdbc_ctx() -> CompileContext:
+    services = {
+        "svc-db": make_service(
+            id="svc-db", type="database", name="Ops Postgres",
+            config={"dialect": "postgresql", "host": "db.internal.corp", "port": 5432, "database": "ops",
+                    "username": "svc_reader", "password": "s3cret"},
+            hasSecret=True,
+        ),
+    }
+    connections = {"kafka": make_connection(id="conn-kafka", type="kafka", name="K", config={"bootstrapServers": "kafka:9092"})}
+    return CompileContext(services=services, connections=connections, gateway_proxies={}, approved_schemas={})
+
+
+def test_jdbc_read_incremental_golden_checks():
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    query = next(p for p in group.processors if p.key == "query")
+    assert query.type == "org.apache.nifi.processors.standard.QueryDatabaseTableRecord"
+    assert query.properties["Table Name"] == "cmdb_assets"
+    assert query.properties["Columns to Return"] == "id, hostname, updated_at"
+    assert query.properties["Maximum-value Columns"] == "updated_at"
+    assert query.properties["Initial Load Strategy"] == "Start at Beginning"
+    assert query.runOnPrimary is True
+    assert query.schedulingStrategy == "CRON_DRIVEN"  # cron on root
+    assert query.schedulingPeriod == "0 0 */2 * * *"  # "0 */2 * * *" -> "sec min hour dom mon dow"
+
+    pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
+    assert pool.type == "org.apache.nifi.dbcp.DBCPConnectionPool"
+    assert pool.properties["Database Driver Class Name"] == "org.postgresql.Driver"
+
+    url_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-db_db_url")
+    assert url_param.value == "jdbc:postgresql://db.internal.corp:5432/ops"
+    pw_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-db_db_password")
+    assert pw_param.sensitive is True and pw_param.value == "s3cret"
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert split.type == "org.apache.nifi.processors.standard.SplitRecord"
+    assert split.properties["Records Per Split"] == "1"
+    dlq_from_query = [c for c in group.connections if c.from_ == "query" and c.to == "dlq"]
+    assert dlq_from_query and dlq_from_query[0].relationships == ["failure"]
+
+
+def test_jdbc_write():
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.type == "org.apache.nifi.processors.standard.PutDatabaseRecord"
+    assert write.properties["Statement Type"] == "INSERT"
+    assert write.properties["Table Name"] == "assets_mirror"
+    assert write.properties["Database Connection Pooling Service"] == "cs_db_pool"
+
+    dlq_from_write = [c for c in group.connections if c.from_ == "write" and c.to == "dlq"]
+    assert dlq_from_write and dlq_from_write[0].relationships == ["failure"]
+
+    # b-write is wired as b-read's child (jdbc is never forced terminal).
+    port_link = next((pl for pl in plan.rootGroup.connections if pl.toBlockId == "b-write"), None)
+    assert port_link is not None and port_link.fromBlockId == "b-read"
+
+
+# --------------------------------------------------------------------------
+# 9. kafka read
+# --------------------------------------------------------------------------
+
+
+def kafka_read_flow(parse_format: str = "json", initial_position: str = "beginning") -> Flow:
+    """A bare kafka-read root, attached to an ADOPTED topic (root_block()'s
+    special case), with no children -- see blocks_kafka.py's module
+    docstring for why children aren't exercised here (compile_flow.py's
+    `terminal=True` for every kafka block means none would actually get
+    wired to a PortLink)."""
+    return Flow(
+        id="flow-kread", name="Kafka Read Flow", cron=None, state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-kread", adapter="kafka", mode="read", name="Consume Events", parentId="t-adopted",
+                config={"parseFormat": parse_format, "initialPosition": initial_position},
+            ),
+        ],
+        topics=[FlowTopic(id="t-adopted", kind="adopted", name="partner.threatfeed.indicators", sealed=False)],
+        variables=[], servicePins={},
+    )
+
+
+def kafka_read_ctx() -> CompileContext:
+    connections = {"kafka": make_connection(id="conn-kafka", type="kafka", name="K", config={"bootstrapServers": "kafka:9092"})}
+    return CompileContext(services={}, connections=connections, gateway_proxies={}, approved_schemas={})
+
+
+def test_kafka_read_json_split_and_offset_reset():
+    plan = compile_flow(kafka_read_flow(parse_format="json", initial_position="new"), kafka_read_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-kread")
+    assert group.inputPort is False  # ConsumeKafka is a source processor, no upstream port needed
+
+    consume = next(p for p in group.processors if p.key == "consume")
+    assert consume.type == "org.apache.nifi.kafka.processors.ConsumeKafka"
+    assert consume.properties["Group ID"] == "kafka_read_flow__b-kread"
+    assert consume.properties["Auto Offset Reset"] == "latest"  # initialPosition "new"
+
+    topic_param = next(p for p in plan.parameterContext.parameters if p.name == "topic_b-kread")
+    assert topic_param.value == "partner.threatfeed.indicators"  # adopted topic's own name, not config.topicName
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert split.type == "org.apache.nifi.processors.standard.SplitJson"
+    assert split.properties["JsonPath Expression"] == "$[*]"
+    assert "original" in split.autoTerminate
+    dlq_from_split = [c for c in group.connections if c.from_ == "split" and c.to == "dlq"]
+    assert dlq_from_split and dlq_from_split[0].relationships == ["failure"]
+
+
+def test_kafka_read_raw_no_transforms_or_split():
+    plan = compile_flow(kafka_read_flow(parse_format="raw", initial_position="beginning"), kafka_read_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-kread")
+    keys = [p.key for p in group.processors]
+
+    assert "split" not in keys and "convert" not in keys  # R8: byte passthrough, no record processing
+    consume = next(p for p in group.processors if p.key == "consume")
+    assert consume.properties["Auto Offset Reset"] == "earliest"  # initialPosition "beginning"
+    assert "success" in consume.autoTerminate  # nothing downstream -- auto-terminated tail
+
+
+# --------------------------------------------------------------------------
+# 10. http write / lookup
+# --------------------------------------------------------------------------
+
+
+def http_svc_ctx() -> CompileContext:
+    services = {"svc-http": make_service(id="svc-http", type="http", name="Ticketing API",
+                                          config={"baseUrl": "https://ticketing.corp.local", "authMode": "none"})}
+    connections = {"kafka": make_connection(id="conn-kafka", type="kafka", name="K", config={"bootstrapServers": "kafka:9092"})}
+    return CompileContext(services=services, connections=connections, gateway_proxies={}, approved_schemas={})
+
+
+def http_write_flow(write_forwards: str) -> Flow:
+    return Flow(
+        id="flow-hwrite", name="Http Write Flow", cron=None, state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-write", adapter="http", mode="write", name="Post Incident", parentId=None, serviceId="svc-http",
+                config={"method": "POST", "path": "/incidents",
+                        "bodyTemplate": '{"title": "${title}", "severity": "${sev}"}',
+                        "writeForwards": write_forwards, "responseFormat": "json", "recordPath": "$.data[*]",
+                        "split": True},
+            ),
+            FlowBlock(
+                id="b-continue", adapter="kafka", mode="write", name="Log Result", parentId="b-write",
+                entity="incident_result", config={},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_http_write_replace_text_method_and_original_continuation():
+    plan = compile_flow(http_write_flow("original"), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    keys = [p.key for p in group.processors]
+    assert keys.index("extract_body_fields") < keys.index("render_body") < keys.index("write")
+    assert "split" not in keys  # "original" continuation never touches the response-parse chain
+
+    extract = next(p for p in group.processors if p.key == "extract_body_fields")
+    assert extract.properties["title"] == "$.title"
+    assert extract.properties["sev"] == "$.sev"
+
+    render = next(p for p in group.processors if p.key == "render_body")
+    assert render.type == "org.apache.nifi.processors.standard.ReplaceText"
+    assert render.properties["Replacement Strategy"] == "Always Replace"
+    assert render.properties["Replacement Value"] == '{"title": "${title}", "severity": "${sev}"}'
+
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.type == "org.apache.nifi.processors.standard.InvokeHTTP"
+    assert write.properties["HTTP Method"] == "POST"
+    assert write.properties["Request Body Enabled"] == "true"
+    assert "Original" not in write.autoTerminate  # forwarded onward
+    assert "Response" in write.autoTerminate  # unused on this branch
+
+    onward = [c for c in group.connections if c.from_ == "write" and c.to == "outputPort:b-continue"]
+    assert onward and onward[0].relationships == ["Original"]
+
+
+def test_http_write_response_continuation_reuses_parse_chain():
+    plan = compile_flow(http_write_flow("response"), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    write = next(p for p in group.processors if p.key == "write")
+    assert "Response" not in write.autoTerminate  # forwarded onward
+    assert "Original" in write.autoTerminate  # unused on this branch
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert split.type == "org.apache.nifi.processors.standard.SplitJson"
+    assert split.properties["JsonPath Expression"] == "$.data[*]"
+    wr_to_split = [c for c in group.connections if c.from_ == "write" and c.to == "split"]
+    assert wr_to_split and wr_to_split[0].relationships == ["Response"]
+
+    onward = [c for c in group.connections if c.from_ == "split" and c.to == "outputPort:b-continue"]
+    assert onward and onward[0].relationships == ["split"]
+
+
+def http_lookup_flow() -> Flow:
+    return Flow(
+        id="flow-hlookup", name="Http Lookup Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="List Hosts", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/hosts", "responseFormat": "json", "recordPath": "$[*]",
+                        "split": True, "pagination": {"type": "none", "fields": {}}},
+            ),
+            FlowBlock(
+                id="b-lookup", adapter="http", mode="lookup", name="Enrich Host", parentId="b-read",
+                serviceId="svc-http", config={"path": "/hosts/${host_id}/details", "lookupJoinField": "details"},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_http_lookup_join_merge():
+    plan = compile_flow(http_lookup_flow(), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-lookup")
+    keys = [p.key for p in group.processors]
+    assert keys.index("extract_path_fields") < keys.index("lookup_fetch") < keys.index("lookup_extract") < keys.index("lookup_merge")
+
+    extract = next(p for p in group.processors if p.key == "extract_path_fields")
+    assert extract.properties["host_id"] == "$.host_id"
+
+    fetch = next(p for p in group.processors if p.key == "lookup_fetch")
+    assert fetch.type == "org.apache.nifi.processors.standard.InvokeHTTP"
+    assert fetch.properties["HTTP Method"] == "GET"
+    assert fetch.properties["HTTP URL"].endswith("/hosts/${host_id}/details")
+
+    lookup_extract = next(p for p in group.processors if p.key == "lookup_extract")
+    assert lookup_extract.properties["lookup_value"] == "$"
+
+    merge = next(p for p in group.processors if p.key == "lookup_merge")
+    assert merge.type == "org.apache.nifi.processors.standard.UpdateRecord"
+    assert merge.properties["/details_lookup"] == "${lookup_value}"
+
+
+# --------------------------------------------------------------------------
+# 11. http read: csv response parsing
+# --------------------------------------------------------------------------
+
+
+def http_csv_read_flow() -> Flow:
+    return Flow(
+        id="flow-csv", name="Csv Read Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="List Rows", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/rows.csv", "responseFormat": "csv", "recordPath": "$[*]",
+                        "split": True, "pagination": {"type": "none", "fields": {}}},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_http_read_csv_response_converts_then_splits():
+    plan = compile_flow(http_csv_read_flow(), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    keys = [p.key for p in group.processors]
+    assert keys.index("fetch") < keys.index("convert") < keys.index("split")
+
+    convert = next(p for p in group.processors if p.key == "convert")
+    assert convert.type == "org.apache.nifi.processors.standard.ConvertRecord"
+    csv_reader = next(cs for cs in group.controllerServices if cs.type == "org.apache.nifi.csv.CSVReader")
+    assert convert.properties["Record Reader"] == csv_reader.key
+
+    fetch_to_convert = [c for c in group.connections if c.from_ == "fetch" and c.to == "convert"]
+    assert fetch_to_convert and fetch_to_convert[0].relationships == ["Response"]
+    dlq_from_convert = [c for c in group.connections if c.from_ == "convert" and c.to == "dlq"]
+    assert dlq_from_convert and dlq_from_convert[0].relationships == ["failure"]
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert split.type == "org.apache.nifi.processors.standard.SplitJson"
+    assert split.properties["JsonPath Expression"] == "$[*]"
+    assert "original" in split.autoTerminate  # pagination.type == "none"
+
+def test_kafka_read_with_child_gets_port_link():
+    """R3/compile fix: kafka blocks are not terminal — a kafka read's children
+    must be wired via a PortLink (was silently skipped when every kafka block
+    compiled as terminal)."""
+    base = kafka_read_flow(parse_format="json", initial_position="beginning")
+    child = FlowBlock(id="b-kwrite", adapter="kafka", mode="write", name="events out",
+                      parentId="b-kread", entity="event", config={}, transforms=[])
+    flow = base.model_copy(update={"blocks": list(base.blocks) + [child]})
+    plan = compile_flow(flow, kafka_read_ctx())
+    links = [(l.fromBlockId, l.toBlockId) for l in plan.rootGroup.connections]
+    assert ("b-kread", "b-kwrite") in links
+    read_group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-kread")
+    assert any("ConsumeKafka" in p.type for p in read_group.processors)
+    assert read_group.outputPort
+    # the promised split tail feeds the output port, not an auto-terminate
+    split = next(p for p in read_group.processors if p.key == "split")
+    assert "split" not in split.autoTerminate
+
+
+def test_kafka_write_childless_publish_consumes_tail_without_auto_terminate():
+    base = kafka_read_flow(parse_format="json", initial_position="beginning")
+    child = FlowBlock(id="b-kwrite", adapter="kafka", mode="write", name="events out",
+                      parentId="b-kread", entity="event", config={}, transforms=[])
+    flow = base.model_copy(update={"blocks": list(base.blocks) + [child]})
+    plan = compile_flow(flow, kafka_read_ctx())
+    kw = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-kwrite")
+    pub = next(p for p in kw.processors if "PublishKafka" in p.type)
+    assert pub is not None
+    assert not kw.outputPort
+    # the input-port tail feeds publish exactly once, no dangling auto-termination clash
+    feeds = [c for c in kw.connections if c.to == "publish"]
+    assert len(feeds) == 1

@@ -22,7 +22,7 @@ represents a record-level failure is wired to the block's DLQ path via
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 from models.adapter import FlowBlock, TransformRule
 
@@ -42,6 +42,27 @@ if TYPE_CHECKING:  # pragma: no cover
 Tail = Tuple[str, str]  # (processor key, forward relationship name)
 
 DEDUP_PLATFORM_EXCLUDES = ["ingest_id", "ingest_ts", "op"]
+
+
+def cron_or_period(cron: Optional[str]) -> Tuple[str, str]:
+    """5-field UTC cron -> NiFi cron (`sec min hour dom mon dow`), per
+    compiler-spec §3.1 item 1 / §3.2 ("trigger = cron scheduling on the
+    processor itself when root"): `0 <min> <hour> <dom> <mon> <dow>`.
+
+    Shared by http's `GenerateFlowFile` trigger (root http read/write) and
+    jdbc's `QueryDatabaseTableRecord` root scheduling — both need the exact
+    same UTC-cron -> NiFi-cron mapping, so it lives here (the one place the
+    task brief sanctions a cross-`blocks_*` shared helper) rather than being
+    duplicated. Originally a private `_cron_or_period` in `blocks_http.py`;
+    moved here verbatim when jdbc needed the same mapping.
+    """
+    if not cron:
+        return "1 hour", "TIMER_DRIVEN"
+    fields = cron.strip().split()
+    if len(fields) != 5:
+        raise CompileError(f"Cron must be a 5-field expression (UTC), got {cron!r}")
+    minute, hour, dom, mon, dow = fields
+    return f"0 {minute} {hour} {dom} {mon} {dow}", "CRON_DRIVEN"
 
 # Adapted from docs/orchestration/analysis/dedup-reference-flow.md's reference
 # script (SRC/EXCLUDES dynamic properties, canonical-JSON-minus-excludes SHA-256

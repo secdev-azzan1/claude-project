@@ -411,22 +411,27 @@ def test_validate_endpoint_clean_flow_returns_no_issues():
         _clear_overrides()
 
 
-# --------------------------------------------------------- read-only stubs
+# --------------------------------------------------- observability (T7.5)
+# Full coverage (metrics attribution, dlq header mapping, drift verdicts,
+# repair, block test) lives in tests/test_v2_runtime.py -- this is just the
+# not-deployed / not-configured honest-empty baseline, still exercised
+# through this file's own flow fixtures.
 
-def test_dlq_metrics_messages_runtime_honest_placeholders():
+def test_dlq_metrics_messages_runtime_honest_when_not_deployed_or_unconfigured():
     fake_db = FakeDB()
     fake_db.flows_v2.docs.append(_valid_flow(flow_id="flow-ro-1"))
     client = _make_client(fake_db)
     try:
+        # No active Kafka connection configured -- an honest empty list, not an error.
         assert client.get("/api/v2/flows/flow-ro-1/dlq").json() == {"records": []}
+        # Never deployed -- honest "not deployed", never a fake zero-filled shape.
         assert client.get("/api/v2/flows/flow-ro-1/metrics").json() == {
             "available": False,
             "reason": "not deployed",
         }
-        assert client.get("/api/v2/flows/flow-ro-1/messages", params={"topic": "x"}).json() == {
-            "messages": [],
-            "source": "unavailable",
-        }
+        # "x" is not one of this flow's topics (_valid_flow has none) -> 404.
+        assert client.get("/api/v2/flows/flow-ro-1/messages", params={"topic": "x"}).status_code == 404
+        # Never deployed and no prior runtime doc -> 404.
         assert client.get("/api/v2/flows/flow-ro-1/runtime").status_code == 404
     finally:
         _clear_overrides()

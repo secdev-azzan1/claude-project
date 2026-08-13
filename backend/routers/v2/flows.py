@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from db import get_db
 from models.adapter import AppService, ApprovedSchema, Flow, GatewayProxy, PlatformConnection
+from services.adapter import runtime as runtime_svc
 from services.adapter.common import COLLECTIONS, audit, now_iso
 from services.adapter.deployer import lifecycle
 from services.adapter.deployer.connect_apply import ConnectApplyError
@@ -327,12 +328,24 @@ async def clear_dedup_cache_v2(
 
 @router.post("/{flow_id}/blocks/{block_id}/test")
 async def test_block_v2(flow_id: str, block_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    """T7.5 fills this in (live per-block sample-run testing). The frontend
-    maps a 501 here to a friendly "not available yet" message, same
-    convention `run_flow_verb_v2` used before the deployment engine
-    landed."""
-    await _get_flow_doc_or_404(db, flow_id)
-    return JSONResponse(status_code=501, content={"detail": "block test run pending (T7.5)", "blockId": block_id})
+    """T7.5: bounded live probe (<=10 records, no commits) for http-read
+    blocks. jdbc/kafka-read block tests (and any other http mode) still
+    501 -- their compiler support doesn't exist yet either. A block that
+    hosts no Test section at all (every write, kafka_kc, kc) refuses with
+    422, mirroring the builder UI's own `hostsTest` rule. See
+    `services/adapter/runtime.py::test_block` for the implementation."""
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    try:
+        result = await runtime_svc.test_block(db, doc, block_id)
+    except runtime_svc.BlockNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except runtime_svc.BlockNotTestRunnable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except runtime_svc.BlockTestPlaceholders as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except runtime_svc.BlockTestUnsupported as exc:
+        return JSONResponse(status_code=501, content={"detail": str(exc), "blockId": block_id})
+    return result
 
 
 @router.post("/{flow_id}/enabled")
@@ -365,36 +378,48 @@ async def validate_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_
     return [_issue_dict(i) for i in issues]
 
 
-# ------------------------------------------------------- read-only, pre-engine
+# ------------------------------------------------------------- observability
+# T7.5 — real runtime observability. Every function backing these lives in
+# services/adapter/runtime.py; see that module's docstring for the shapes
+# and the honest-values rationale (NEVER fake zeros).
 
 @router.get("/{flow_id}/dlq")
 async def get_flow_dlq_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    await _get_flow_doc_or_404(db, flow_id)
-    # Real implementation arrives with the deployment engine.
-    return {"records": []}
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    return await runtime_svc.get_flow_dlq(db, doc)
 
 
 @router.get("/{flow_id}/metrics")
 async def get_flow_metrics_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    await _get_flow_doc_or_404(db, flow_id)
-    runtime = await db[COLLECTIONS.runtimes].find_one({"flowId": flow_id}, {"_id": 0})
-    if not runtime:
-        return {"available": False, "reason": "not deployed"}
-    # A runtime record exists, but metrics collection itself is not wired up
-    # yet — still an honest "unavailable", just a different reason.
-    return {"available": False, "reason": "metrics collection pending deployment engine"}
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    return await runtime_svc.get_flow_metrics(db, doc)
 
 
 @router.get("/{flow_id}/messages")
 async def get_flow_messages_v2(flow_id: str, topic: str = Query(""), db: AsyncIOMotorDatabase = Depends(get_db)):
-    await _get_flow_doc_or_404(db, flow_id)
-    return {"messages": [], "source": "unavailable"}
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    try:
+        return await runtime_svc.get_topic_messages(db, doc, topic)
+    except runtime_svc.TopicNotOwned as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/{flow_id}/runtime")
 async def get_flow_runtime_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    await _get_flow_doc_or_404(db, flow_id)
-    runtime = await db[COLLECTIONS.runtimes].find_one({"flowId": flow_id}, {"_id": 0})
+    """Doubles as the live "refresh from NiFi" action — the frontend GETs
+    this same route for both the initial load and the explicit Refresh
+    button (api.ts's `getFlowRuntime`/`refreshFlowRuntime`)."""
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    runtime = await runtime_svc.read_runtime(db, doc)
     if not runtime:
         raise HTTPException(status_code=404, detail="No runtime record for this flow")
     return runtime
+
+
+@router.post("/{flow_id}/runtime/repair")
+async def force_repair_flow_runtime_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    doc = await _get_flow_doc_or_404(db, flow_id)
+    try:
+        return await runtime_svc.repair_runtime(db, doc)
+    except runtime_svc.RuntimeRepairRefused as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

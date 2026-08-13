@@ -137,8 +137,11 @@ def _compile_block(
         tail = blocks_jdbc.compile_entry(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
                                          is_root=is_root, add_param=add_param)
     elif block.adapter == "kafka":
+        # NOT terminal: R3 lets the chain continue after a kafka write, and a
+        # kafka read is a source — only kafka_kc/kc are terminal. The block's
+        # consume chain (read) / publish step (write) is attached below, after
+        # the transforms chain, so children can also be wired off the tail.
         tail = blocks_kafka.compile_entry(block, is_root=is_root)
-        terminal = True
     elif block.adapter == "kafka_kc":
         tail = blocks_kafka_kc.compile_envelope(builder, is_root=is_root)
         terminal = True
@@ -148,18 +151,23 @@ def _compile_block(
     tail = build_chain(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, tail=tail, add_param=add_param)
 
     output_port_needed = False
+    tail_consumed_by_publish = False
+    if block.adapter == "kafka":
+        # Fulfill the promised consume chain (read) or attach the publish
+        # step (write). A write's publish consumes the tail; children (legal
+        # per R3) additionally fan out from the same tail below.
+        blocks_kafka.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
+                                     add_param=add_param, topics_out=topics_out, tail=tail)
+        tail_consumed_by_publish = block.mode == "write"
+
     if terminal:
-        if block.adapter == "kafka":
-            blocks_kafka.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
-                                         add_param=add_param, topics_out=topics_out, tail=tail)
-        elif block.adapter == "kafka_kc":
-            blocks_kafka_kc.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
-                                            add_param=add_param, topics_out=topics_out,
-                                            connectors_out=connectors_out, tail=tail)
+        blocks_kafka_kc.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
+                                        add_param=add_param, topics_out=topics_out,
+                                        connectors_out=connectors_out, tail=tail)
     elif children:
         routing.wire_children(builder, flow=flow, parent=block, children=children, tail=tail, port_links=port_links)
         output_port_needed = True
-    else:
+    elif not tail_consumed_by_publish:
         # Non-terminal, childless: nothing downstream consumes the finished
         # tail (placement-valid but structurally incomplete flow) — the
         # relationship auto-terminates rather than dangling unconnected.

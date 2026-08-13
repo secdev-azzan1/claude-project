@@ -1,27 +1,300 @@
 """`jdbc` adapter compilation — compiler-spec.md §3.2.
 
-STUB for T7.1: all three modes (read / write / lookup) land in a follow-up
-task. Kept as its own module — and this single dispatch function — so that
-follow-up work is local: implement `compile_read` / `compile_write` /
-`compile_lookup` here and wire them into `compile_flow.py`'s adapter
-dispatch, exactly the same shape as `blocks_http.py`.
+FULL scope: all three modes (read/write/lookup). `jdbc` is never `terminal`
+per `compile_flow.py`'s dispatch (only `kafka`/`kafka_kc` set `terminal =
+True`) and `compile_entry()` here DOES receive `builder` (unlike
+`blocks_kafka.compile_entry` — see that module's docstring for why that one
+needed a very different design), so every mode below adds its processors
+directly and returns a real tail, exactly like `blocks_http.compile_read`.
+
+`read` can be a flow root (`compute_root_menu()` lists "jdbc · read");
+`write`/`lookup` never are (`compute_add_menu()`-only entries) — each mode
+guards `is_root` accordingly.
+
+read-mode non-root edge case (flagged, not fully resolved — see
+`_compile_read`'s docstring): `compute_add_menu()` also offers "jdbc · read"
+MID-CHAIN ("Read a table per record"), a materially different runtime
+behavior (per-incoming-record query) than the root case's bulk/incremental
+table poll. compiler-spec §3.2's one-line read description does not
+disambiguate the two, and no config key distinguishes them either — this
+compiles BOTH uniformly as `QueryDatabaseTableRecord` (root: cron/timer
+scheduling; non-root: a benign always-on timer default), which is faithful
+to the root/bulk-poll case the spec clearly describes, but likely not the
+intended runtime behavior for the mid-chain "per record" case. Flagged for
+live E2E / a follow-up design pass.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
-from models.adapter import FlowBlock
+from models.adapter import AppService, FlowBlock
+
+from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, ensure_json_record_services
+from .transforms import Tail, cron_or_period
 
 if TYPE_CHECKING:  # pragma: no cover
     from models.adapter import Flow
     from .ir import BlockBuilder, CompileContext
 
 
-def compile_entry(builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext",
-                  flow_token: str, is_root: bool, add_param):
-    raise NotImplementedError(
-        f"jdbc adapter compilation (mode={block.mode!r}) is not implemented yet "
-        f"— lands in a follow-up task (T7.1 scope: http read + kafka write/kafka_kc/kc only) "
-        f"— block {block.id}"
+_DIALECT_DRIVERS = {
+    "postgresql": "org.postgresql.Driver",
+    "mysql": "com.mysql.cj.jdbc.Driver",
+    "trino": "io.trino.jdbc.TrinoDriver",
+}
+
+
+def compile_entry(
+    builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
+    is_root: bool, add_param,
+) -> Tail:
+    if block.mode == "read":
+        return _compile_read(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, is_root=is_root,
+                             add_param=add_param)
+    if block.mode == "write":
+        return _compile_write(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, is_root=is_root,
+                              add_param=add_param)
+    if block.mode == "lookup":
+        return _compile_lookup(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, is_root=is_root,
+                               add_param=add_param)
+    raise CompileError(f"Unknown jdbc mode {block.mode!r} on block {block.id}")
+
+
+def _service_for(block: FlowBlock, ctx: "CompileContext") -> AppService:
+    if not block.serviceId:
+        raise CompileError(f"jdbc block {block.id!r} has no service selected")
+    svc = ctx.services.get(block.serviceId)
+    if svc is None:
+        raise CompileError(f"jdbc block {block.id!r} references unknown service {block.serviceId!r}")
+    return svc
+
+
+def _table_name(block: FlowBlock) -> str:
+    table = str(block.config.get("table") or block.entity or "").strip()
+    if not table:
+        raise CompileError(f"jdbc block {block.id!r} has no table configured")
+    return table
+
+
+def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, add_param) -> str:
+    """Add (once per group) the shared `DBCPConnectionPool` CS built from the
+    block's database service — dialect -> JDBC URL scheme + driver class
+    (postgresql/mysql/trino per `JdbcDialect` in models/adapter/service.py),
+    host/port/database from service config, user/password (sensitive) as
+    parameters. `DBCPConnectionPool`'s own property names ("Database
+    Connection URL", "Database Driver Class Name", "Database User",
+    "Password") are long-standing, stable NiFi controller-service properties
+    — high confidence, unlike the QueryDatabaseTableRecord/ConsumeKafka
+    property names flagged elsewhere in this task."""
+    cs_key = "cs_db_pool"
+    sid = service.id
+    dialect = str(service.config.get("dialect", "postgresql"))
+    driver = _DIALECT_DRIVERS.get(dialect)
+    if driver is None:
+        raise CompileError(f"Unknown jdbc dialect {dialect!r} on service {sid!r}")
+    host = service.config.get("host", "")
+    port = service.config.get("port", "")
+    database = service.config.get("database", "")
+    url = f"jdbc:{dialect}://{host}:{port}/{database}"
+
+    add_param(f"svc_{sid}_db_url", url, False)
+    add_param(f"svc_{sid}_db_user", str(service.config.get("username", "")), False)
+    add_param(f"svc_{sid}_db_password", service.config.get("password"), True)
+
+    if not builder.has_cs(cs_key):
+        builder.add_cs(
+            ControllerServiceSpec(
+                key=cs_key, name="db_pool", type="org.apache.nifi.dbcp.DBCPConnectionPool",
+                properties={
+                    "Database Connection URL": f"#{{svc_{sid}_db_url}}",
+                    "Database Driver Class Name": driver,
+                    "Database User": f"#{{svc_{sid}_db_user}}",
+                    "Password": f"#{{svc_{sid}_db_password}}",
+                },
+            )
+        )
+    return cs_key
+
+
+def _compile_read(
+    builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
+    is_root: bool, add_param,
+) -> Tail:
+    """compiler-spec §3.2: `QueryDatabaseTableRecord` (Database Connection
+    Pooling Service, Table Name, Columns to Return, Maximum-value Columns =
+    watermark when incremental, Initial Load Strategy per initialPosition,
+    Record Writer JsonRecordSetWriter, runOnPrimary, cron-on-root scheduling)
+    -> `SplitRecord` (1 record per split) so the rest of the compiler sees
+    the same per-record JSON shape http/kafka read produce.
+
+    `Initial Load Strategy` (allowed values "Start at Beginning"/"Start at
+    Current Maximum Values") is CONFIRMED to exist on the sibling
+    `AbstractDatabaseFetchProcessor` family (`QueryDatabaseTable`/
+    `GenerateTableFetch`, added NIFI-9760) but NOT independently confirmed
+    against `QueryDatabaseTableRecord` specifically for NiFi 2.9 — none of
+    the 5 reference flow exports use any jdbc processor at all. Included per
+    the task brief's explicit allowed-values list; flagged for live E2E.
+    `Database Type` (dialect-specific SQL quoting) is a real
+    QueryDatabaseTable(Record) property too, but is deliberately NOT set
+    here — its NiFi 2.9 allowed-value spelling for `trino` isn't confirmed
+    either, so it's left at the processor's own default rather than guessed.
+    """
+    service = _service_for(block, ctx)
+    table = _table_name(block)
+    cs_pool = _ensure_db_pool(builder, service=service, add_param=add_param)
+    _, writer_key = ensure_json_record_services(builder)
+
+    columns = [c for c in (block.config.get("columns") or []) if isinstance(c, str) and c.strip()]
+    incremental = bool(block.config.get("incremental"))
+    watermark_column = str(block.config.get("watermarkColumn") or "").strip()
+    initial_position = str(block.config.get("initialPosition") or "oldest")
+
+    props: Dict[str, Any] = {
+        "Database Connection Pooling Service": cs_pool,
+        "Table Name": table,
+        "Record Writer": writer_key,
+    }
+    if columns:
+        props["Columns to Return"] = ", ".join(columns)
+    if incremental and watermark_column:
+        props["Maximum-value Columns"] = watermark_column
+        props["Initial Load Strategy"] = (
+            "Start at Current Maximum Values" if initial_position == "new" else "Start at Beginning"
+        )
+
+    if is_root:
+        period, strategy = cron_or_period(flow.cron)
+    else:
+        # Not the flow root -- mid-chain "jdbc · read" (see this module's
+        # docstring: a materially different, currently-unresolved runtime
+        # meaning). QueryDatabaseTableRecord is a source processor (no
+        # incoming connections possible) either way, so this just keeps it
+        # continuously polling on a benign default rather than a cron.
+        period, strategy = "0 sec", "TIMER_DRIVEN"
+
+    builder.add_processor(
+        ProcessorSpec(key="query", name="query", type="org.apache.nifi.processors.standard.QueryDatabaseTableRecord",
+                      properties=props, schedulingPeriod=period, schedulingStrategy=strategy, runOnPrimary=True)
     )
+    builder.to_dlq("query", "failure")
+
+    reader_key, split_writer_key = ensure_json_record_services(builder)
+    builder.add_processor(
+        ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitRecord",
+                      properties={"Record Reader": reader_key, "Record Writer": split_writer_key,
+                                  "Records Per Split": "1"},
+                      autoTerminate=["original"])
+    )
+    builder.link("query", "split", ["success"])
+    builder.to_dlq("split", "failure")
+    return "split", "splits"
+
+
+def _compile_write(
+    builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
+    is_root: bool, add_param,
+) -> Tail:
+    """compiler-spec §3.2: `PutDatabaseRecord` (Record Reader JsonTreeReader,
+    Statement Type = INSERT default, Database Connection Pooling Service,
+    Table Name from config/entity).
+
+    change_type note (documented per the task brief, not implemented): the
+    frontend's own copy for jdbc write ("History-driven writes: the record's
+    `change_type` maps to INSERT / UPDATE / DELETE" — BlockForm.tsx) implies
+    a PER-RECORD dynamic statement type. NiFi's `PutDatabaseRecord` does
+    support a RecordPath-driven "Statement Type" mode for exactly this, but
+    the precise NiFi 2.9 property/enum spelling for that mode isn't
+    confirmed here (no reference flow uses PutDatabaseRecord) -- this
+    compiles a STATIC `Statement Type` (default `INSERT`, overridable via
+    `config.statementType`) instead. Flagged for live E2E.
+    """
+    if is_root:
+        raise CompileError(f"jdbc write block {block.id!r} cannot be a flow root")
+    service = _service_for(block, ctx)
+    table = _table_name(block)
+    cs_pool = _ensure_db_pool(builder, service=service, add_param=add_param)
+    reader_key, _ = ensure_json_record_services(builder)
+
+    statement_type = str(block.config.get("statementType") or "INSERT").upper()
+    builder.add_processor(
+        ProcessorSpec(
+            key="write", name="write", type="org.apache.nifi.processors.standard.PutDatabaseRecord",
+            properties={
+                "Record Reader": reader_key,
+                "Database Connection Pooling Service": cs_pool,
+                "Statement Type": statement_type,
+                "Table Name": table,
+            },
+        )
+    )
+    builder.link("inputPort", "write", [])
+    builder.to_dlq("write", "failure")
+    return "write", "success"
+
+
+def _compile_lookup(
+    builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
+    is_root: bool, add_param,
+) -> Tail:
+    """compiler-spec §3.2: `LookupRecord` + `DatabaseRecordLookupService`
+    (Lookup Service wiring, Result RecordPath `/<joinField>_lookup`, Routing
+    Strategy route to success) — kept simple and documented, per the task
+    brief's own instruction.
+
+    UNCONFIRMED property names (no reference flow uses either processor):
+    `LookupRecord`'s exact class (`org.apache.nifi.processors.standard.
+    LookupRecord` — standard NiFi bundle, high-moderate confidence) and its
+    "Result RecordPath"/"Routing Strategy" property spellings; the dynamic
+    per-record lookup-coordinate property (named `<joinField>`, valued
+    `/<joinField>` as a RecordPath into the incoming record) mirrors how
+    `LookupRecord`'s coordinate properties are generally documented to work,
+    but is not verified against this specific service.
+    `DatabaseRecordLookupService`'s class name
+    (`org.apache.nifi.lookup.db.DatabaseRecordLookupService`) and its
+    "Lookup Key Column" property are moderate-confidence best guesses.
+    Flagged for live E2E.
+
+    NOTE: the frontend does not currently expose a jdbc-lookup join-field
+    control (only http-lookup's `lookupJoinField` input exists in
+    BlockForm.tsx) -- this reads `config.lookupJoinField` defensively
+    (same key name, for consistency with http lookup) with an `"id"`
+    fallback, since nothing currently sets it from the UI.
+    """
+    if is_root:
+        raise CompileError(f"jdbc lookup block {block.id!r} cannot be a flow root")
+    service = _service_for(block, ctx)
+    table = _table_name(block)
+    cs_pool = _ensure_db_pool(builder, service=service, add_param=add_param)
+    join_field = str(block.config.get("lookupJoinField") or "id")
+
+    cs_lookup_key = "cs_db_lookup"
+    if not builder.has_cs(cs_lookup_key):
+        builder.add_cs(
+            ControllerServiceSpec(
+                key=cs_lookup_key, name="db_lookup", type="org.apache.nifi.lookup.db.DatabaseRecordLookupService",
+                properties={
+                    "Database Connection Pooling Service": cs_pool,
+                    "Table Name": table,
+                    "Lookup Key Column": join_field,
+                },
+            )
+        )
+
+    reader_key, writer_key = ensure_json_record_services(builder)
+    builder.add_processor(
+        ProcessorSpec(
+            key="lookup", name="lookup", type="org.apache.nifi.processors.standard.LookupRecord",
+            properties={
+                "Record Reader": reader_key,
+                "Record Writer": writer_key,
+                "Lookup Service": cs_lookup_key,
+                "Result RecordPath": f"/{join_field}_lookup",
+                "Routing Strategy": "Route to Success",
+                join_field: f"/{join_field}",
+            },
+        )
+    )
+    builder.link("inputPort", "lookup", [])
+    builder.to_dlq("lookup", "failure")
+    return "lookup", "success"
