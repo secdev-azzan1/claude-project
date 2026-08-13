@@ -27,7 +27,10 @@ def _to_spec_summary(doc: Dict[str, Any]) -> Dict[str, Any]:
         "version": doc.get("version") or "",
         "format": doc.get("format") or "",
         "openapiVersion": doc.get("openapi_version") or "",
-        "operationsCount": len(doc.get("operations") or []),
+        # operations may be projected out on reads — prefer the stored count
+        "operationsCount": doc.get("operations_count")
+        if doc.get("operations_count") is not None
+        else len(doc.get("operations") or []),
         "servers": doc.get("servers") or [],
         "warnings": doc.get("warnings") or [],
     }
@@ -118,6 +121,7 @@ async def parse_openapi_v2(
         "version": parsed["version"],
         "servers": parsed["servers"],
         "operations": parsed["operations"],
+        "operations_count": len(parsed["operations"] or []),
         "warnings": parsed["warnings"],
         "errors": parsed["errors"],
         "created_at": now,

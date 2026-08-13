@@ -116,6 +116,11 @@ def test_parse_happy_path_returns_camelcase_summary():
         assert body["format"] == "openapi3"
         assert body["openapiVersion"] == "3.0.0"
         assert body["operationsCount"] == 3
+        # regression: GET summary must report the count even though the read
+        # projection excludes the operations array (bug found in T8.U8 live test)
+        got = client.get(f"/api/v2/openapi/{body['specId']}")
+        assert got.status_code == 200
+        assert got.json()["operationsCount"] == 3
         assert body["servers"] == [{"url": "https://api.example.com", "description": "prod"}]
         assert body["warnings"] == []
         assert isinstance(body["specId"], str) and body["specId"]

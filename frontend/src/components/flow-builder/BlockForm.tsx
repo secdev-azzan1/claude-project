@@ -49,6 +49,8 @@ import { KvRows, type KvRow } from "./KvRows";
 import { branchesOf, branchSummary, describeBranch, isConditional } from "@/prototype/branches";
 import { PaginationFields } from "./PaginationFields";
 import { SinkConfigEditor } from "./SinkConfigEditor";
+import { OpenApiPanel } from "./OpenApiPanel";
+import { OpenApiPathCombobox } from "./OpenApiPathCombobox";
 import {
   ServiceFormFields,
   buildConfig,
@@ -70,6 +72,7 @@ import {
   topicNameCollision,
 } from "@/prototype/naming";
 import { saveService } from "@/prototype/api";
+import { getOpenApiOperationDetail } from "@/prototype/openapiClient";
 import { CONNECT_PLUGIN_CATALOG } from "@/prototype/seeds";
 import { uid } from "@/prototype/store";
 import { cn } from "@/lib/utils";
@@ -112,24 +115,6 @@ import { toast } from "sonner";
  */
 const METHODS_FOR_MODE = (mode: BlockMode | undefined): string[] =>
   mode === "write" ? ["POST", "PUT", "PATCH"] : ["GET", "POST"];
-
-/** Canned OpenAPI operations per seeded HTTP service — the picker's data. */
-const OPENAPI_OPERATIONS: Record<string, { label: string; method: string; path: string; recordPath?: string }[]> = {
-  "svc-rapid7": [
-    { label: "GET /api/3/assets — Search assets", method: "GET", path: "/api/3/assets", recordPath: "$.resources[*]" },
-    { label: "GET /api/3/scans — List scans", method: "GET", path: "/api/3/scans", recordPath: "$.resources[*]" },
-    { label: "GET /api/3/vulnerabilities — List vulnerabilities", method: "GET", path: "/api/3/vulnerabilities", recordPath: "$.resources[*]" },
-  ],
-  "svc-fortisiem": [
-    { label: "GET /phoenix/rest/incident/list — List incidents", method: "GET", path: "/phoenix/rest/incident/list", recordPath: "$.incidents[*]" },
-    { label: "GET /phoenix/rest/device/list — List devices", method: "GET", path: "/phoenix/rest/device/list", recordPath: "$.devices[*]" },
-  ],
-  "svc-servicenow": [
-    { label: "GET /api/now/table/cmdb_ci — CMDB items", method: "GET", path: "/api/now/table/cmdb_ci", recordPath: "$.result[*]" },
-    { label: "GET /api/now/table/cmdb_ci_retired — Retired items", method: "GET", path: "/api/now/table/cmdb_ci_retired", recordPath: "$.result[*]" },
-    { label: "POST /api/now/table/incident — Create incident", method: "POST", path: "/api/now/table/incident" },
-  ],
-};
 
 const SECTION_ID_PREFIX = "block-section-";
 
@@ -1132,7 +1117,19 @@ function HttpSettings({
   const cfg = block.config;
   const pagination = (cfg.pagination as { type?: string; fields?: Record<string, string> }) ?? { type: "none", fields: {} };
 
-  const openApiOps = block.serviceId ? OPENAPI_OPERATIONS[block.serviceId] ?? [] : [];
+  const openapiSpecId = (cfg.openapiSpecId as string | undefined) || undefined;
+  const openapiOperationId = (cfg.openapiOperationId as string | undefined) || undefined;
+  // Drives the "N documented parameters" hint below the path field. Reads
+  // from the two persisted config keys rather than any transient selection
+  // state, so the hint survives a block switch or a page reload.
+  const operationDetailQuery = useQuery({
+    queryKey: ["openapi-operation-detail", openapiSpecId, openapiOperationId],
+    queryFn: () => getOpenApiOperationDetail(openapiSpecId!, openapiOperationId!),
+    enabled: !!openapiSpecId && !!openapiOperationId,
+    staleTime: 60_000,
+  });
+  const documentedParamCount = operationDetailQuery.data?.parameters.length ?? 0;
+
   const headers = (cfg.headers as KvRow[]) ?? [];
   const query = (cfg.query as KvRow[]) ?? [];
 
@@ -1148,34 +1145,7 @@ function HttpSettings({
 
   return (
     <div className="space-y-3">
-      {openApiOps.length > 0 && (
-        <div className="grid gap-1.5">
-          <Label>OpenAPI operation</Label>
-          <Select
-            value=""
-            disabled={locked}
-            onValueChange={(v) => {
-              const op = openApiOps.find((o) => o.label === v);
-              if (op) {
-                onPatchConfig(block.id, { method: op.method, path: op.path, ...(op.recordPath ? { recordPath: op.recordPath } : {}) });
-                toast.success(`Applied ${op.method} ${op.path}${op.recordPath ? ` · record path ${op.recordPath}` : ""}`);
-              }
-            }}
-          >
-            <SelectTrigger className="max-w-md">
-              <SelectValue placeholder="Pick from the service's imported spec (fills method, path, record path)…" />
-            </SelectTrigger>
-            <SelectContent>
-              {openApiOps.map((op) => (
-                <SelectItem key={op.label} value={op.label}>
-                  {op.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">OpenAPI 3.0/3.1 JSON only — imported on the HTTP service.</p>
-        </div>
-      )}
+      <OpenApiPanel block={block} locked={locked} onPatchConfig={onPatchConfig} />
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="grid gap-1.5">
@@ -1199,13 +1169,40 @@ function HttpSettings({
         </div>
         <div className="grid min-w-[16rem] flex-1 gap-1.5">
           <Label>Path</Label>
-          <Input
-            className="font-mono text-xs"
-            value={(cfg.path as string) ?? ""}
-            disabled={locked}
-            placeholder="/api/v3/assets or /scans/${scan_id}"
-            onChange={(e) => onPatchConfig(block.id, { path: e.target.value })}
-          />
+          {openapiSpecId ? (
+            <OpenApiPathCombobox
+              specId={openapiSpecId}
+              locked={locked}
+              value={(cfg.path as string) ?? ""}
+              placeholder="/api/v3/assets or /scans/${scan_id}"
+              onChange={(path) => {
+                // Free typing is always allowed — it clears the operation
+                // binding so a hand-edited path is never silently misreported
+                // as "from the doc" (flexibility rule).
+                const patch: Record<string, unknown> = { path };
+                if (cfg.openapiOperationId) patch.openapiOperationId = undefined;
+                onPatchConfig(block.id, patch);
+              }}
+              onSelectOperation={(op) => {
+                onPatchConfig(block.id, { path: op.path, method: op.method, openapiOperationId: op.operationId });
+                toast.success(`Applied ${op.method} ${op.path}`);
+              }}
+            />
+          ) : (
+            <Input
+              className="font-mono text-xs"
+              value={(cfg.path as string) ?? ""}
+              disabled={locked}
+              placeholder="/api/v3/assets or /scans/${scan_id}"
+              onChange={(e) => onPatchConfig(block.id, { path: e.target.value })}
+            />
+          )}
+          {openapiOperationId && documentedParamCount > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {documentedParamCount} documented parameter{documentedParamCount === 1 ? "" : "s"} — configure values under
+              Advanced → Query parameters / Headers.
+            </p>
+          )}
         </div>
       </div>
 
