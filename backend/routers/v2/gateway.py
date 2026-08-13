@@ -86,9 +86,20 @@ async def _apisix_conn(db: AsyncIOMotorDatabase) -> Dict[str, Any]:
     `{"type": "apisix", "active": True}`; `adminKey` is a secret stored
     server-side in `config`.
     """
-    conn = await db[COLLECTIONS.connections].find_one({"type": "apisix", "active": True})
+    conn = await _try_apisix_conn(db)
     if not conn:
         raise HTTPException(status_code=404, detail="No active APISIX connection")
+    return conn
+
+
+async def _try_apisix_conn(db: AsyncIOMotorDatabase) -> Optional[Dict[str, Any]]:
+    """Same lookup as `_apisix_conn`, but returns `None` instead of raising —
+    for best-effort cleanup paths (E4's proxy-delete teardown) that must
+    never hard-fail just because the APISIX connection was retired/never
+    configured."""
+    conn = await db[COLLECTIONS.connections].find_one({"type": "apisix", "active": True})
+    if not conn:
+        return None
     config = conn.get("config") or {}
     return {
         "adminUrl": config.get("adminUrl") or "",
@@ -299,6 +310,7 @@ async def save_proxy(
         next_proxy["createdAt"] = now
         next_proxy["status"] = "Pending"
         next_proxy["statusDetail"] = "Created — not yet reconciled onto the gateway."
+        next_proxy["everReconciled"] = False
         proxies.append(next_proxy)
         response.status_code = 201
         await audit(
@@ -322,6 +334,11 @@ async def save_proxy(
         # A proxy that already has a lastTest keeps it across an edit.
         if "lastTest" in before:
             next_proxy["lastTest"] = before["lastTest"]
+        # E4: "was this proxy ever successfully reconciled onto the live
+        # gateway" survives every subsequent edit (which resets `status`
+        # back to "Pending" until reconciled again) — delete needs this to
+        # know whether there is anything live on APISIX to tear down.
+        next_proxy["everReconciled"] = bool(before.get("everReconciled"))
         proxies[idx] = next_proxy
         response.status_code = 200
         await audit(
@@ -336,6 +353,32 @@ async def save_proxy(
     gateway["proxies"] = proxies
     await _save_gateway(db, gateway)
     return next_proxy
+
+
+async def _teardown_live_apisix_objects(db: AsyncIOMotorDatabase, proxy_id: str) -> Dict[str, Any]:
+    """E4: best-effort delete of the live APISIX routes + upstream a prior
+    `reconcile_proxy()` call pushed for this proxy — `dmp_<id>_root` /
+    `dmp_<id>_wild` (routes) then `dmp_<id>` (upstream), mirroring
+    `reconcile_proxy`'s own naming and the "routes before upstream" order
+    (an upstream with live routes still pointing at it is the wrong order
+    to delete in). Never raises: every failure is collected into `errors`
+    for the caller to fold into the audit detail rather than swallow."""
+    conn = await _try_apisix_conn(db)
+    if conn is None:
+        return {"cleaned": False, "errors": ["No active APISIX connection — live gateway objects were not cleaned up."]}
+
+    admin_url, admin_key = conn["adminUrl"], conn["adminKey"]
+    errors: List[str] = []
+    for route_id in (f"dmp_{proxy_id}_root", f"dmp_{proxy_id}_wild"):
+        result = await apisix_client.delete_route(admin_url, admin_key, route_id)
+        if not result.get("ok"):
+            errors.append(f'route "{route_id}": {result.get("error") or "delete failed"}')
+
+    upstream_result = await apisix_client.delete_upstream(admin_url, admin_key, f"dmp_{proxy_id}")
+    if not upstream_result.get("ok"):
+        errors.append(f'upstream "dmp_{proxy_id}": {upstream_result.get("error") or "delete failed"}')
+
+    return {"cleaned": not errors, "errors": errors}
 
 
 @router.delete("/proxies/{proxy_id}")
@@ -357,10 +400,24 @@ async def delete_proxy(proxy_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
             ),
         )
 
+    # E4: a proxy that was ever reconciled pushed real objects onto the live
+    # gateway (`reconcile_proxy`) — deleting only the platform's own Mongo
+    # record left them running (and routing traffic) forever. A proxy that
+    # never made it past "Pending" has nothing live to clean up.
+    apisix_cleaned = False
+    cleanup_detail: Optional[str] = None
+    if proxy.get("everReconciled"):
+        teardown = await _teardown_live_apisix_objects(db, proxy_id)
+        apisix_cleaned = bool(teardown["cleaned"])
+        if teardown["errors"]:
+            cleanup_detail = "APISIX cleanup incomplete — " + "; ".join(teardown["errors"])
+        else:
+            cleanup_detail = "Live APISIX routes and upstream removed."
+
     gateway["proxies"] = [p for p in proxies if p.get("id") != proxy_id]
     await _save_gateway(db, gateway)
-    await audit(db, "Gateway proxy deleted", proxy.get("name", ""), "Warning", object="Gateway")
-    return {"ok": True, "id": proxy_id}
+    await audit(db, "Gateway proxy deleted", proxy.get("name", ""), "Warning", details=cleanup_detail, object="Gateway")
+    return {"ok": True, "id": proxy_id, "apisixCleaned": apisix_cleaned}
 
 
 # ------------------------------------------------------------- reconcile
@@ -466,6 +523,7 @@ async def reconcile_proxy(proxy_id: str, db: AsyncIOMotorDatabase = Depends(get_
 
     proxy["status"] = "Reconciled"
     proxy["statusDetail"] = None
+    proxy["everReconciled"] = True
     proxy["updatedAt"] = now_iso()
     proxies[idx] = proxy
     gateway["proxies"] = proxies

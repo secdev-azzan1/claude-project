@@ -5,8 +5,9 @@ Every child of block P attaches at P's finished-record tail. Per spec:
     connection — "NiFi fans out copies" when a relationship has multiple
     outbound connections, so no processor is needed.
   - conditional, match="any": ONE `RouteOnAttribute` (`route__<branchToken>`,
-    "Route to Property name" strategy) with one dynamic property per rule;
-    ANY matched relationship feeds the child; `unmatched` auto-terminates.
+    "Route to 'matched' if any matches" strategy) with one dynamic property
+    per rule; the single `matched` relationship feeds the child exactly once
+    (see `_wire_any_match` — review M1); `unmatched` auto-terminates.
   - conditional, match="all": a CHAIN of `RouteOnAttribute` processors
     (`route__<branchToken>__rule_<i>`), each testing one rule; `matched`
     advances to the next rule (or the child, on the last one); every
@@ -15,6 +16,14 @@ Every child of block P attaches at P's finished-record tail. Per spec:
 Routing processors live in the PARENT's BlockGroup (they are the parent's
 egress decision, not the child's) — `compile_flow` attributes their keys to
 the parent's scope-map entry accordingly.
+
+On the `to_dlq(<route>, "failure")` edges below (review C2 claimed they make
+every routed flow undeployable): EMPIRICALLY REFUTED — Journey B deployed
+this exact wiring against live NiFi, the connections were read back off the
+NiFi REST API (`route__males --[failure]--> dlq__meta` et al.), the flow
+started and produced exact per-branch counts over three cron firings. Live
+NiFi accepts the connection and it is inert at runtime (RouteOnAttribute
+never emits `failure`), so the edges are kept as wired-and-verified reality.
 
 Processor keys are derived from the branch's NAME (`route__<branchToken>`),
 so two conditional children of the same parent sharing a branch name would
@@ -116,16 +125,22 @@ def wire_children(
 
 
 def _wire_any_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail") -> List[str]:
+    """match="any": ONE `RouteOnAttribute` with one genuine dynamic property
+    per rule (D7's "N real decision expressions on one processor"), but with
+    `Routing Strategy = Route to 'matched' if any matches` and a SINGLE
+    `matched` connection to the child. The previous "Route to Property name"
+    strategy transferred a COPY of the FlowFile to EVERY matching property
+    (review finding M1) — a record matching several rules was delivered to
+    the child once per matching rule. The 'matched'-if-any strategy collapses
+    the relationship set to `matched`/`unmatched`, so a record is forwarded
+    exactly once no matter how many rules it satisfies."""
     key = f"route__{_branch_token(child)}"
     rules = child.branch.rules or []
     if not rules:
         raise CompileError(f"Branch on {child.id!r} has match='any' but no rules")
-    props = {"Routing Strategy": "Route to Property name"}
-    rel_names: List[str] = []
+    props = {"Routing Strategy": "Route to 'matched' if any matches"}
     for i, rule in enumerate(rules):
-        rel = f"rule_{i}"
-        rel_names.append(rel)
-        props[rel] = branch_rule_el(rule.field, rule.op, rule.value)
+        props[f"rule_{i}"] = branch_rule_el(rule.field, rule.op, rule.value)
     builder.add_processor(
         ProcessorSpec(key=key, name=key, type="org.apache.nifi.processors.standard.RouteOnAttribute",
                       properties=props, autoTerminate=["unmatched"])
@@ -133,8 +148,7 @@ def _wire_any_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail"
     src_key, src_rel = source
     builder.link(src_key, key, [src_rel])
     builder.to_dlq(key, "failure")
-    for rel in rel_names:
-        builder.link(key, out_port(child.id), [rel])
+    builder.link(key, out_port(child.id), ["matched"])
     return [key]
 
 

@@ -216,6 +216,76 @@ def test_save_while_running_is_refused_with_mirrored_guard_reason():
         _clear_overrides()
 
 
+def test_save_rename_of_deployed_stopped_flow_refused_409():
+    """M12 — MVP §7.1 invariant 2: names freeze at Deploy. A Stopped,
+    deployed flow otherwise passes the edit-lock check (structural edits
+    ARE allowed at rest) -- only a NAME change must be refused, to keep
+    derived topic/DLQ/connector names (all derived from the flow's name)
+    from silently orphaning the ones created under the old name."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    existing = _valid_flow(
+        flow_id="flow-deployed-stopped-1",
+        state="Stopped",
+        deployedAt="2026-08-01T00:00:00.000Z",
+        createdAt="2026-08-01T00:00:00.000Z",
+        updatedAt="2026-08-01T00:00:00.000Z",
+    )
+    fake_db.flows_v2.docs.append(existing)
+    client = _make_client(fake_db)
+    try:
+        renamed = dict(existing)
+        renamed["name"] = "Valid Flow v2"
+        resp = client.post("/api/v2/flows/", json=renamed)
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["detail"] == "Names freeze at deploy — undeploy first to rename."
+        assert fake_db.flows_v2.docs[0]["name"] == "Valid Flow"  # untouched
+    finally:
+        _clear_overrides()
+
+
+def test_save_structural_edit_of_deployed_stopped_flow_still_allowed():
+    """The name-freeze guard must not become a blanket edit-lock -- a
+    Stopped, deployed flow can still have its structure edited (only
+    renaming is refused) per MVP §7.1's own carve-out."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    existing = _valid_flow(
+        flow_id="flow-deployed-stopped-2",
+        state="Stopped",
+        deployedAt="2026-08-01T00:00:00.000Z",
+        createdAt="2026-08-01T00:00:00.000Z",
+        updatedAt="2026-08-01T00:00:00.000Z",
+    )
+    fake_db.flows_v2.docs.append(existing)
+    client = _make_client(fake_db)
+    try:
+        edited = dict(existing)
+        edited["description"] = "Updated description, same name"
+        resp = client.post("/api/v2/flows/", json=edited)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["name"] == "Valid Flow"
+        assert fake_db.flows_v2.docs[0]["description"] == "Updated description, same name"
+    finally:
+        _clear_overrides()
+
+
+def test_save_rename_of_never_deployed_draft_flow_allowed():
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    existing = _valid_flow(flow_id="flow-draft-rename-1")  # deployedAt is None
+    fake_db.flows_v2.docs.append(existing)
+    client = _make_client(fake_db)
+    try:
+        renamed = dict(existing)
+        renamed["name"] = "Renamed While Draft"
+        resp = client.post("/api/v2/flows/", json=renamed)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["name"] == "Renamed While Draft"
+    finally:
+        _clear_overrides()
+
+
 # ---------------------------------------------------------------- delete
 
 def test_delete_draft_flow_ok():
@@ -237,7 +307,9 @@ def test_delete_deployed_flow_tears_down_and_removes():
     connections happen to be configured, then removes the docs) instead of
     refusing with 409 — with no connections_v2 docs seeded here, every
     NiFi/Connect/Kafka step is a no-op skip (no active connection to act
-    against), so this also exercises that skip-if-missing path end to end."""
+    against). E7: a deletion step that could not even be attempted (no
+    active kafka connection to delete the DLQ topic through) is now
+    recorded as an orphan rather than silently dropped."""
     fake_db = FakeDB()
     fake_db.flows_v2.docs.append(
         _valid_flow(flow_id="flow-del-2", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z")
@@ -246,7 +318,12 @@ def test_delete_deployed_flow_tears_down_and_removes():
     try:
         resp = client.delete("/api/v2/flows/flow-del-2")
         assert resp.status_code == 200, resp.text
-        assert resp.json() == {"ok": True, "id": "flow-del-2"}
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["id"] == "flow-del-2"
+        assert body["orphans"] == [
+            {"kind": "topic", "ref": "dlq.valid_flow", "reason": "No active kafka connection is configured."}
+        ]
         assert fake_db.flows_v2.docs == []
         actions = [e["action"] for e in fake_db.audit_v2.docs]
         assert "Flow undeployed" in actions

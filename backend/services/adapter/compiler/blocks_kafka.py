@@ -12,48 +12,22 @@ A `kafka` READ block is a continuous consumer (R1: "kafka reads are never
 scheduled"), so `ConsumeKafka` needs no trigger/input-port wiring at all,
 root or not.
 
-ARCHITECTURE NOTE (read the whole thing before touching this module): unlike
-`blocks_http.compile_read` / `blocks_jdbc.compile_entry` — which both receive
-`builder` and can add processors directly — `compile_flow.py`'s dispatch for
-adapter `"kafka"` calls `compile_entry(block, is_root=is_root)` (NO `builder`
-argument; a signature that predates this task, written when the adapter was
-write-only) and then unconditionally sets `terminal = True` for EVERY kafka
-block regardless of `mode`, which always routes into
-`compile_publish(builder, ..., tail=tail)` next (the only kafka-dispatch
-function that DOES receive `builder`). Both of these are `compile_flow.py`
-internals outside this task's edit scope (only `blocks_jdbc.py`,
-`blocks_kafka.py`, `blocks_http.py`, `transforms.py` are in scope), so `read`
-mode is implemented to fit that exact, unmodified call contract rather than
-the shape it would otherwise take:
+ARCHITECTURE NOTE: `compile_flow.py`'s kafka dispatch calls
+`compile_entry(block, is_root=is_root)` (no `builder`) which, for read mode,
+returns a "promised" Tail — the key/relationship of the parse/split processor
+that `compile_publish()` (which does receive `builder`) adds afterwards.
+Safe because BlockBuilder's graph is flat lists: `transforms.build_chain()`
+only records connections referencing the key, which exists by
+`build_group()` time.
 
-  - `compile_entry()` (no builder) returns a "promised" `Tail` for read mode
-    — the key/relationship of a processor that does not exist YET, naming
-    what `compile_publish()` will add later. Since `BlockBuilder`'s graph is
-    just flat `processors[]` + `connections[]` lists (no ordering
-    requirement), this is safe: `transforms.build_chain()` (called between
-    `compile_entry()` and `compile_publish()`) only ever *records a
-    connection* referencing that key — the key just needs to exist by the
-    time `builder.build_group()` runs at the very end, which it does once
-    `compile_publish()` adds it.
-  - `compile_publish()` (has builder) dispatches on `block.mode`: for
-    `"read"`, it adds `ConsumeKafka` + the parse/split chain (fulfilling
-    `compile_entry()`'s promise), then — because `terminal=True` means
-    `compile_flow.py` will NEVER call `routing.wire_children()` for a kafka
-    block, read or write — auto-terminates the finished tail itself
-    (`builder.auto_terminate_tail`), exactly mirroring
-    `compile_flow.py`'s own "non-terminal, childless" pattern.
-
-KNOWN GAP this leaves (flagged for the owning agent, since fixing it means
-editing `compile_flow.py`, out of this task's scope): a `kafka`+`read` block
-that has children in the flow model (legal per `legality.py` — `is_terminal()`
-only returns True for `kafka_kc`/`kc`, and `compute_add_menu()` offers real
-continuations after a non-raw read) will have those children compiled as
-their own independent BlockGroups (the outer `for block in flow.blocks` loop
-in `compile_flow.py` processes every block unconditionally), but NO PortLink
-is ever created into them, because `terminal=True` short-circuits the
-`elif children: routing.wire_children(...)` branch for every kafka block.
-Test flows in this task deliberately give kafka-read blocks no children, to
-stay inside the currently-wired-up shape.
+kafka blocks are NOT terminal (R3: the chain continues after a kafka write;
+a read is a source — only kafka_kc/kc are terminal). `compile_flow.py`
+always calls `compile_publish()` for kafka blocks (read → consume+split
+chain; write → PublishKafka consuming the tail) and then wires children off
+the tail via `routing.wire_children()`, or auto-terminates the tail itself
+in the childless-read case. This module must NOT auto-terminate the tail —
+tail disposition belongs to `compile_flow.py` (regression-tested by
+`test_kafka_read_with_child_gets_port_link`).
 """
 
 from __future__ import annotations
@@ -89,13 +63,14 @@ def _read_entry_tail(block: FlowBlock) -> Tail:
     see the module docstring's ARCHITECTURE NOTE. `raw` skips parsing
     entirely (R8 quarantine: byte passthrough, no record processing) so the
     promise is `ConsumeKafka`'s own `success` relationship directly; every
-    other format promises the eventual per-record split step."""
+    other format (json included — M17, see `_compile_read_terminal`) promises
+    the eventual per-record `SplitRecord` step's `splits` relationship."""
     parse_format = str(block.config.get("parseFormat", "json"))
     if parse_format == "raw":
         return "consume", "success"
     if parse_format not in ("json", "csv", "xml"):
         raise NotImplementedError(f"kafka read parseFormat {parse_format!r} is not implemented — block {block.id}")
-    return "split", ("split" if parse_format == "json" else "splits")
+    return "split", "splits"
 
 
 def _resolve_topic(flow: "Flow", block: FlowBlock) -> str:
@@ -244,20 +219,24 @@ def _compile_read_terminal(
     )
 
     if parse_format != "raw":
+        # M17: json splits via record-based SplitRecord (JsonTreeReader ->
+        # JsonRecordSetWriter, 1 record per split), NOT SplitJson `$[*]` —
+        # a Kafka message is normally one JSON OBJECT, and Jayway's `$[*]`
+        # over an object shreds it into its VALUES (scalars). SplitRecord
+        # handles both shapes: an object message is one record, an
+        # array-batched message is N records. csv/xml already took this
+        # path; json now shares it with its own reader.
         if parse_format == "json":
-            builder.add_processor(
-                ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitJson",
-                              properties={"JsonPath Expression": "$[*]"}, autoTerminate=["original"])
-            )
+            reader_key, writer_key = ensure_json_record_services(builder)
         else:
             reader_key = _ensure_csv_reader(builder) if parse_format == "csv" else _ensure_xml_reader(builder)
             _, writer_key = ensure_json_record_services(builder)
-            builder.add_processor(
-                ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitRecord",
-                              properties={"Record Reader": reader_key, "Record Writer": writer_key,
-                                          "Records Per Split": "1"},
-                              autoTerminate=["original"])
-            )
+        builder.add_processor(
+            ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitRecord",
+                          properties={"Record Reader": reader_key, "Record Writer": writer_key,
+                                      "Records Per Split": "1"},
+                          autoTerminate=["original"])
+        )
         builder.link("consume", "split", ["success"])
         builder.to_dlq("split", "failure")
 

@@ -213,9 +213,22 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
     existing = await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
 
     if existing:
-        lock_reason = _get_edit_lock_reason(Flow(**existing))
+        existing_flow = Flow(**existing)
+        lock_reason = _get_edit_lock_reason(existing_flow)
         if lock_reason:
             raise HTTPException(status_code=409, detail=lock_reason)
+        # M12: MVP §7.1 invariant 2 — "names freeze at Deploy... for the
+        # flow's lifetime". `deployedAt` set means this flow (Stopped or
+        # not — a Stopped, deployed flow otherwise passes the edit-lock
+        # check above and IS allowed structural edits) has derived real
+        # topic/DLQ/connector names from its current name at least once;
+        # renaming it now would silently orphan those names (proven live —
+        # docs/orchestration/reviews/flow-engine-review.md M12) since
+        # nothing re-derives or migrates them. The frontend already
+        # disables the name input in this state; this is the server-side
+        # backstop for API clients that bypass it.
+        if existing_flow.deployedAt and existing_flow.name != flow_in.name:
+            raise HTTPException(status_code=409, detail="Names freeze at deploy — undeploy first to rename.")
 
     services = await _load_services(db)
     schemas = await _load_schemas(db)

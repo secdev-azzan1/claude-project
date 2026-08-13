@@ -41,6 +41,7 @@ export interface ServiceForm {
   loginPath: string;
   tokenPath: string;
   tokenHeader: string;
+  tokenTemplate: string;
   /** APISIX egress for this host — empty means call it directly. */
   proxyId: string;
   // database
@@ -82,6 +83,7 @@ export const emptyForm = (): ServiceForm => ({
   loginPath: "",
   tokenPath: "",
   tokenHeader: "",
+  tokenTemplate: "",
   proxyId: "",
   dialect: "postgresql",
   host: "",
@@ -119,6 +121,7 @@ export function formFromService(svc: AppService): ServiceForm {
     loginPath: str(c.loginPath),
     tokenPath: str(c.tokenPath),
     tokenHeader: str(c.tokenHeader),
+    tokenTemplate: str(c.tokenTemplate),
     proxyId: str(c.proxyId),
     dialect: (str(c.dialect, "postgresql") as JdbcDialect) || "postgresql",
     host: str(c.host),
@@ -157,6 +160,7 @@ export function buildConfig(type: ServiceType, f: ServiceForm): Record<string, u
         cfg.loginPath = f.loginPath.trim();
         cfg.tokenPath = f.tokenPath.trim();
         cfg.tokenHeader = f.tokenHeader.trim();
+        cfg.tokenTemplate = f.tokenTemplate.trim();
       }
       // Egress belongs to the host, and the host is this service — so every
       // block using it inherits the same route out.
@@ -386,6 +390,18 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                       <TextField label="Login path" mono value={form.loginPath} placeholder="/rest/login" onChange={(loginPath) => setForm((p) => ({ ...p, loginPath }))} />
                       <TextField label="Token JSONPath" mono value={form.tokenPath} placeholder="$.sessionToken" onChange={(tokenPath) => setForm((p) => ({ ...p, tokenPath }))} />
                       <TextField label="Token header" mono value={form.tokenHeader} placeholder="Authorization" onChange={(tokenHeader) => setForm((p) => ({ ...p, tokenHeader }))} />
+                      <div className="grid gap-1.5">
+                        <TextField
+                          label="Injection template"
+                          mono
+                          value={form.tokenTemplate}
+                          placeholder="Bearer ${token}"
+                          onChange={(tokenTemplate) => setForm((p) => ({ ...p, tokenTemplate }))}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          How the token is inserted into the header — use {"${token}"} as the placeholder. Leave empty to send the raw token.
+                        </p>
+                      </div>
                       <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
                         Logins are never modeled as data streams — session bootstrap lives here now.
                       </div>

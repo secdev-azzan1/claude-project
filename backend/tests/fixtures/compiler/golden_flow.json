@@ -70,7 +70,7 @@
               "Character Set": "UTF-8",
               "Data Format": "Text"
             },
-            "schedulingPeriod": "0 0 */6 * * *",
+            "schedulingPeriod": "0 0 */6 * * ?",
             "schedulingStrategy": "CRON_DRIVEN",
             "autoTerminate": [],
             "runOnPrimary": true
@@ -82,7 +82,6 @@
             "properties": {
               "Accept": "application/json",
               "mime.type": "application/json",
-              "request.url": "#{svc_svc-http_base_url}/api/3/assets?offset=${offset}&limit=${limit}",
               "offset": "0",
               "limit": "200",
               "page_count": "0"
@@ -111,7 +110,7 @@
               "Request Chunked Transfer-Encoding Enabled": "false",
               "HTTP/2 Disabled": "True",
               "HTTP Method": "GET",
-              "HTTP URL": "${request.url}",
+              "HTTP URL": "#{svc_svc-http_base_url}/api/3/assets?offset=${offset}&limit=${limit}",
               "X-Api-Key": "#{svc_svc-http_key_value}"
             },
             "autoTerminate": [
@@ -668,15 +667,23 @@
         "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
         "topics": "raw.golden_flow.asset",
         "tasks.max": "1",
+        "consumer.override.auto.offset.reset": "earliest",
         "iceberg.tables": "bronze.asset",
         "iceberg.tables.auto-create-enabled": "true",
+        "iceberg.catalog.type": "rest",
         "iceberg.catalog.uri": "http://polaris.internal.corp:8181/api/catalog",
         "iceberg.catalog.warehouse": "bronze",
+        "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+        "iceberg.catalog.client.region": "us-east-1",
+        "iceberg.catalog.s3.region": "us-east-1",
+        "iceberg.catalog.s3.path-style-access": "true",
         "iceberg.control.commit.interval-ms": "60000",
         "value.converter": "io.apicurio.registry.utils.converter.AvroConverter",
-        "value.converter.apicurio.registry.url": "http://apicurio.internal.corp:8081/apis/ccompat/v7",
+        "value.converter.apicurio.registry.url": "http://apicurio.internal.corp:8081/apis/registry/v3",
         "value.converter.apicurio.registry.as-confluent": "true",
         "value.converter.apicurio.registry.find-latest": "true",
+        "value.converter.apicurio.registry.use-id": "contentId",
+        "value.converter.apicurio.registry.auto-register": "false",
         "value.converter.schemas.enable": "true",
         "key.converter": "org.apache.kafka.connect.storage.StringConverter"
       },

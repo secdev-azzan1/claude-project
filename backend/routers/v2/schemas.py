@@ -366,6 +366,12 @@ async def approve_schema(body: Dict[str, Any] = Body(...), db: AsyncIOMotorDatab
         username=auth["username"],
         password=auth["password"],
         token=auth["token"],
+        # E6: register exactly once via ccompat — see
+        # services/apicurio_client.py::_register_schema_ccompat_only's
+        # docstring. Every v2 call site uses this so the app's own
+        # per-approval version counter stays 1:1 with the registry's
+        # ccompat version numbers (the delete-by-version path depends on it).
+        ccompat_only=True,
     )
     if not result.get("ok"):
         await audit(
@@ -483,6 +489,7 @@ async def register_schema_standalone(body: Dict[str, Any] = Body(...), db: Async
         username=auth["username"],
         password=auth["password"],
         token=auth["token"],
+        ccompat_only=True,  # E6 — see approve_schema's call site for the rationale.
     )
     if not result.get("ok"):
         raise HTTPException(status_code=502, detail=f"Registration failed: {result.get('error') or 'unknown error'}")

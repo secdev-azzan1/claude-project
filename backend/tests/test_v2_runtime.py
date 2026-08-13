@@ -318,6 +318,79 @@ def test_messages_owned_topic_no_kafka_connection_returns_empty_list():
         _clear_overrides()
 
 
+def test_messages_api_created_flow_owns_its_derived_topic_without_frontend_sync():
+    """E3: an API-created flow that never went through the frontend's
+    `syncTopics()` step (`flow.topics` empty/absent) must still be able to
+    view the topic its own kafka-write block derives -- ownership is
+    computed server-side from the block, not only from `flow.topics`."""
+    fake_db = FakeDB()
+    flow_doc = _http_kafka_flow(topics=[])  # nothing frontend-materialized
+    fake_db.flows_v2.docs.append(flow_doc)
+    client = _make_client(fake_db)
+    try:
+        resp = client.get(f"/api/v2/flows/{flow_doc['id']}/messages", params={"topic": "raw.test_flow.thing"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"messages": []}
+    finally:
+        _clear_overrides()
+
+
+def test_messages_dlq_topic_is_owned_even_when_not_materialized():
+    """E3: the DLQ topic (`dlq_name(flow.name)`) is now part of the shared
+    ownership set feeding both `/messages` and `topicCounts` -- it was
+    never in `flow.topics` before this fix and 404'd unconditionally."""
+    fake_db = FakeDB()
+    flow_doc = _http_kafka_flow(topics=[])
+    fake_db.flows_v2.docs.append(flow_doc)
+    client = _make_client(fake_db)
+    try:
+        resp = client.get(f"/api/v2/flows/{flow_doc['id']}/messages", params={"topic": "dlq.test_flow"})
+        assert resp.status_code == 200, resp.text
+    finally:
+        _clear_overrides()
+
+
+def test_messages_still_404s_for_a_genuinely_unowned_topic():
+    fake_db = FakeDB()
+    flow_doc = _http_kafka_flow(topics=[])
+    fake_db.flows_v2.docs.append(flow_doc)
+    client = _make_client(fake_db)
+    try:
+        resp = client.get(f"/api/v2/flows/{flow_doc['id']}/messages", params={"topic": "raw.someone_else.thing"})
+        assert resp.status_code == 404, resp.text
+    finally:
+        _clear_overrides()
+
+
+@async_test
+async def test_metrics_topic_counts_include_derived_topic_without_frontend_sync(monkeypatch):
+    """E3: `topicCounts` must feed off the same server-derived ownership set
+    as `/messages` -- previously it only ever read `flow.topics`."""
+    fake_db = FakeDB()
+    flow_doc = _http_kafka_flow(topics=[])
+    _seed_nifi_connection(fake_db)
+    _seed_kafka_connection(fake_db)
+
+    async def fake_nifi_api_request(url, method, path, **kwargs):
+        return {"ok": True, "data": {"processGroupStatus": {"aggregateSnapshot": {
+            "flowFilesOut": 0, "flowFilesQueued": 0, "connectionStatusSnapshots": [], "processGroupStatusSnapshots": [],
+        }}}}
+
+    counted = []
+
+    async def fake_count_topic(kafka_conn, name):
+        counted.append(name)
+        return {"ok": True, "total_messages": 1}
+
+    monkeypatch.setattr(runtime_svc, "nifi_api_request", fake_nifi_api_request)
+    monkeypatch.setattr(runtime_svc.topics_mod, "count_topic", fake_count_topic)
+
+    result = await runtime_svc.get_flow_metrics(fake_db, flow_doc)
+    topic_names = {t["topic"] for t in result["topicCounts"]}
+    assert "raw.test_flow.thing" in topic_names  # derived from b2, never in flow.topics here
+    assert "dlq.test_flow" in topic_names
+
+
 # ================================================================ 4. runtime
 
 
@@ -428,6 +501,68 @@ async def test_runtime_healthy_pg_reads_components_and_controller_services(monke
     assert {"nid-trigger", "nid-init", "nid-fetch", "nid-publish"} <= ids
     for c in result["components"]:
         assert c["state"] == "STOPPED"
+
+
+@async_test
+async def test_runtime_drift_out_of_band_rename_detected(monkeypatch):
+    """E8: the PG exists and is reachable, but its live name no longer
+    matches `tokenize(flow.name)` ("test_flow" for `_http_kafka_flow`'s
+    "Test Flow") -- an out-of-band rename. Before this fix, `read_runtime`
+    only ever emitted `process_group_missing` findings and a rename was
+    invisible."""
+    fake_db = FakeDB()
+    flow_doc = _http_kafka_flow()
+    _seed_nifi_connection(fake_db)
+
+    async def fake_probe(conn):
+        return {"ok": True, "fingerprint": "root-A", "reachable": True, "error": None}
+
+    async def fake_pg_check(url, method, path, **kwargs):
+        if path == "/nifi-api/process-groups/pg-flow-1":
+            return {"ok": True, "data": {"id": "pg-flow-1", "component": {"id": "pg-flow-1", "name": "test_flow_drifted"}}}
+        raise AssertionError(f"unexpected path {path}")
+
+    async def fake_get_processor_config(url, processor_id, **kwargs):
+        return {"ok": True, "id": processor_id, "name": "x", "type": "t", "state": "STOPPED",
+                "properties": {}, "descriptors": {}, "validation_errors": [], "revision": 0}
+
+    monkeypatch.setattr(runtime_svc, "probe_nifi_fingerprint", fake_probe)
+    monkeypatch.setattr(runtime_svc, "nifi_api_request", fake_pg_check)
+    monkeypatch.setattr(runtime_svc.nifi_flow_manager, "get_processor_config", fake_get_processor_config)
+
+    result = await runtime_svc.read_runtime(fake_db, flow_doc)
+    assert result["reachable"] is True
+    assert len(result["drift"]) == 1
+    finding = result["drift"][0]
+    assert finding["kind"] == "property_edited"
+    assert finding["verdict"] == "out_of_band_edit"
+    assert finding["expected"] == "test_flow"
+    assert finding["observed"] == "test_flow_drifted"
+    assert finding["repairable"] is False
+
+
+@async_test
+async def test_runtime_no_drift_when_pg_name_matches(monkeypatch):
+    fake_db = FakeDB()
+    flow_doc = _http_kafka_flow()
+    _seed_nifi_connection(fake_db)
+
+    async def fake_probe(conn):
+        return {"ok": True, "fingerprint": "root-A", "reachable": True, "error": None}
+
+    async def fake_pg_check(url, method, path, **kwargs):
+        return {"ok": True, "data": {"id": "pg-flow-1", "component": {"id": "pg-flow-1", "name": "test_flow"}}}
+
+    async def fake_get_processor_config(url, processor_id, **kwargs):
+        return {"ok": True, "id": processor_id, "name": "x", "type": "t", "state": "STOPPED",
+                "properties": {}, "descriptors": {}, "validation_errors": [], "revision": 0}
+
+    monkeypatch.setattr(runtime_svc, "probe_nifi_fingerprint", fake_probe)
+    monkeypatch.setattr(runtime_svc, "nifi_api_request", fake_pg_check)
+    monkeypatch.setattr(runtime_svc.nifi_flow_manager, "get_processor_config", fake_get_processor_config)
+
+    result = await runtime_svc.read_runtime(fake_db, flow_doc)
+    assert result["drift"] == []
 
 
 def test_runtime_no_process_group_returns_404_when_no_prior_doc():

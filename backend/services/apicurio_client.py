@@ -123,6 +123,71 @@ async def test_apicurio_connection(
         return {"ok": False, "error": str(e)[:300]}
 
 
+async def _register_schema_ccompat_only(
+    ccompat_url: str,
+    artifact_id: str,
+    schema_str: str,
+    bearer_header: Dict[str, str],
+    auth: Optional[tuple],
+) -> Dict[str, Any]:
+    """E6 fix: register exactly once, via the Confluent-compatible API only
+    — no native v3/v2 follow-up POST. `register_schema`'s default dual-write
+    (ccompat POST + native v3/v2 POST) lands on the same underlying Apicurio
+    artifact and BOTH increment the subject's ccompat version counter even
+    for byte-identical content, so one logical registration always consumed
+    2 ccompat version slots. `routers/v2/schemas.py::delete_approved_schema_
+    version` then forwarded the app's own 1-per-approval version counter
+    straight through as the literal ccompat version to delete — from the
+    second approval onward the two numbering schemes were no longer
+    aligned, so delete targeted the WRONG registry version (live-verified,
+    docs/orchestration/e2e/journey-c-d.md DEFECT-2). Live E2E evidence also
+    showed content registered via ccompat IS resolvable through the native
+    v3 API for the same subject/group (Apicurio unifies both APIs over one
+    content store) — so skipping the native POST here does not make the
+    schema any less visible to a native-API reader (e.g. NiFi's own
+    ConfluentSchemaRegistry CS already reads ccompat directly, per the
+    compiled flow structure verified in journey-a-e.md).
+
+    Callers of `register_schema(..., ccompat_only=True)` — every v2 router
+    call site (approve/register) — get a `version` field back (the ccompat
+    version this call just created), which the legacy dual-write path never
+    returned (its `version` is always the native API's `version`, which is
+    NOT the ccompat version needed for the delete-by-version path)."""
+    async with httpx.AsyncClient(verify=tls_verify_enabled(), timeout=15.0) as client:
+        cc_ep = f"{ccompat_url}/subjects/{artifact_id}/versions"
+        cc_payload = {"schema": schema_str, "schemaType": "AVRO"}
+        try:
+            r = await client.post(
+                cc_ep,
+                json=cc_payload,
+                headers={"Content-Type": "application/vnd.schemaregistry.v1+json", **bearer_header},
+                auth=auth,
+            )
+        except Exception as e:
+            return {"ok": False, "error": f"ccompat subject register error: {str(e)[:200]}"}
+        if r.status_code not in (200, 201):
+            return {"ok": False, "error": f"ccompat subject register failed {r.status_code}: {r.text[:200]}"}
+        try:
+            data = r.json()
+        except Exception:
+            data = {}
+        schema_id = data.get("id")
+
+        version = None
+        try:
+            latest = await client.get(
+                f"{ccompat_url}/subjects/{artifact_id}/versions/latest",
+                headers=bearer_header,
+                auth=auth,
+            )
+            if latest.status_code == 200:
+                version = latest.json().get("version")
+        except Exception as e:
+            logger.warning(f"ccompat-only register: could not resolve the new version number: {e}")
+
+        return {"ok": True, "api_version": "ccompat", "global_id": schema_id, "version": version, "ccompat_id": schema_id}
+
+
 async def register_schema(
     url: str,
     group_id: str,
@@ -132,12 +197,22 @@ async def register_schema(
     username: Optional[str] = None,
     password: Optional[str] = None,
     token: Optional[str] = None,
+    ccompat_only: bool = False,
 ) -> Dict[str, Any]:
     """Register or update an Avro schema in Apicurio Registry.
 
     Strategy:
     1) Try Confluent-compatible subjects API first (works for ccompat-only endpoints).
     2) Fallback to native Apicurio v3, then v2 endpoints when available.
+
+    `ccompat_only=True` (E6 — see `_register_schema_ccompat_only`'s
+    docstring) skips step 2 entirely: exactly one ccompat registration call,
+    no native v3/v2 follow-up write, so ccompat's per-subject version
+    counter advances by exactly 1 per logical registration. Every v2 router
+    call site (`routers/v2/schemas.py`'s `approve_schema` /
+    `register_schema_standalone`) passes this; the legacy alpha router
+    (`routers/flows.py`, `routers/schemas.py`) does not pass it and keeps
+    the original dual-write behaviour unchanged.
     """
     import json
     endpoints = _normalize_apicurio_endpoints(url)
@@ -153,6 +228,9 @@ async def register_schema(
         auth = (username, password)
 
     schema_str = json.dumps(avro_schema)
+
+    if ccompat_only:
+        return await _register_schema_ccompat_only(ccompat_url, artifact_id, schema_str, bearer_header, auth)
 
     async def _sync_ccompat_subject() -> Dict[str, Any]:
         """

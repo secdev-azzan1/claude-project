@@ -4,14 +4,25 @@ FULL scope: all three modes (read/write/lookup), all six auth modes, proxy
 egress base-URL swap, all four pagination styles (read only), json/csv/xml
 response parsing.
 
-Design used throughout (read mode): `fetch`'s "HTTP URL" property is ALWAYS
-`${request.url}` — `init` seeds `request.url` to an EL template containing
-the literal (unevaluated) `${offset}`/`${page}`/`${cursor}` placeholders for
-the first three pagination styles (NiFi re-evaluates the template fresh each
-time the looped flowfile re-enters `fetch`, so `next` only has to update the
-underlying counter attribute, not the URL string itself); for `next_url`
-pagination, `next` overwrites `request.url` directly with the server-given
-absolute URL each iteration, since there is no query template to re-evaluate.
+Design used throughout (read mode), per the pokeapi reference wiring
+(nifi-reference-flows.md §3.4/§9.2) — review finding C4: NiFi EL is
+single-pass, an EL template STORED IN AN ATTRIBUTE is never re-evaluated, so
+pagination placeholders must live where EL actually runs per FlowFile — on
+the PROCESSOR PROPERTY itself.
+  - offset/page/cursor pagination: `fetch`'s "HTTP URL" property carries the
+    full URL template directly (e.g.
+    `#{svc_x_base_url}/path?offset=${offset}&limit=${limit}`) — InvokeHTTP
+    evaluates it fresh against the incoming FlowFile's attributes on every
+    request, exactly like the reference `Invoke Page` processor. `init` seeds
+    only the literal counter attributes (`offset`/`limit`/`page`/...), and
+    `next` recomputes them with EL at the UpdateAttribute
+    (`offset = ${offset:toNumber():plus(N)}`), mirroring `Init Offset` /
+    `Next Offset` in the reference.
+  - `next_url` pagination and no pagination: the URL contains no counter
+    placeholders, so `init` stores the concrete URL in `request.url` and
+    `fetch` uses `${request.url}` (proven live — Journey C ran this shape);
+    for `next_url`, `next` overwrites `request.url` with the server-given
+    absolute URL each iteration.
 
 Response parsing runs BEFORE the pagination-continue check (compiler-spec
 §3.1 lists parsing at step 5, pagination at step 6): `fetch`'s `Response`
@@ -100,8 +111,19 @@ def _base_url_expr(*, block: FlowBlock, service: AppService, ctx: "CompileContex
     return f"#{{apisix_runtime_url}}/{proxy_token}"
 
 
+def _session_header_value(service: AppService) -> str:
+    """The header value injected on session_token-authed requests. The
+    service's optional `tokenTemplate` (default `${token}`) describes how the
+    extracted token is framed — e.g. `Bearer ${token}` — and `${token}` is
+    replaced with the EL for the extracted token attribute, so the compiled
+    header value is e.g. `Bearer ${session.token}`."""
+    template = str(service.config.get("tokenTemplate") or "${token}")
+    return template.replace("${token}", "${session.token}")
+
+
 def _apply_auth(
-    builder: "BlockBuilder", *, service: AppService, props: Dict[str, Any], add_param
+    builder: "BlockBuilder", *, service: AppService, props: Dict[str, Any], add_param,
+    api_key_query_handled: bool = False,
 ) -> None:
     mode = service.config.get("authMode", "none")
     sid = service.id
@@ -122,10 +144,18 @@ def _apply_auth(
         key_name = str(service.config.get("keyName", "X-Api-Key")) or "X-Api-Key"
         location = service.config.get("keyLocation", "header")
         if location == "query":
-            # Query-param api keys are folded into the URL by the caller
-            # (see `_build_query`); recorded here too, informationally, so
-            # the processor's own properties show where the key went.
-            props[f"API Key Query Param (informational): {key_name}"] = f"#{{svc_{sid}_key_value}}"
+            # M16: a query-location key belongs in the URL's query string,
+            # never in a dynamic property (InvokeHTTP emits every dynamic
+            # property as a request HEADER — a prose-named one is malformed
+            # AND leaks the secret into a second location). Read mode folds
+            # the key into the URL itself via `_build_query`
+            # (api_key_query_handled=True); write/lookup append it to the
+            # concrete "HTTP URL" template here — parameter references are
+            # legal inside the URL property, so this stays EL/param-safe.
+            if not api_key_query_handled:
+                url = str(props.get("HTTP URL", "") or "")
+                sep = "&" if "?" in url else "?"
+                props["HTTP URL"] = f"{url}{sep}{key_name}=#{{svc_{sid}_key_value}}"
         else:
             props[key_name] = f"#{{svc_{sid}_key_value}}"
         return
@@ -150,7 +180,7 @@ def _apply_auth(
         return
     if mode == "session_token":
         header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
-        props[header] = "${session.token}"
+        props[header] = _session_header_value(service)
         return
     raise CompileError(f"Unknown http auth mode {mode!r} on service {sid!r}")
 
@@ -313,8 +343,17 @@ def compile_read(
     base_expr = _base_url_expr(block=block, service=service, ctx=ctx, add_param=add_param)
     initial_url = f"{base_expr}{path}" + (f"?{query}" if query else "")
 
-    init_props: Dict[str, Any] = {"Accept": "application/json", "mime.type": "application/json",
-                                   "request.url": initial_url}
+    # C4: the pagination EL placeholders must sit on the property NiFi
+    # actually evaluates per FlowFile — `fetch`'s own "HTTP URL" — because EL
+    # stored inside an attribute value is never re-evaluated. Styles whose
+    # URL embeds counter placeholders (offset/page/cursor) therefore put the
+    # template on `fetch` directly; `none`/`next_url` have a concrete URL, so
+    # it is stored in `request.url` (`next` overwrites it for next_url).
+    url_on_fetch = ptype in ("offset", "page", "cursor")
+
+    init_props: Dict[str, Any] = {"Accept": "application/json", "mime.type": "application/json"}
+    if not url_on_fetch:
+        init_props["request.url"] = initial_url
     if ptype == "offset":
         fields = pagination.get("fields", {})
         init_props["offset"] = "0"
@@ -343,12 +382,14 @@ def compile_read(
         fetch_source = _build_session_login(builder, service=service, add_param=add_param, source_key="init")
 
     # ---- fetch -----------------------------------------------------------------
-    invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": "GET", "HTTP URL": "${request.url}"}
+    invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": "GET",
+                                     "HTTP URL": initial_url if url_on_fetch else "${request.url}"}
     if service.config.get("authMode") == "session_token":
         header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
-        invoke_props[header] = "${session.token}"
+        invoke_props[header] = _session_header_value(service)
     else:
-        _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
+        _apply_auth(builder, service=service, props=invoke_props, add_param=add_param,
+                    api_key_query_handled=key_value_query_param is not None)
     if ptype == "cursor" and (pagination.get("fields") or {}).get("cursorSource") == "header":
         invoke_props["Response Header Request Attributes Enabled"] = "true"
         invoke_props["Response Header Request Attributes Pattern"] = (pagination["fields"].get("cursorHeaderName", "cursor"))
@@ -385,21 +426,51 @@ def _build_trigger(flow: "Flow") -> ProcessorSpec:
 
 
 def _build_session_login(builder: "BlockBuilder", *, service: AppService, add_param, source_key: str) -> Tail:
+    """session_token login chain (E5 — rewritten after the live Journey C
+    failure): seed -> `login_body` (`ReplaceText`, Always Replace, JSON body
+    `{"username":"#{...}","password":"#{...}"}` with both credentials as
+    parameters, password sensitive) -> `login` (`InvokeHTTP` POST with
+    Request Body Enabled + Content-Type application/json) ->
+    `extract_token` (`EvaluateJsonPath` -> `session.token`).
+
+    The previous Basic-Auth-property approach (`Request Username`/`Request
+    Password`) was PROVEN BROKEN live: session-token login APIs (dummyjson's
+    `/auth/login`, and the pattern generally) require a JSON body and ignore
+    Basic-Auth headers — NiFi's bulletin captured the exact 400
+    ("Username and password required"). The service's own Test button
+    (`_test_http_session_token`) already POSTs a JSON body; the compiled flow
+    now matches it.
+
+    M7: `login` auto-terminates ONLY `Original`; `Failure`/`Retry`/`No Retry`
+    are connected to `run_failure__log` — exactly one disposition per
+    relationship (the builder-level invariant enforces this at compile time).
+
+    Run failures (login_body/login/extract_token) are NOT record failures —
+    no DLQ record is fabricated; they surface via the error-level log.
+    """
     sid = service.id
     login_path = str(service.config.get("loginPath", "/login"))
     base_expr = f"#{{svc_{sid}_base_url}}"
+
+    add_param(f"svc_{sid}_username", str(service.config.get("username", "")), False)
+    add_param(f"svc_{sid}_password", service.config.get("password"), True)
+    body = f'{{"username":"#{{svc_{sid}_username}}","password":"#{{svc_{sid}_password}}"}}'
+    builder.add_processor(
+        ProcessorSpec(key="login_body", name="login_body", type="org.apache.nifi.processors.standard.ReplaceText",
+                      properties={"Replacement Strategy": "Always Replace", "Replacement Value": body,
+                                  "Evaluation Mode": "Entire text", "Character Set": "UTF-8"})
+    )
+    builder.link(source_key, "login_body", ["success"] if source_key != "inputPort" else [])
+
     props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": "POST",
-                              "HTTP URL": f"{base_expr}{login_path}"}
-    if service.config.get("username"):
-        add_param(f"svc_{sid}_username", str(service.config.get("username", "")), False)
-        add_param(f"svc_{sid}_password", service.config.get("password"), True)
-        props["Request Username"] = f"#{{svc_{sid}_username}}"
-        props["Request Password"] = f"#{{svc_{sid}_password}}"
+                              "HTTP URL": f"{base_expr}{login_path}",
+                              "Request Body Enabled": "true",
+                              "Request Content-Type": "application/json"}
     builder.add_processor(
         ProcessorSpec(key="login", name="login", type="org.apache.nifi.processors.standard.InvokeHTTP",
-                      properties=props, autoTerminate=list(_INVOKE_HTTP_AUTOTERMINATE))
+                      properties=props, autoTerminate=["Original"])
     )
-    builder.link(source_key, "login", ["success"])
+    builder.link("login_body", "login", ["success"])
 
     token_path = str(service.config.get("tokenPath", "$.token"))
     builder.add_processor(
@@ -414,7 +485,8 @@ def _build_session_login(builder: "BlockBuilder", *, service: AppService, add_pa
                       type="org.apache.nifi.processors.standard.LogAttribute",
                       properties={"Log Level": "error", "Log Payload": "false"}, autoTerminate=["success"])
     )
-    # Run failures (login/extract_token) are NOT record failures -- no DLQ record.
+    # Run failures (login chain) are NOT record failures -- no DLQ record.
+    builder.link("login_body", "run_failure__log", ["failure"])
     builder.link("login", "run_failure__log", ["Failure", "Retry", "No Retry"])
     builder.link("extract_token", "run_failure__log", ["failure", "unmatched"])
     return "extract_token", "matched"
@@ -606,7 +678,7 @@ def _compile_write(
                                      "Request Body Enabled": "true"}
     if service.config.get("authMode") == "session_token":
         header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
-        invoke_props[header] = "${session.token}"
+        invoke_props[header] = _session_header_value(service)
     else:
         _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
 
@@ -671,7 +743,7 @@ def _compile_lookup(
     invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": "GET", "HTTP URL": f"{base_expr}{path}"}
     if service.config.get("authMode") == "session_token":
         header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
-        invoke_props[header] = "${session.token}"
+        invoke_props[header] = _session_header_value(service)
     else:
         _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
 

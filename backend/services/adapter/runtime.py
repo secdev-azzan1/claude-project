@@ -48,7 +48,7 @@ from services.adapter.deployer.lifecycle import (
     _nifi_conn_dict,
 )
 from services.adapter.legality import hosts_test
-from services.adapter.naming import dlq_name, tokenize
+from services.adapter.naming import derive_topic_name, dlq_name, tokenize
 from services.adapter.validation import GatewaySnapshot, block_proxy_id
 from services.connection_fingerprint import probe_nifi_fingerprint
 from services.http_tls import tls_verify_enabled
@@ -93,6 +93,33 @@ def _all_connector_names(flow_doc: Dict[str, Any]) -> List[str]:
     names: List[str] = []
     for entry in scope_map.values():
         names.extend((entry or {}).get("connectorNames") or [])
+    return names
+
+
+def _owned_topic_names(flow_doc: Dict[str, Any]) -> set:
+    """E3: this flow's full topic-ownership set, computed server-side --
+    `flow.topics` (frontend-materialized, via api.ts's `syncTopics`) union
+    every kafka-family write/`kafka_kc` block's server-derived topic name
+    (`services/adapter/naming.derive_topic_name`, the same function the
+    compiler itself uses) union the flow's DLQ topic (`dlq_name`). Before
+    this fix, ownership for `GET /{id}/messages` (and the `topicCounts`
+    entries below) came ONLY from `flow.topics`, which nothing on the
+    server ever populates -- a flow saved directly through the v2 API
+    (never touched by the frontend's `syncTopics()` step) could deploy and
+    publish real records into a topic it could never view, 404ing on its
+    own data. A block with a missing `entity` derives the "raw.<entity
+    missing>" placeholder (`naming.derive_topic_name`'s own warning case,
+    never a real topic) -- excluded here rather than treated as owned."""
+    flow = Flow(**flow_doc)
+    names = {t.name for t in flow.topics if t.name}
+    for block in flow.blocks:
+        is_kafka_family_write = (block.adapter == "kafka" and block.mode == "write") or block.adapter == "kafka_kc"
+        if not is_kafka_family_write:
+            continue
+        derived = derive_topic_name(flow, block)
+        if derived.value and not derived.value.startswith("raw.<"):
+            names.add(derived.value)
+    names.add(dlq_name(flow.name))
     return names
 
 
@@ -210,10 +237,7 @@ async def get_flow_metrics(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     kafka_conn_doc = _active_connection(connections, "kafka")
     if kafka_conn_doc:
         kafka_conn = _kafka_conn_dict(kafka_conn_doc)
-        topic_names = [t.get("name") for t in (flow_doc.get("topics") or []) if t.get("name")]
-        dlq_topic = dlq_name(flow_doc.get("name") or "")
-        if dlq_topic not in topic_names:
-            topic_names.append(dlq_topic)
+        topic_names = sorted(_owned_topic_names(flow_doc))
         for name in topic_names:
             r = await topics_mod.count_topic(kafka_conn, name)
             if r.get("ok"):
@@ -497,7 +521,7 @@ async def get_topic_messages(db, flow_doc: Dict[str, Any], topic: str) -> Dict[s
     """`GET /{id}/messages?topic=`. Group-less viewer, newest-first, capped
     at 50 -- `topic` must be one of this flow's own `topics` (404
     otherwise); nothing here reads/writes a consumer group."""
-    owned = {t.get("name") for t in (flow_doc.get("topics") or []) if t.get("name")}
+    owned = _owned_topic_names(flow_doc)
     if not topic or topic not in owned:
         raise TopicNotOwned(f"Topic {topic!r} does not belong to this flow.")
 
@@ -568,6 +592,43 @@ def _pg_missing_verdict(observed_fp: Optional[str], deployed_fp: str) -> Tuple[s
         "deployed_elsewhere",
         "The active NiFi connection points at a different NiFi instance (its root process group fingerprint does not match the one recorded at deploy time) — the flow's process group may still exist, unmanaged, on the original instance.",
     )
+
+
+def _rename_drift(pg_check: Dict[str, Any], flow_doc: Dict[str, Any], *, where: str, now: str) -> List[Dict[str, Any]]:
+    """E8: the process group EXISTS (this only runs on the `pg_check.ok`
+    branch) but its live NiFi name no longer matches `tokenize(flow.name)`
+    -- the name `nifi_apply._create_pg`/`compile_flow` gave it at deploy —
+    an out-of-band rename. Before this, `read_runtime` only ever emitted
+    `process_group_missing` findings; a rename left the PG perfectly
+    reachable and running, so nothing here ever flagged it (live-verified,
+    docs/orchestration/e2e/journey-a-e.md FINDING 5). `property_edited` is
+    the closest existing `DriftKind` (models/adapter/runtime.py /
+    frontend/src/prototype/types.ts) — a rename IS a live-vs-expected
+    property mismatch on the process group's own `name`, and it is a kind
+    the UI can already label; inventing a new enum value the frontend has
+    no copy for was avoided per the task brief. Not repairable: the PG is
+    not a dead reference to clear, only cosmetically diverged."""
+    observed_name = ((pg_check.get("data") or {}).get("component") or {}).get("name")
+    expected_name = tokenize(flow_doc.get("name") or "")
+    if not observed_name or not expected_name or observed_name == expected_name:
+        return []
+    return [
+        _drift_finding(
+            kind="property_edited",
+            summary=f'The process group was renamed out of band: expected "{expected_name}", found "{observed_name}".',
+            where=where,
+            expected=expected_name,
+            observed=observed_name,
+            verdict="out_of_band_edit",
+            verdict_detail=(
+                "The process group this flow was deployed to still exists and is reachable — only its name "
+                "was changed outside the platform. Nothing to repair; renaming it back in NiFi (or ignoring "
+                "the cosmetic drift) are both safe."
+            ),
+            repairable=False,
+            now=now,
+        )
+    ]
 
 
 _OAUTH2_CS_KEY_RE = re.compile(r"^cs_oauth2_(.+)$")
@@ -823,6 +884,7 @@ async def read_runtime(db, flow_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]
         )
     else:
         components, controller_services = await _read_components(nifi_conn, flow_doc)
+        drift.extend(_rename_drift(pg_check, flow_doc, where=flow_doc.get("name") or flow_id, now=now))
 
     connectors = await _read_connectors(connections, flow_doc)
 

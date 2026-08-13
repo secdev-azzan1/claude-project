@@ -373,6 +373,124 @@ def test_delete_proxy_not_found():
 
 
 # =========================================================================
+# E4 — delete tears down live APISIX objects when the proxy was reconciled
+# =========================================================================
+
+
+def _install_apisix_deletes(monkeypatch, *, ok: bool = True, error: str = "boom"):
+    """Monkeypatch apisix_client.delete_route/delete_upstream, recording
+    every call as {"kind", "id", ...} in call order."""
+    calls: List[Dict[str, Any]] = []
+
+    async def fake_delete_route(admin_url, admin_key, route_id):
+        calls.append({"kind": "route", "id": route_id, "admin_url": admin_url, "admin_key": admin_key})
+        if ok:
+            return {"ok": True, "status_code": 200}
+        return {"ok": False, "status_code": 400, "error": error}
+
+    async def fake_delete_upstream(admin_url, admin_key, upstream_id):
+        calls.append({"kind": "upstream", "id": upstream_id, "admin_url": admin_url, "admin_key": admin_key})
+        if ok:
+            return {"ok": True, "status_code": 200}
+        return {"ok": False, "status_code": 400, "error": error}
+
+    monkeypatch.setattr(gw.apisix_client, "delete_route", fake_delete_route)
+    monkeypatch.setattr(gw.apisix_client, "delete_upstream", fake_delete_upstream)
+    return calls
+
+
+def test_delete_proxy_after_reconcile_cleans_up_live_apisix_objects(monkeypatch):
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    proxy = client.post("/api/v2/gateway/proxies", json=_proxy_payload()).json()
+    fake_db.connections_v2.docs.append(_apisix_connection_doc())
+    fake_db.gateway_v2.docs[0]["allowlist"] = [proxy["targetHost"]]
+
+    _install_apisix_puts(monkeypatch, ok=True)
+    reconcile_resp = client.post(f"/api/v2/gateway/proxies/{proxy['id']}/reconcile")
+    assert reconcile_resp.status_code == 200, reconcile_resp.text
+    assert reconcile_resp.json()["status"] == "Reconciled"
+
+    delete_calls = _install_apisix_deletes(monkeypatch, ok=True)
+    resp = client.delete(f"/api/v2/gateway/proxies/{proxy['id']}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["apisixCleaned"] is True
+    assert fake_db.gateway_v2.docs[0]["proxies"] == []
+
+    # Routes before the upstream — an upstream still referenced by a live
+    # route is the wrong order to delete in.
+    ids_in_order = [c["id"] for c in delete_calls]
+    assert ids_in_order == [f"dmp_{proxy['id']}_root", f"dmp_{proxy['id']}_wild", f"dmp_{proxy['id']}"]
+    for c in delete_calls:
+        assert c["admin_url"] == "https://apisix-admin.internal:9180"
+        assert c["admin_key"] == "s3cr3t-admin-key"
+
+    deleted_event = next(a for a in fake_db.audit_v2.docs if a["action"] == "Gateway proxy deleted")
+    assert "removed" in (deleted_event.get("details") or "").lower()
+
+
+def test_delete_proxy_never_reconciled_skips_apisix_cleanup(monkeypatch):
+    """A proxy that never made it past "Pending" pushed nothing live —
+    delete must not call APISIX at all for it."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    proxy = client.post("/api/v2/gateway/proxies", json=_proxy_payload()).json()
+
+    delete_calls = _install_apisix_deletes(monkeypatch, ok=True)
+    resp = client.delete(f"/api/v2/gateway/proxies/{proxy['id']}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["apisixCleaned"] is False
+    assert delete_calls == []
+
+
+def test_delete_proxy_apisix_cleanup_failure_is_logged_not_swallowed(monkeypatch):
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    proxy = client.post("/api/v2/gateway/proxies", json=_proxy_payload()).json()
+    fake_db.connections_v2.docs.append(_apisix_connection_doc())
+    fake_db.gateway_v2.docs[0]["allowlist"] = [proxy["targetHost"]]
+    _install_apisix_puts(monkeypatch, ok=True)
+    client.post(f"/api/v2/gateway/proxies/{proxy['id']}/reconcile")
+
+    _install_apisix_deletes(monkeypatch, ok=False, error="route delete boom")
+    resp = client.delete(f"/api/v2/gateway/proxies/{proxy['id']}")
+    # The platform-side delete still succeeds (best-effort cleanup) --
+    # but the failure must be visible, not swallowed.
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["apisixCleaned"] is False
+
+    deleted_event = next(a for a in fake_db.audit_v2.docs if a["action"] == "Gateway proxy deleted")
+    details = deleted_event.get("details") or ""
+    assert "incomplete" in details.lower()
+    assert "route delete boom" in details
+
+
+def test_delete_proxy_reconciled_but_no_active_apisix_connection_best_effort(monkeypatch):
+    """The APISIX connection was retired after reconcile — delete must not
+    hard-fail; it records that cleanup could not be attempted."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    proxy = client.post("/api/v2/gateway/proxies", json=_proxy_payload()).json()
+    fake_db.connections_v2.docs.append(_apisix_connection_doc())
+    fake_db.gateway_v2.docs[0]["allowlist"] = [proxy["targetHost"]]
+    _install_apisix_puts(monkeypatch, ok=True)
+    client.post(f"/api/v2/gateway/proxies/{proxy['id']}/reconcile")
+
+    # Connection retired before delete.
+    fake_db.connections_v2.docs[0]["active"] = False
+
+    delete_calls = _install_apisix_deletes(monkeypatch, ok=True)
+    resp = client.delete(f"/api/v2/gateway/proxies/{proxy['id']}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["apisixCleaned"] is False
+    assert delete_calls == []
+
+    deleted_event = next(a for a in fake_db.audit_v2.docs if a["action"] == "Gateway proxy deleted")
+    assert "no active apisix connection" in (deleted_event.get("details") or "").lower()
+
+
+# =========================================================================
 # Reconcile
 # =========================================================================
 

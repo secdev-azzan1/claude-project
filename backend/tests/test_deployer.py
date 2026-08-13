@@ -486,3 +486,604 @@ async def test_clear_dedup_cache_no_dedup_transform_raises():
         assert False, "expected LifecycleError"
     except lifecycle.LifecycleError as exc:
         assert "no dedup transform" in str(exc)
+
+
+# ------------------------------------------------------- 6. M9: pause/resume trigger keys
+
+
+def _jdbc_read_flow(flow_id: str = "flow-jdbc-1", **overrides):
+    """A jdbc-rooted flow already Running -- carries its schedule on the
+    "query" processor (QueryDatabaseTableRecord), per blocks_jdbc.py's
+    `_compile_read`."""
+    flow = {
+        "id": flow_id, "name": "JDBC Flow", "description": None, "state": "Running", "enabled": True,
+        "cron": "*/5 * * * *",
+        "blocks": [
+            {
+                "id": "b1", "adapter": "jdbc", "mode": "read", "name": "Query", "parentId": None,
+                "serviceId": "svc-db", "entity": "assets", "config": {"table": "assets"}, "transforms": [],
+            },
+        ],
+        "topics": [], "variables": [], "servicePins": {},
+        "deployedAt": "2026-08-01T00:00:00.000Z", "nifiProcessGroupId": "pg-root",
+        "runtimeScopeMap": {
+            "b1": {"adapter": "jdbc", "engine": "nifi", "groupName": "query__jdbc", "processGroupId": "pg-b1",
+                   "components": {"query": "nid-query", "split": "nid-split"}, "connectorNames": [], "topics": []},
+        },
+        "lastRunAt": None, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+    }
+    flow.update(overrides)
+    return flow
+
+
+def _kafka_read_flow(flow_id: str = "flow-kread-1", **overrides):
+    """A kafka-read-rooted flow -- ingests through the "consume" processor
+    (ConsumeKafka), per blocks_kafka.py."""
+    flow = {
+        "id": flow_id, "name": "Kafka Read Flow", "description": None, "state": "Running", "enabled": True,
+        "cron": None,
+        "blocks": [
+            {
+                "id": "b1", "adapter": "kafka", "mode": "read", "name": "Consume", "parentId": None,
+                "serviceId": None, "entity": None, "config": {"topicName": "raw.x.y"}, "transforms": [],
+            },
+        ],
+        "topics": [], "variables": [], "servicePins": {},
+        "deployedAt": "2026-08-01T00:00:00.000Z", "nifiProcessGroupId": "pg-root",
+        "runtimeScopeMap": {
+            "b1": {"adapter": "kafka", "engine": "nifi", "groupName": "consume__kafka", "processGroupId": "pg-b1",
+                   "components": {"consume": "nid-consume"}, "connectorNames": [], "topics": []},
+        },
+        "lastRunAt": None, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+    }
+    flow.update(overrides)
+    return flow
+
+
+@async_test
+async def test_pause_resolves_jdbc_root_query_processor(monkeypatch):
+    """M9: before the fix, `_TRIGGER_KEYS = ("trigger",)` meant a jdbc-rooted
+    flow's `_trigger_component_ids` came back empty and `pause()` raised
+    "Could not resolve the flow's trigger processor(s)"."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _jdbc_read_flow()
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    pause_calls = []
+
+    async def fake_pause_trigger(nifi_conn, ids):
+        pause_calls.append(list(ids))
+        return {"ok": True, "failed": []}
+
+    monkeypatch.setattr(nifi_apply, "pause_trigger", fake_pause_trigger)
+
+    result = await lifecycle.pause(fake_db, flow_doc)
+    assert pause_calls == [["nid-query"]]
+    assert result["state"] == "Paused"
+
+
+@async_test
+async def test_resume_resolves_kafka_read_root_consume_processor(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _kafka_read_flow(state="Paused")
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    resume_calls = []
+
+    async def fake_resume_trigger(nifi_conn, ids):
+        resume_calls.append(list(ids))
+        return {"ok": True, "failed": []}
+
+    monkeypatch.setattr(nifi_apply, "resume_trigger", fake_resume_trigger)
+
+    result = await lifecycle.resume(fake_db, flow_doc)
+    assert resume_calls == [["nid-consume"]]
+    assert result["state"] == "Running"
+
+
+@async_test
+async def test_pause_http_root_still_resolves_trigger_key_no_regression(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(
+        flow_id="flow-http-pause-1", state="Running", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root",
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {"trigger": "nid-trigger", "init": "nid-init", "fetch": "nid-fetch"},
+                   "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka", "engine": "nifi", "groupName": "write_topic__kafka", "processGroupId": "pg-b2",
+                   "components": {"publish": "nid-publish"}, "connectorNames": [], "topics": ["raw.test_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    pause_calls = []
+
+    async def fake_pause_trigger(nifi_conn, ids):
+        pause_calls.append(list(ids))
+        return {"ok": True, "failed": []}
+
+    monkeypatch.setattr(nifi_apply, "pause_trigger", fake_pause_trigger)
+    result = await lifecycle.pause(fake_db, flow_doc)
+
+    assert pause_calls == [["nid-trigger"]]
+    assert result["state"] == "Paused"
+
+
+# --------------------------------------------------------- 7. E7: delete after repair
+
+
+@async_test
+async def test_delete_after_repair_still_deletes_connectors_and_topics(monkeypatch):
+    """E7: `runtime.repair_runtime` clears `deployedAt`/`nifiProcessGroupId`
+    but deliberately KEEPS `runtimeScopeMap` -- `delete()` must still
+    best-effort delete the flow's connectors + owned topics + DLQ even
+    though neither `deployedAt` nor `nifiProcessGroupId` is set anymore
+    (proven live -- docs/orchestration/e2e/journey-a-e.md DEFECT 6)."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    flow_doc = _kc_flow(
+        flow_id="flow-repair-1", state="Draft", deployedAt=None, nifiProcessGroupId=None,
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {}, "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka_kc", "engine": "nifi", "groupName": "to_iceberg__kafka_kc", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": ["kc_flow.b2.kafka_kc"], "topics": ["raw.kc_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fail_if_undeploy_called(*args, **kwargs):
+        raise AssertionError("undeploy() must not run when neither deployedAt nor nifiProcessGroupId is set")
+
+    monkeypatch.setattr(lifecycle, "undeploy", fail_if_undeploy_called)
+
+    delete_connectors_calls = []
+
+    async def fake_delete_connectors(kc_conn, names):
+        delete_connectors_calls.append(list(names))
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(connect_apply, "delete_connectors", fake_delete_connectors)
+
+    delete_topic_calls = []
+
+    async def fake_delete_topic(kafka_conn, name):
+        delete_topic_calls.append(name)
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    result = await lifecycle.delete(fake_db, flow_doc)
+
+    assert delete_connectors_calls == [["kc_flow.b2.kafka_kc"]]
+    assert "dlq.kc_flow" in delete_topic_calls
+    assert "raw.kc_flow.thing" in delete_topic_calls
+    assert result["ok"] is True
+    assert result["orphans"] == []
+    assert fake_db.flows_v2.docs == []
+
+    deleted_events = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deleted"]
+    assert len(deleted_events) == 1
+
+
+@async_test
+async def test_delete_records_orphan_when_connector_delete_fails(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    flow_doc = _kc_flow(
+        flow_id="flow-repair-2", state="Draft", deployedAt=None, nifiProcessGroupId=None,
+        runtimeScopeMap={
+            "b2": {"adapter": "kafka_kc", "engine": "nifi", "groupName": "to_iceberg__kafka_kc", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": ["kc_flow.b2.kafka_kc"], "topics": ["raw.kc_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_connectors(kc_conn, names):
+        return [{"name": n, "ok": False, "error": "Connect unreachable"} for n in names]
+
+    monkeypatch.setattr(connect_apply, "delete_connectors", fake_delete_connectors)
+
+    async def fake_delete_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    result = await lifecycle.delete(fake_db, flow_doc)
+
+    assert result["orphans"] == [{"kind": "connector", "ref": "kc_flow.b2.kafka_kc", "reason": "Connect unreachable"}]
+    deleted_events = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deleted"]
+    assert "connector" in deleted_events[0]["details"]
+
+
+@async_test
+async def test_delete_still_undeploys_when_deployed_and_records_no_double_connector_delete(monkeypatch):
+    """When the flow IS still deployed, `undeploy()` runs (and handles
+    connectors itself) -- the post-repair best-effort connector path must
+    not run a SECOND time on top of it."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(
+        flow_id="flow-del-normal-1", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root",
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {}, "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka", "engine": "nifi", "groupName": "write_topic__kafka", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": [], "topics": ["raw.test_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    undeploy_calls = []
+    orig_undeploy = lifecycle.undeploy
+
+    async def spy_undeploy(db, doc):
+        undeploy_calls.append(doc["id"])
+        return await orig_undeploy(db, doc)
+
+    monkeypatch.setattr(lifecycle, "undeploy", spy_undeploy)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    delete_topic_calls = []
+
+    async def fake_delete_topic(kafka_conn, name):
+        delete_topic_calls.append(name)
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    async def fake_empty_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "empty_topic", fake_empty_topic)
+
+    result = await lifecycle.delete(fake_db, flow_doc)
+    assert undeploy_calls == ["flow-del-normal-1"]
+    assert result["ok"] is True
+    assert set(delete_topic_calls) == {"dlq.test_flow", "raw.test_flow.thing"}
+    assert result["orphans"] == []
+
+
+# ------------------------------------------------------------------ 8. M10: undeploy clears dedup
+
+
+@async_test
+async def test_undeploy_bumps_dedup_epoch_for_every_dedup_bearing_block(monkeypatch):
+    """M10: undeploy must clear dedup caches per MVP §7.9 -- the same
+    dedupEpoch-bump mechanism `clear_dedup_cache()` uses, applied to every
+    dedup-bearing block automatically."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _kc_flow(
+        flow_id="flow-u10-1", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root",
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {}, "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka_kc", "engine": "nifi", "groupName": "to_iceberg__kafka_kc", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": [], "topics": []},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    result = await lifecycle.undeploy(fake_db, flow_doc)
+    assert result["state"] == "Draft"
+
+    stored = fake_db.flows_v2.docs[0]
+    assert stored["blocks"][1]["transforms"][0]["config"]["dedupEpoch"] == 1
+    # b1 has no dedup transform -- untouched.
+    assert stored["blocks"][0]["transforms"] == []
+
+
+@async_test
+async def test_undeploy_bumps_epoch_again_on_second_undeploy(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _kc_flow(
+        flow_id="flow-u10-2", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root",
+        runtimeScopeMap={"b2": {"adapter": "kafka_kc", "engine": "nifi", "groupName": "g", "processGroupId": "pg-b2",
+                                 "components": {}, "connectorNames": [], "topics": []}},
+    )
+    flow_doc["blocks"][1]["transforms"][0]["config"]["dedupEpoch"] = 3  # already bumped once before
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    await lifecycle.undeploy(fake_db, flow_doc)
+    stored = fake_db.flows_v2.docs[0]
+    assert stored["blocks"][1]["transforms"][0]["config"]["dedupEpoch"] == 4
+
+
+# --------------------------------------------------------- 9. M11: dedup config-change warning
+
+
+@async_test
+async def test_deploy_dedup_config_change_bumps_epoch_and_warns(monkeypatch):
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_iceberg_service(fake_db)
+    _seed_core_connections(fake_db, kafka_connect=True, redis=True)
+    flow_doc = _kc_flow(flow_id="flow-dedup-warn-1")
+    _seed_approved_schema(fake_db, flow_id=flow_doc["id"], block_id="b2")
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+
+    async def fake_list_plugins(conn):
+        return {"ok": True, "data": [{"class": "org.apache.iceberg.connect.IcebergSinkConnector"}]}
+
+    monkeypatch.setattr(lifecycle.kafka_connect_client, "list_connector_plugins", fake_list_plugins)
+
+    ensure_topics_calls = []
+    _patch_ensure_topics_ok(monkeypatch, ensure_topics_calls)
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    async def fake_create_connectors(kc_conn, connectors):
+        return [{"name": c.name, "ownerBlockId": c.ownerBlockId, "ok": True, "paused": True} for c in connectors]
+
+    monkeypatch.setattr(connect_apply, "create_connectors", fake_create_connectors)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    first = await lifecycle.deploy(fake_db, flow_doc)
+    assert not first.get("preflightWarnings")
+    assert (first["blocks"][1]["transforms"][0]["config"].get("dedupEpoch") or 0) == 0
+    assert first["provenance"]["dedupConfigHashes"]["b2"]
+
+    # Change identityFields on the already-deployed flow -- config changed
+    # vs. what was hashed at the last deploy.
+    stored = fake_db.flows_v2.docs[0]
+    stored["blocks"][1]["transforms"][0]["config"]["identityFields"] = ["id", "sku"]
+    stored["state"] = "Stopped"
+
+    second = await lifecycle.deploy(fake_db, stored)
+    assert second["blocks"][1]["transforms"][0]["config"]["dedupEpoch"] == 1
+    assert second.get("preflightWarnings")
+    warning = second["preflightWarnings"][0]
+    assert warning["ok"] is True  # non-blocking
+    assert "Dedup settings changed" in warning["detail"]
+    assert "cache resets" in warning["detail"]
+
+
+@async_test
+async def test_deploy_dedup_config_unchanged_no_warning_no_bump(monkeypatch):
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_iceberg_service(fake_db)
+    _seed_core_connections(fake_db, kafka_connect=True, redis=True)
+    flow_doc = _kc_flow(flow_id="flow-dedup-nowarn-1")
+    _seed_approved_schema(fake_db, flow_id=flow_doc["id"], block_id="b2")
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+
+    async def fake_list_plugins(conn):
+        return {"ok": True, "data": [{"class": "org.apache.iceberg.connect.IcebergSinkConnector"}]}
+
+    monkeypatch.setattr(lifecycle.kafka_connect_client, "list_connector_plugins", fake_list_plugins)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    async def fake_create_connectors(kc_conn, connectors):
+        return [{"name": c.name, "ownerBlockId": c.ownerBlockId, "ok": True, "paused": True} for c in connectors]
+
+    monkeypatch.setattr(connect_apply, "create_connectors", fake_create_connectors)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    await lifecycle.deploy(fake_db, flow_doc)
+    stored = fake_db.flows_v2.docs[0]
+    second = await lifecycle.deploy(fake_db, stored)
+
+    assert not second.get("preflightWarnings")
+    assert (second["blocks"][1]["transforms"][0]["config"].get("dedupEpoch") or 0) == 0
+
+
+# ------------------------------------------------------- 10. M13: topic reservation
+
+
+@async_test
+async def test_deploy_refuses_when_topic_collides_with_another_flows_owned_topic(monkeypatch):
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-collide-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    # Another flow already owns the exact topic this one would derive
+    # ("raw.test_flow.thing" -- both flows named "Test Flow").
+    fake_db.flows_v2.docs.append({
+        "id": "flow-other-owner", "name": "Some Other Flow",
+        "runtimeScopeMap": {"b2": {"topics": ["raw.test_flow.thing"], "connectorNames": []}},
+    })
+
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    apply_calls = []
+
+    async def fail_if_called(*a, **k):
+        apply_calls.append((a, k))
+        raise AssertionError("apply_plan must not be called when a topic-reservation row fails")
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fail_if_called)
+
+    try:
+        await lifecycle.deploy(fake_db, flow_doc)
+        assert False, "expected DeployPreflightFailed"
+    except lifecycle.DeployPreflightFailed as exc:
+        failing = [r for r in exc.rows if not r["ok"]]
+        assert any("raw.test_flow.thing" in r["detail"] and "Some Other Flow" in r["detail"] for r in failing)
+
+    assert apply_calls == []
+
+
+@async_test
+async def test_deploy_topic_reservation_passes_when_no_collision(monkeypatch):
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-nocollide-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    ensure_topics_calls = []
+    _patch_ensure_topics_ok(monkeypatch, ensure_topics_calls)
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    result = await lifecycle.deploy(fake_db, flow_doc)
+    assert result["state"] == "Stopped"
+    assert len(ensure_topics_calls) == 1
+
+
+@async_test
+async def test_deploy_topic_reservation_skips_silently_when_kafka_listing_unavailable(monkeypatch):
+    """The live-cluster half of the check is best-effort -- an unreachable
+    Kafbat listing must never itself block a deploy."""
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-listing-unavailable-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    async def fake_list_topics(kafka_conn):
+        return {"ok": False, "error": "Kafbat unreachable"}
+
+    monkeypatch.setattr(topics, "list_topics", fake_list_topics)
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    result = await lifecycle.deploy(fake_db, flow_doc)
+    assert result["state"] == "Stopped"
+
+
+@async_test
+async def test_deploy_refuses_when_topic_exists_live_and_unowned(monkeypatch):
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-live-collide-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    async def fake_list_topics(kafka_conn):
+        return {"ok": True, "topics": ["raw.test_flow.thing", "some.unrelated.topic"]}
+
+    monkeypatch.setattr(topics, "list_topics", fake_list_topics)
+
+    apply_calls = []
+
+    async def fail_if_called(*a, **k):
+        apply_calls.append((a, k))
+        raise AssertionError("apply_plan must not be called when a topic-reservation row fails")
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fail_if_called)
+
+    try:
+        await lifecycle.deploy(fake_db, flow_doc)
+        assert False, "expected DeployPreflightFailed"
+    except lifecycle.DeployPreflightFailed as exc:
+        failing = [r for r in exc.rows if not r["ok"]]
+        assert any("raw.test_flow.thing" in r["detail"] and "already exists on the Kafka cluster" in r["detail"] for r in failing)
+
+    assert apply_calls == []
+
+
+@async_test
+async def test_deploy_redeploy_does_not_flag_its_own_prior_live_topic(monkeypatch):
+    """A REDEPLOY of the SAME flow re-derives the identical topic names
+    (name-frozen, M12) -- those already existing live (from the flow's own
+    prior deploy) must never be flagged as a collision against itself."""
+    fake_db = FakeDB()
+    _seed_http_service(fake_db)
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(
+        flow_id="flow-redeploy-1", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-old",
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {}, "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka", "engine": "nifi", "groupName": "write_topic__kafka", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": [], "topics": ["raw.test_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+    _patch_provenance_probes(monkeypatch)
+    _patch_ensure_topics_ok(monkeypatch, [])
+
+    async def fake_list_topics(kafka_conn):
+        return {"ok": True, "topics": ["raw.test_flow.thing"]}  # this flow's own, already live
+
+    monkeypatch.setattr(topics, "list_topics", fake_list_topics)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    async def fake_apply_plan(nifi_conn, plan):
+        groups = {g.blockId: f"pg-{g.blockId}" for g in plan.rootGroup.childGroups}
+        components = {g.blockId: {p.key: f"nifi-{p.key}" for p in g.processors} for g in plan.rootGroup.childGroups}
+        return nifi_apply.AppliedResult(
+            process_group_id="pg-root", parameter_context_id="pc-1", parameter_context_name=plan.parameterContext.name,
+            groups=groups, components=components,
+        )
+
+    monkeypatch.setattr(nifi_apply, "apply_plan", fake_apply_plan)
+
+    result = await lifecycle.deploy(fake_db, flow_doc)
+    assert result["state"] == "Stopped"

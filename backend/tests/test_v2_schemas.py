@@ -180,6 +180,10 @@ def test_approve_happy_path_registers_and_appends_history(monkeypatch):
 
         assert len(calls) == 1
         assert calls[0]["artifact_id"] == "raw.orders-value"
+        # E6: every v2 call site registers ccompat-only (exactly one ccompat
+        # version consumed per approval) -- see services/apicurio_client.py's
+        # register_schema(ccompat_only=...) and tests/test_apicurio_client.py.
+        assert calls[0]["ccompat_only"] is True
 
         assert len(fake_db.schemas_v2.docs) == 1
         assert any(e["action"] == "Approved & registered" for e in fake_db.audit_v2.docs)
@@ -330,6 +334,7 @@ def test_register_standalone_and_template_linking(monkeypatch):
         assert resp.status_code == 200, resp.text
         assert resp.json() == {"globalId": 77, "subject": "raw.orders-value", "version": 3}
         assert calls[0]["artifact_id"] == "raw.orders-value"
+        assert calls[0]["ccompat_only"] is True  # E6 — see approve's equivalent assertion.
 
         tpl_doc = next(d for d in fake_db.schema_templates_v2.docs if d["id"] == tpl_id)
         assert tpl_doc["registeredSubject"] == "raw.orders-value"

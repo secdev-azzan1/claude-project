@@ -308,7 +308,26 @@ class BlockBuilder:
     def to_dlq(self, from_: str, relationship: str) -> None:
         self.link(from_, "dlq", [relationship])
 
+    def _check_relationship_dispositions(self) -> None:
+        """Compile-time invariant (review M6/M7): a relationship must have
+        exactly ONE disposition on its processor — connected somewhere, or
+        auto-terminated, never both. NiFi treats the two as mutually
+        exclusive; a graph that declares both is at best ambiguous and at
+        worst refused at apply time. Raising here keeps the whole class of
+        bug out of every emitted plan."""
+        connected: Dict[str, set] = {}
+        for c in self.connections:
+            connected.setdefault(c.from_, set()).update(c.relationships)
+        for p in self.processors:
+            both = set(p.autoTerminate) & connected.get(p.key, set())
+            if both:
+                raise CompileError(
+                    f"Processor {p.key!r}: relationship(s) {sorted(both)} are both connected and "
+                    f"auto-terminated — a relationship must have exactly one disposition."
+                )
+
     def build_group(self, block_id: str, name: str, *, input_port: bool, output_port: bool) -> BlockGroup:
+        self._check_relationship_dispositions()
         return BlockGroup(
             blockId=block_id,
             name=name,
@@ -408,6 +427,25 @@ def apicurio_ccompat_url(raw_url: str) -> str:
             root = root[:idx]
             break
     return f"{root.rstrip('/')}/apis/ccompat/v7"
+
+
+def apicurio_registry_v3_url(raw_url: str) -> str:
+    """Registry root (or an already-API-suffixed) URL -> NATIVE registry API
+    base (`/apis/registry/v3`). Counterpart of `apicurio_ccompat_url` for the
+    Kafka Connect Apicurio `AvroConverter`, whose registry 3.x resolver
+    fetches by content id against the NATIVE API only — proven live (E2b):
+    `{ccompat}/ids/contentIds/<id>` 404s while `{v3}/ids/contentIds/<id>`
+    200s. NiFi's ConfluentSchemaRegistry controller service keeps the ccompat
+    URL (`apicurio_ccompat_url`); only Connect converters use this one."""
+    root = (raw_url or "").rstrip("/")
+    if not root:
+        return ""
+    for marker in ("/apis/ccompat/", "/apis/registry/"):
+        idx = root.find(marker)
+        if idx != -1:
+            root = root[:idx]
+            break
+    return f"{root.rstrip('/')}/apis/registry/v3"
 
 
 def dedupe_preserve_order(values: List[str]) -> List[str]:

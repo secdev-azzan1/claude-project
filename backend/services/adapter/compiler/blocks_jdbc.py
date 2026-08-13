@@ -177,7 +177,11 @@ def _compile_read(
         ProcessorSpec(key="query", name="query", type="org.apache.nifi.processors.standard.QueryDatabaseTableRecord",
                       properties=props, schedulingPeriod=period, schedulingStrategy=strategy, runOnPrimary=True)
     )
-    builder.to_dlq("query", "failure")
+    # NO DLQ edge here (review C3): QueryDatabaseTableRecord is a source
+    # processor with exactly one relationship, `success` — there is no
+    # `failure` to wire. A query failure is a RUN failure (no record exists
+    # yet, MVP §7.14): NiFi yields/penalizes the processor and the failure
+    # surfaces as a bulletin. The DLQ path starts at the downstream split.
 
     reader_key, split_writer_key = ensure_json_record_services(builder)
     builder.add_processor(
@@ -226,6 +230,11 @@ def _compile_write(
                 "Statement Type": statement_type,
                 "Table Name": table,
             },
+            # M6: every PutDatabaseRecord relationship needs a disposition —
+            # `retry` is auto-terminated (transient errors resurface via the
+            # `failure` -> DLQ path on the next attempt rather than looping),
+            # `failure` goes to the DLQ below, `success` is the tail.
+            autoTerminate=["retry"],
         )
     )
     builder.link("inputPort", "write", [])

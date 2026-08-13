@@ -175,6 +175,26 @@ async def apply_plan(nifi_conn: Dict[str, Any], plan: DeploymentPlan) -> Applied
 # ------------------------------------------------------------ parameter context
 
 
+def _param_value_for_nifi(value: Optional[str]) -> str:
+    """M8 fix: a `None`-valued parameter serializes as JSON `null` in NiFi's
+    parameter-context payload — on the UPDATE path (`_update_parameter_
+    context`, taken on every redeploy of an already-deployed flow) a `null`
+    value is NiFi's DELETE-this-parameter instruction, not "this parameter
+    has no value". `add_param("redis_password", None, True)` (an in-cluster
+    Redis with no password configured — the documented deployment) and
+    every optional secret/field compiles a `None`-valued
+    `ParameterSpec.value` today; on first deploy that is harmless (nothing
+    to delete yet), but redeploy silently removes the parameter while
+    `#{redis_password}` (or the equivalent property) still references it,
+    which fails that controller service's validation and the redeploy dies
+    ~45s later. Coercing `None` -> `""` here — for both sensitive and
+    non-sensitive parameters — keeps the parameter (and therefore every
+    `#{...}` reference to it) alive across redeploys; the referencing
+    property just resolves to an empty string, exactly like an
+    unconfigured optional secret should."""
+    return "" if value is None else value
+
+
 async def _ensure_parameter_context(url: str, auth: Dict[str, Any], spec: ParameterContextSpec) -> Tuple[str, str]:
     listing = await nifi_api_request(url, "GET", "/nifi-api/flow/parameter-contexts", **auth)
     existing_id: Optional[str] = None
@@ -186,7 +206,8 @@ async def _ensure_parameter_context(url: str, auth: Dict[str, Any], spec: Parame
                 break
 
     params_body = [
-        {"parameter": {"name": p.name, "value": p.value, "sensitive": p.sensitive}} for p in spec.parameters
+        {"parameter": {"name": p.name, "value": _param_value_for_nifi(p.value), "sensitive": p.sensitive}}
+        for p in spec.parameters
     ]
 
     if existing_id is None:

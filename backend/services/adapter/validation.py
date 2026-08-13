@@ -196,6 +196,48 @@ DEDUP_MAX_WINDOW_HOURS = 8760  # 365 days
 DEDUP_DEFAULT_WINDOW_HOURS = 24
 
 
+def dedup_stream_not_per_record_reason(flow: Flow, block: FlowBlock) -> Optional[str]:
+    """Dedup (DetectDuplicate + the hash script) is per-FlowFile, so it is
+    only sound when the stream feeding the block is one-record-per-FlowFile.
+    Returns a human-readable reason when that guarantee is broken, else None.
+
+    The guarantee is established at the stream's SOURCE and preserved by
+    everything in between (transforms/routing/write-passthrough never merge
+    FlowFiles), so this walks the parent chain up to the nearest
+    record-producing source:
+      - http read (or http write forwarding its response): per-record only
+        when `split` is true (the default) — `split: false` carries the whole
+        response page in one FlowFile.
+      - jdbc read: always per-record (`SplitRecord`, 1 record per split).
+      - kafka read: always per-record for json/csv/xml (`SplitRecord`); raw
+        branches cannot host transforms at all (R8), so dedup is already
+        excluded there by the raw-branch check.
+    """
+    by_id = {b.id: b for b in flow.blocks}
+    cur: Optional[FlowBlock] = block
+    seen: set = set()
+    while cur is not None and cur.id not in seen:
+        seen.add(cur.id)
+        cfg = cur.config or {}
+        if cur.adapter == "http":
+            if cur.mode == "read":
+                if cfg.get("split") is False:
+                    return f'"{cur.name}" reads whole responses (split is off), so one FlowFile carries many records'
+                return None
+            if cur.mode == "write" and str(cfg.get("writeForwards") or "original") == "response":
+                if cfg.get("split") is False:
+                    return f'"{cur.name}" forwards whole responses (split is off), so one FlowFile carries many records'
+                return None
+            # http write forwarding the original / http lookup: granularity
+            # comes from the parent stream — keep walking up.
+        elif cur.adapter == "jdbc" and cur.mode == "read":
+            return None
+        elif cur.adapter == "kafka" and cur.mode == "read":
+            return None
+        cur = by_id.get(cur.parentId) if cur.parentId else None
+    return None
+
+
 def validate_block(
     flow: Flow,
     block: FlowBlock,
@@ -289,6 +331,14 @@ def validate_block(
         valid_number = isinstance(window, (int, float)) and not isinstance(window, bool)
         if not valid_number or not (DEDUP_MIN_WINDOW_HOURS <= window <= DEDUP_MAX_WINDOW_HOURS):
             at("Dedup window must be between 1 minute and 365 days (1/60-8760 hours).")
+
+    if dedup_positions:
+        per_record_reason = dedup_stream_not_per_record_reason(flow, block)
+        if per_record_reason:
+            at(
+                f"Dedup requires one record per FlowFile — {per_record_reason}. "
+                f"Enable per-record splitting or remove the dedup."
+            )
 
     return issues
 

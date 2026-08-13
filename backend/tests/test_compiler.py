@@ -276,11 +276,18 @@ def test_routing_any_all_unconditional():
     any_procs = [p for p in route_procs if p.key == "route__any_branch"]
     assert len(any_procs) == 1, "exactly one RouteOnAttribute for the any-match branch"
     any_proc = any_procs[0]
+    # M1: 'matched'-if-any strategy — N genuine rule expressions, but ONE
+    # matched relationship so a record matching several rules is delivered
+    # to the child exactly once (Route to Property name cloned per property).
+    assert any_proc.properties["Routing Strategy"] == "Route to 'matched' if any matches"
     dynamic = {k: v for k, v in any_proc.properties.items() if k.startswith("rule_")}
     assert len(dynamic) == 2  # one dynamic property per rule
     assert dynamic["rule_0"] == "${sev:equals('HIGH')}"
     assert dynamic["rule_1"] == "${sev:equals('CRIT')}"
     assert any_proc.autoTerminate == ["unmatched"]
+    any_to_child = [c for c in group.connections if c.from_ == "route__any_branch" and c.to == "outputPort:b-any"]
+    assert len(any_to_child) == 1, "a single connection to the child, never one per rule"
+    assert any_to_child[0].relationships == ["matched"]
 
     all_procs = sorted((p for p in route_procs if p.key.startswith("route__all_branch__rule_")), key=lambda p: p.key)
     assert len(all_procs) == 2, "a 2-processor chain for the all-match branch"
@@ -376,12 +383,34 @@ def test_session_token_login_ahead_of_fetch():
     group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-fetch")
     keys = [p.key for p in group.processors]
 
-    assert "login" in keys and "extract_token" in keys and "fetch" in keys
-    assert keys.index("login") < keys.index("extract_token") < keys.index("fetch")
+    assert "login_body" in keys and "login" in keys and "extract_token" in keys and "fetch" in keys
+    assert keys.index("login_body") < keys.index("login") < keys.index("extract_token") < keys.index("fetch")
+
+    # E5: the login credentials travel as a JSON request BODY rendered by a
+    # ReplaceText step (both values parameter references, password sensitive)
+    # — the Basic-Auth-property approach was proven broken live.
+    body = next(p for p in group.processors if p.key == "login_body")
+    assert body.type == "org.apache.nifi.processors.standard.ReplaceText"
+    assert body.properties["Replacement Strategy"] == "Always Replace"
+    assert body.properties["Replacement Value"] == (
+        '{"username":"#{svc_svc-fs_username}","password":"#{svc_svc-fs_password}"}'
+    )
+    pw_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-fs_password")
+    assert pw_param.sensitive is True
 
     login = next(p for p in group.processors if p.key == "login")
     assert login.type == "org.apache.nifi.processors.standard.InvokeHTTP"
     assert login.properties["HTTP URL"] == "#{svc_svc-fs_base_url}/phoenix/rest/h5/sec/login"
+    assert login.properties["HTTP Method"] == "POST"
+    assert login.properties["Request Body Enabled"] == "true"
+    assert login.properties["Request Content-Type"] == "application/json"
+    assert "Request Username" not in login.properties  # Basic Auth removed (E5)
+    assert "Request Password" not in login.properties
+    # M7: exactly one disposition per relationship — Original auto-terminates,
+    # Failure/Retry/No Retry are connected (to run_failure__log), never both.
+    assert login.autoTerminate == ["Original"]
+    login_failure_conns = [c for c in group.connections if c.from_ == "login" and c.to == "run_failure__log"]
+    assert login_failure_conns and set(login_failure_conns[0].relationships) == {"Failure", "Retry", "No Retry"}
 
     extract_token = next(p for p in group.processors if p.key == "extract_token")
     assert extract_token.properties["session.token"] == "$.sessionToken"
@@ -389,11 +418,21 @@ def test_session_token_login_ahead_of_fetch():
     fetch = next(p for p in group.processors if p.key == "fetch")
     assert fetch.properties["Authorization"] == "${session.token}"  # injection header on the fetch call
 
-    # Login/extract_token failures are run failures, not record failures -- no DLQ record.
-    dlq_from_login = [c for c in group.connections if c.from_ in ("login", "extract_token") and c.to == "dlq"]
+    # Login-chain failures are run failures, not record failures -- no DLQ record.
+    dlq_from_login = [c for c in group.connections if c.from_ in ("login_body", "login", "extract_token") and c.to == "dlq"]
     assert dlq_from_login == []
-    assert any(c.to == "run_failure__log" for c in group.connections if c.from_ == "login")
+    assert any(c.to == "run_failure__log" for c in group.connections if c.from_ == "login_body")
     assert any(c.to == "run_failure__log" for c in group.connections if c.from_ == "extract_token")
+
+
+def test_session_token_header_honors_token_template():
+    ctx = session_token_ctx()
+    ctx.services["svc-fs"].config["tokenTemplate"] = "Bearer ${token}"
+    plan = compile_flow(session_token_flow(), ctx)
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-fetch")
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    # `${token}` in the template is replaced with the extracted-token EL.
+    assert fetch.properties["Authorization"] == "Bearer ${session.token}"
 
 
 # --------------------------------------------------------------------------
@@ -465,7 +504,7 @@ def test_jdbc_read_incremental_golden_checks():
     assert query.properties["Initial Load Strategy"] == "Start at Beginning"
     assert query.runOnPrimary is True
     assert query.schedulingStrategy == "CRON_DRIVEN"  # cron on root
-    assert query.schedulingPeriod == "0 0 */2 * * *"  # "0 */2 * * *" -> "sec min hour dom mon dow"
+    assert query.schedulingPeriod == "0 0 */2 * * ?"  # C1: Quartz needs `?` in DOW when DOM is unspecified
 
     pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
     assert pool.type == "org.apache.nifi.dbcp.DBCPConnectionPool"
@@ -479,8 +518,13 @@ def test_jdbc_read_incremental_golden_checks():
     split = next(p for p in group.processors if p.key == "split")
     assert split.type == "org.apache.nifi.processors.standard.SplitRecord"
     assert split.properties["Records Per Split"] == "1"
+    # C3: QueryDatabaseTableRecord has exactly one relationship (`success`) —
+    # there is NO `failure` to wire to the DLQ; query errors are run
+    # failures surfacing as bulletins. The DLQ path starts at `split`.
     dlq_from_query = [c for c in group.connections if c.from_ == "query" and c.to == "dlq"]
-    assert dlq_from_query and dlq_from_query[0].relationships == ["failure"]
+    assert dlq_from_query == []
+    dlq_from_split = [c for c in group.connections if c.from_ == "split" and c.to == "dlq"]
+    assert dlq_from_split and dlq_from_split[0].relationships == ["failure"]
 
 
 def test_jdbc_write():
@@ -493,6 +537,10 @@ def test_jdbc_write():
     assert write.properties["Table Name"] == "assets_mirror"
     assert write.properties["Database Connection Pooling Service"] == "cs_db_pool"
 
+    # M6: `retry` needs a disposition — auto-terminated (failure covers DLQ).
+    # (`success` is additionally auto-terminated here because this fixture's
+    # write block is childless — the tail has nothing downstream.)
+    assert "retry" in write.autoTerminate
     dlq_from_write = [c for c in group.connections if c.from_ == "write" and c.to == "dlq"]
     assert dlq_from_write and dlq_from_write[0].relationships == ["failure"]
 
@@ -544,12 +592,22 @@ def test_kafka_read_json_split_and_offset_reset():
     topic_param = next(p for p in plan.parameterContext.parameters if p.name == "topic_b-kread")
     assert topic_param.value == "partner.threatfeed.indicators"  # adopted topic's own name, not config.topicName
 
+    # M17: record-based splitting (SplitRecord + JsonTreeReader), never
+    # SplitJson `$[*]` — a Kafka message is normally one JSON OBJECT, and
+    # `$[*]` over an object shreds it into its scalar VALUES. SplitRecord
+    # handles both object-shaped (1 record) and array-shaped (N records)
+    # messages.
     split = next(p for p in group.processors if p.key == "split")
-    assert split.type == "org.apache.nifi.processors.standard.SplitJson"
-    assert split.properties["JsonPath Expression"] == "$[*]"
+    assert split.type == "org.apache.nifi.processors.standard.SplitRecord"
+    assert split.properties["Records Per Split"] == "1"
+    assert split.properties["Record Reader"] == "cs_json_reader"
+    assert split.properties["Record Writer"] == "cs_json_writer"
     assert "original" in split.autoTerminate
     dlq_from_split = [c for c in group.connections if c.from_ == "split" and c.to == "dlq"]
     assert dlq_from_split and dlq_from_split[0].relationships == ["failure"]
+    # the record tail is SplitRecord's `splits` relationship
+    consume_to_split = [c for c in group.connections if c.from_ == "consume" and c.to == "split"]
+    assert consume_to_split and consume_to_split[0].relationships == ["success"]
 
 
 def test_kafka_read_raw_no_transforms_or_split():
@@ -737,9 +795,10 @@ def test_kafka_read_with_child_gets_port_link():
     read_group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-kread")
     assert any("ConsumeKafka" in p.type for p in read_group.processors)
     assert read_group.outputPort
-    # the promised split tail feeds the output port, not an auto-terminate
+    # the promised split tail (SplitRecord `splits`) feeds the output port,
+    # not an auto-terminate
     split = next(p for p in read_group.processors if p.key == "split")
-    assert "split" not in split.autoTerminate
+    assert "splits" not in split.autoTerminate
 
 
 def test_kafka_write_childless_publish_consumes_tail_without_auto_terminate():
@@ -755,3 +814,521 @@ def test_kafka_write_childless_publish_consumes_tail_without_auto_terminate():
     # the input-port tail feeds publish exactly once, no dangling auto-termination clash
     feeds = [c for c in kw.connections if c.to == "publish"]
     assert len(feeds) == 1
+
+
+# --------------------------------------------------------------------------
+# 12. C1 — cron translation (5-field UTC -> NiFi/Quartz 6-field)
+# --------------------------------------------------------------------------
+
+
+def test_cron_presets_translate_to_quartz():
+    from services.adapter.compiler.transforms import cron_or_period
+    from services.adapter.naming import CRON_PRESETS
+
+    expected = {
+        "*/5 * * * *": "0 */5 * * * ?",
+        "*/15 * * * *": "0 */15 * * * ?",
+        "0 * * * *": "0 0 * * * ?",
+        "0 */6 * * *": "0 0 */6 * * ?",
+        "0 2 * * *": "0 0 2 * * ?",
+        # Weekly Mon: standard-cron DOW 1 (Monday) -> Quartz 2 (1=Sunday)
+        "0 6 * * 1": "0 0 6 ? * 2",
+    }
+    # every UI preset is covered by this table
+    assert {p["value"] for p in CRON_PRESETS} == set(expected)
+    for cron, quartz in expected.items():
+        period, strategy = cron_or_period(cron)
+        assert strategy == "CRON_DRIVEN"
+        assert period == quartz, f"{cron!r} -> {period!r}, expected {quartz!r}"
+
+
+def test_cron_dow_conversion_ranges_lists_steps_and_dom():
+    from services.adapter.compiler.transforms import cron_or_period
+
+    # DOW range 1-5 (Mon-Fri) -> 2-6, DOM becomes ?
+    assert cron_or_period("0 6 * * 1-5")[0] == "0 0 6 ? * 2-6"
+    # list incl. Sunday-as-0 and Sunday-as-7 (both -> Quartz 1)
+    assert cron_or_period("0 6 * * 0,3,7")[0] == "0 0 6 ? * 1,4,1"
+    # a step count is NOT a day value and never shifts
+    assert cron_or_period("0 6 * * 1-5/2")[0] == "0 0 6 ? * 2-6/2"
+    assert cron_or_period("0 6 * * */2")[0] == "0 0 6 ? * */2"
+    # named days pass through (same meaning in both dialects)
+    assert cron_or_period("0 6 * * MON")[0] == "0 0 6 ? * MON"
+    # DOM specified, DOW wildcard -> DOW becomes ?
+    assert cron_or_period("30 4 15 * *")[0] == "0 30 4 15 * ?"
+    # both specified -> DOW wins, DOM becomes ? (Quartz forbids both)
+    assert cron_or_period("0 2 15 * 1")[0] == "0 0 2 ? * 2"
+    # no cron -> timer fallback unchanged
+    assert cron_or_period(None) == ("1 hour", "TIMER_DRIVEN")
+
+
+# --------------------------------------------------------------------------
+# 13. C4 — pagination: EL evaluated where NiFi evaluates it (all 4 styles)
+# --------------------------------------------------------------------------
+
+
+def _paginated_read_flow(pagination: dict) -> Flow:
+    return Flow(
+        id="flow-pg", name="Pg Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="Read", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$.items[*]",
+                        "split": True, "pagination": pagination},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def _read_group(plan):
+    return next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+
+def test_pagination_offset_template_on_fetch_url():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "offset", "fields": {"offsetParam": "offset", "limitParam": "limit", "limitValue": "30"}}
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    # the EL lives on the InvokeHTTP property, evaluated per FlowFile
+    assert fetch.properties["HTTP URL"] == "#{svc_svc-http_base_url}/items?offset=${offset}&limit=${limit}"
+    init = next(p for p in group.processors if p.key == "init")
+    assert "request.url" not in init.properties  # no frozen URL string anywhere
+    assert init.properties["offset"] == "0"
+    assert init.properties["limit"] == "30"
+    nxt = next(p for p in group.processors if p.key == "next")
+    # `next` recomputes the literal counter AT the UpdateAttribute
+    assert nxt.properties["offset"] == "${offset:toNumber():plus(30)}"
+    assert any(c.from_ == "next" and c.to == "fetch" for c in group.connections)  # loop re-entry
+
+
+def test_pagination_page_template_on_fetch_url():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "page", "fields": {"pageParam": "page", "sizeParam": "size", "firstPage": "1", "sizeValue": "50"}}
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "#{svc_svc-http_base_url}/items?page=${page}&size=${page_size}"
+    init = next(p for p in group.processors if p.key == "init")
+    assert "request.url" not in init.properties
+    assert init.properties["page"] == "1"
+    assert init.properties["page_size"] == "50"
+    nxt = next(p for p in group.processors if p.key == "next")
+    assert nxt.properties["page"] == "${page:toNumber():plus(1)}"
+
+
+def test_pagination_cursor_template_on_fetch_url():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "cursor", "fields": {"cursorParam": "cursor", "cursorPath": "$.meta.next"}}
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "#{svc_svc-http_base_url}/items?cursor=${cursor}"
+    init = next(p for p in group.processors if p.key == "init")
+    assert "request.url" not in init.properties
+    assert init.properties["cursor"] == ""
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    assert page_meta.properties["next_cursor"] == "$.meta.next"
+    nxt = next(p for p in group.processors if p.key == "next")
+    assert nxt.properties["cursor"] == "${next_cursor}"
+
+
+def test_pagination_next_url_keeps_request_url_attribute():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "next_url", "fields": {"urlPath": "$.next"}}
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    # next_url has no counter placeholder: the concrete URL is stored and
+    # `next` overwrites it with the server-given absolute URL each iteration.
+    assert fetch.properties["HTTP URL"] == "${request.url}"
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["request.url"] == "#{svc_svc-http_base_url}/items"
+    nxt = next(p for p in group.processors if p.key == "next")
+    assert nxt.properties["request.url"] == "${next_url}"
+
+
+# --------------------------------------------------------------------------
+# 14. M4 — extract `default` materialized via UpdateAttribute
+# --------------------------------------------------------------------------
+
+
+def _single_read_flow_with_transforms(transforms) -> Flow:
+    return Flow(
+        id="flow-tx", name="Tx Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="Read", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$.items[*]",
+                        "split": True, "pagination": {"type": "none", "fields": {}}},
+                transforms=transforms,
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_extract_default_materialized_as_update_attribute():
+    flow = _single_read_flow_with_transforms([
+        TransformRule(id="t-1", kind="extract", config={"attribute": "status", "path": "$.status", "default": "unknown"}),
+    ])
+    plan = compile_flow(flow, http_svc_ctx())
+    group = _read_group(plan)
+
+    extract = next(p for p in group.processors if p.key == "t0__extract")
+    # M4: EvaluateJsonPath dynamic properties are JsonPaths only — the old
+    # "Default Value (informational)" property made the processor invalid.
+    assert not any("informational" in k.lower() for k in extract.properties)
+
+    dflt = next(p for p in group.processors if p.key == "t0__extract__default")
+    assert dflt.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert dflt.properties["status"] == "${status:isEmpty():ifElse('unknown', ${status})}"
+    link = [c for c in group.connections if c.from_ == "t0__extract" and c.to == "t0__extract__default"]
+    assert link and link[0].relationships == ["matched"]
+    # the default step IS the new tail (childless flow -> auto-terminated)
+    assert "success" in dflt.autoTerminate
+
+
+def test_extract_without_default_adds_no_extra_processor():
+    flow = _single_read_flow_with_transforms([
+        TransformRule(id="t-1", kind="extract", config={"attribute": "status", "path": "$.status"}),
+    ])
+    plan = compile_flow(flow, http_svc_ctx())
+    group = _read_group(plan)
+    assert not any(p.key == "t0__extract__default" for p in group.processors)
+    extract = next(p for p in group.processors if p.key == "t0__extract")
+    assert "matched" in {r for c in group.connections if c.from_ == "t0__extract" for r in c.relationships} or (
+        "matched" in extract.autoTerminate
+    )
+
+
+# --------------------------------------------------------------------------
+# 15. M5 — coerce: RecordPath property name, field.value EL cast
+# --------------------------------------------------------------------------
+
+
+def test_coerce_recordpath_name_and_field_value_el():
+    flow = _single_read_flow_with_transforms([
+        TransformRule(id="t-1", kind="coerce", config={"field": "age", "type": "integer"}),
+    ])
+    plan = compile_flow(flow, http_svc_ctx())
+    group = _read_group(plan)
+    coerce = next(p for p in group.processors if p.key == "t0__coerce")
+    assert coerce.type == "org.apache.nifi.processors.standard.UpdateRecord"
+    assert coerce.properties["Replacement Value Strategy"] == "literal-value"
+    # dynamic property NAME is a RecordPath; VALUE recomputes the field via
+    # UpdateRecord's own `field.value` EL variable
+    assert coerce.properties["/age"] == "${field.value:toNumber()}"
+    assert not any("informational" in k.lower() for k in coerce.properties)
+
+
+def test_coerce_el_per_target_type():
+    from services.adapter.compiler.transforms import _coerce_el
+
+    assert _coerce_el("integer") == "${field.value:toNumber()}"
+    assert _coerce_el("number") == "${field.value:toNumber()}"
+    assert _coerce_el("double") == "${field.value:toDecimal()}"
+    assert _coerce_el("boolean") == "${field.value:toLower():equals('true')}"
+    assert _coerce_el("string") == "${field.value:toString()}"
+    assert _coerce_el("something_else") == "${field.value}"
+
+
+# --------------------------------------------------------------------------
+# 16. M15 — dedup requires a per-record stream
+# --------------------------------------------------------------------------
+
+
+def _dedup_rule() -> TransformRule:
+    return TransformRule(id="t-d", kind="dedup",
+                         config={"identityFields": ["id"], "excludedFields": [], "windowHours": 24})
+
+
+def test_dedup_on_unsplit_http_read_refused():
+    from services.adapter.validation import validate_flow
+
+    flow = Flow(
+        id="flow-nosplit", name="NoSplit Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="Read", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$",
+                        "split": False, "pagination": {"type": "none", "fields": {}}},
+                transforms=[_dedup_rule()],
+            ),
+            FlowBlock(id="b-write", adapter="kafka", mode="write", name="Out", parentId="b-read", entity="e", config={}),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    ctx = http_svc_ctx()
+
+    # validation surfaces it as an issue...
+    issues = validate_flow(flow, list(ctx.services.values()), [], None)
+    assert any("one record per FlowFile" in i.message for i in issues)
+    # ...and the compiler refuses outright (defense in depth)
+    with pytest.raises(CompileError, match="one record per FlowFile"):
+        compile_flow(flow, ctx)
+
+
+def test_dedup_downstream_of_unsplit_read_also_refused():
+    flow = Flow(
+        id="flow-nosplit2", name="NoSplit Flow 2", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="Read", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$",
+                        "split": False, "pagination": {"type": "none", "fields": {}}},
+            ),
+            FlowBlock(id="b-write", adapter="kafka", mode="write", name="Out", parentId="b-read", entity="e",
+                      config={}, transforms=[_dedup_rule()]),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    with pytest.raises(CompileError, match="one record per FlowFile"):
+        compile_flow(flow, http_svc_ctx())
+
+
+def test_dedup_on_split_http_read_allowed():
+    flow = _single_read_flow_with_transforms([_dedup_rule()])
+    ctx = http_svc_ctx()
+    ctx.connections["redis"] = make_connection(id="conn-redis", type="redis", name="R",
+                                               config={"host": "redis", "port": 6379})
+    plan = compile_flow(flow, ctx)  # split=True -> fine
+    group = _read_group(plan)
+    assert any(p.key == "dedupe__detect" for p in group.processors)
+
+
+# --------------------------------------------------------------------------
+# 17. M16 — api_key in query location
+# --------------------------------------------------------------------------
+
+
+def api_key_query_ctx() -> CompileContext:
+    services = {"svc-http": make_service(
+        id="svc-http", type="http", name="Keyed API",
+        config={"baseUrl": "https://keyed.example", "authMode": "api_key",
+                "keyLocation": "query", "keyName": "api_key", "keyValue": "s3cr3t"},
+        hasSecret=True,
+    )}
+    connections = {"kafka": make_connection(id="conn-kafka", type="kafka", name="K",
+                                            config={"bootstrapServers": "kafka:9092"})}
+    return CompileContext(services=services, connections=connections, gateway_proxies={}, approved_schemas={})
+
+
+def test_api_key_query_read_folds_into_url_once():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "offset", "fields": {"offsetParam": "offset", "limitParam": "limit", "limitValue": "30"}}
+    ), api_key_query_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    url = fetch.properties["HTTP URL"]
+    assert url == "#{svc_svc-http_base_url}/items?offset=${offset}&limit=${limit}&api_key=#{svc_svc-http_key_value}"
+    assert url.count("#{svc_svc-http_key_value}") == 1  # never doubled
+    # M16: no malformed "informational" header property, and the key value is
+    # never emitted as a header-shaped dynamic property
+    assert not any("informational" in k.lower() for k in fetch.properties)
+    header_like = {k: v for k, v in fetch.properties.items()
+                   if v == "#{svc_svc-http_key_value}" and k != "HTTP URL"}
+    assert header_like == {}
+
+
+def test_api_key_query_read_unpaginated_stays_in_request_url_only():
+    plan = compile_flow(_paginated_read_flow({"type": "none", "fields": {}}), api_key_query_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "${request.url}"  # untouched — no double-append
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["request.url"].endswith("?api_key=#{svc_svc-http_key_value}")
+    assert not any("informational" in k.lower() for k in fetch.properties)
+
+
+def test_api_key_query_write_appends_to_url():
+    flow = Flow(
+        id="flow-wq", name="Wq Flow", cron=None, state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(id="b-write", adapter="http", mode="write", name="Post", parentId=None, serviceId="svc-http",
+                      config={"method": "POST", "path": "/incidents", "bodyTemplate": "{}",
+                              "writeForwards": "original"}),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    plan = compile_flow(flow, api_key_query_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.properties["HTTP URL"] == "#{svc_svc-http_base_url}/incidents?api_key=#{svc_svc-http_key_value}"
+    assert not any("informational" in k.lower() for k in write.properties)
+
+
+# --------------------------------------------------------------------------
+# 18. M6/M7 — relationship-disposition invariant
+# --------------------------------------------------------------------------
+
+
+def test_relationship_disposition_invariant_raises():
+    from services.adapter.compiler.ir import BlockBuilder, ProcessorSpec
+
+    b = BlockBuilder()
+    b.add_processor(ProcessorSpec(key="p", name="p", type="T", autoTerminate=["x"]))
+    b.add_processor(ProcessorSpec(key="q", name="q", type="T"))
+    b.link("p", "q", ["x"])  # `x` now both connected and auto-terminated
+    with pytest.raises(CompileError, match="both connected and auto-terminated"):
+        b.build_group("b", "b", input_port=False, output_port=False)
+
+
+def test_no_emitted_group_violates_disposition_invariant():
+    # Compiling every fixture flow in this module exercises the builder-level
+    # invariant on the real graphs (build_group runs it) — reaching here
+    # without CompileError IS the assertion, but re-check explicitly anyway.
+    for flow, ctx in [
+        (golden_flow(), golden_ctx()),
+        (routing_flow(), routing_ctx()),
+        (session_token_flow(), session_token_ctx()),
+        (jdbc_flow(), jdbc_ctx()),
+        (kafka_read_flow(), kafka_read_ctx()),
+        (http_write_flow("original"), http_svc_ctx()),
+        (http_write_flow("response"), http_svc_ctx()),
+        (http_lookup_flow(), http_svc_ctx()),
+    ]:
+        plan = compile_flow(flow, ctx)
+        for group in plan.rootGroup.childGroups:
+            connected = {}
+            for c in group.connections:
+                connected.setdefault(c.from_, set()).update(c.relationships)
+            for p in group.processors:
+                overlap = set(p.autoTerminate) & connected.get(p.key, set())
+                assert not overlap, f"{flow.id}/{group.blockId}/{p.key}: {overlap}"
+
+
+# --------------------------------------------------------------------------
+# 19. E2/E2b — connector configs (iceberg REST catalog / opensearch / registry URLs)
+# --------------------------------------------------------------------------
+
+
+def iceberg_full_ctx() -> CompileContext:
+    ctx = golden_ctx()
+    ctx.services["svc-iceberg"] = make_service(
+        id="svc-iceberg", type="sink_destination", name="Iceberg Bronze Catalog",
+        config={"kind": "iceberg_catalog", "catalogUrl": "http://polaris.internal.corp:8181/api/catalog",
+                "warehouse": "bronze", "oauthClientId": "cid", "oauthClientSecret": "csecret",
+                "s3Endpoint": "http://minio.corp:9000", "s3AccessKey": "AK", "s3SecretKey": "SK",
+                "s3Region": "eu-west-1", "s3PathStyle": True},
+        hasSecret=True,
+    )
+    return ctx
+
+
+def test_iceberg_connector_full_property_set():
+    flow = golden_flow()
+    sink = next(b for b in flow.blocks if b.id == "b-sink")
+    sink.config["initialPosition"] = "new"
+    plan = compile_flow(flow, iceberg_full_ctx())
+    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
+
+    # E2: full REST-catalog config from the sink service (alpha-proven set)
+    assert cfg["connector.class"] == "org.apache.iceberg.connect.IcebergSinkConnector"
+    assert cfg["iceberg.catalog.type"] == "rest"  # HiveCatalog default = live task crash
+    assert cfg["iceberg.catalog.uri"] == "http://polaris.internal.corp:8181/api/catalog"
+    assert cfg["iceberg.catalog.warehouse"] == "bronze"
+    assert cfg["iceberg.catalog.credential"] == "cid:csecret"
+    assert cfg["iceberg.catalog.rest.auth.type"] == "oauth2"
+    assert cfg["iceberg.catalog.scope"] == "PRINCIPAL_ROLE:ALL"
+    assert cfg["iceberg.catalog.oauth2-server-uri"] == "http://polaris.internal.corp:8181/api/catalog/v1/oauth/tokens"
+    assert cfg["iceberg.catalog.io-impl"] == "org.apache.iceberg.aws.s3.S3FileIO"
+    assert cfg["iceberg.catalog.s3.endpoint"] == "http://minio.corp:9000"
+    assert cfg["iceberg.catalog.s3.access-key-id"] == "AK"
+    assert cfg["iceberg.catalog.s3.secret-access-key"] == "SK"
+    assert cfg["iceberg.catalog.s3.path-style-access"] == "true"
+    assert cfg["iceberg.catalog.s3.region"] == "eu-west-1"
+    # initialPosition "new" -> latest
+    assert cfg["consumer.override.auto.offset.reset"] == "latest"
+
+    # E2b: the Connect converter uses the NATIVE registry API...
+    assert cfg["value.converter.apicurio.registry.url"] == "http://apicurio.internal.corp:8081/apis/registry/v3"
+    assert cfg["value.converter.apicurio.registry.use-id"] == "contentId"
+    # ...while the NiFi-side ConfluentSchemaRegistry CS keeps ccompat
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-sink")
+    registry = next(cs for cs in group.controllerServices if cs.key == "cs_schema_registry")
+    assert registry.properties["Schema Registry URLs"] == "#{apicurio_ccompat_url}"
+    ccompat_param = next(p for p in plan.parameterContext.parameters if p.name == "apicurio_ccompat_url")
+    assert ccompat_param.value == "http://apicurio.internal.corp:8081/apis/ccompat/v7"
+
+
+def test_iceberg_connector_default_offset_reset_is_earliest():
+    plan = compile_flow(golden_flow(), golden_ctx())
+    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
+    assert cfg["consumer.override.auto.offset.reset"] == "earliest"
+    # no oauth/s3 creds configured -> no credential keys emitted
+    assert "iceberg.catalog.credential" not in cfg
+    assert "iceberg.catalog.s3.access-key-id" not in cfg
+    # but the catalog type + io-impl are always present
+    assert cfg["iceberg.catalog.type"] == "rest"
+    assert cfg["iceberg.catalog.io-impl"] == "org.apache.iceberg.aws.s3.S3FileIO"
+
+
+def test_opensearch_connector_credentials():
+    ctx = golden_ctx()
+    ctx.services["svc-iceberg"] = make_service(
+        id="svc-iceberg", type="sink_destination", name="OpenSearch Sink",
+        config={"kind": "opensearch", "url": "https://os.internal.corp:9200",
+                "username": "os_user", "password": "os_pw", "writeMode": "upsert", "indexPrefix": "sec_"},
+        hasSecret=True,
+    )
+    plan = compile_flow(golden_flow(), ctx)
+    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
+    assert cfg["connector.class"] == "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector"
+    assert cfg["connection.url"] == "https://os.internal.corp:9200"
+    assert cfg["connection.username"] == "os_user"
+    assert cfg["connection.password"] == "os_pw"
+    assert cfg["key.ignore"] == "false"  # upsert
+    assert cfg["topic.index.map"] == "raw.golden_flow.asset:sec_asset"
+    assert cfg["consumer.override.auto.offset.reset"] == "earliest"
+    assert cfg["value.converter.apicurio.registry.url"] == "http://apicurio.internal.corp:8081/apis/registry/v3"
+
+
+def test_opensearch_connector_without_credentials_omits_them():
+    ctx = golden_ctx()
+    ctx.services["svc-iceberg"] = make_service(
+        id="svc-iceberg", type="sink_destination", name="OpenSearch Sink",
+        config={"kind": "opensearch", "url": "https://os.internal.corp:9200"},
+    )
+    plan = compile_flow(golden_flow(), ctx)
+    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
+    assert "connection.username" not in cfg
+    assert "connection.password" not in cfg
+
+
+# --------------------------------------------------------------------------
+# 20. kafka_kc sink service reference: serviceId OR config.sinkServiceId
+# --------------------------------------------------------------------------
+
+
+def test_kafka_kc_sink_service_from_service_id_only():
+    flow = golden_flow()
+    sink = next(b for b in flow.blocks if b.id == "b-sink")
+    sink.config.pop("sinkServiceId", None)  # serviceId="svc-iceberg" remains
+    plan = compile_flow(flow, golden_ctx())
+    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
+    assert cfg["connector.class"] == "org.apache.iceberg.connect.IcebergSinkConnector"
+
+
+def test_kafka_kc_sink_service_from_sink_service_id_only():
+    base = golden_flow()
+    blocks = [b if b.id != "b-sink" else b.model_copy(update={"serviceId": None}) for b in base.blocks]
+    flow = base.model_copy(update={"blocks": blocks})
+    plan = compile_flow(flow, golden_ctx())  # config.sinkServiceId still set
+    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
+    assert cfg["connector.class"] == "org.apache.iceberg.connect.IcebergSinkConnector"
+
+
+def test_kafka_kc_sink_service_missing_both_raises():
+    base = golden_flow()
+    blocks = [b if b.id != "b-sink" else b.model_copy(update={"serviceId": None, "config": {}})
+              for b in base.blocks]
+    flow = base.model_copy(update={"blocks": blocks})
+    with pytest.raises(CompileError, match="sink destination service"):
+        compile_flow(flow, golden_ctx())

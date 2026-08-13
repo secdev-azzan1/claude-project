@@ -32,6 +32,7 @@ from .ir import (
     ProcessorSpec,
     dedupe_preserve_order,
     ensure_json_record_services,
+    escape_el_literal,
     format_duration_hours,
 )
 
@@ -44,17 +45,55 @@ Tail = Tuple[str, str]  # (processor key, forward relationship name)
 DEDUP_PLATFORM_EXCLUDES = ["ingest_id", "ingest_ts", "op"]
 
 
+def _quartz_dow_token(tok: str) -> str:
+    """One numeric day-of-week token: standard cron 0-7 (0/7 = Sunday) ->
+    Quartz 1-7 (1 = Sunday). Names (SUN..SAT) pass through unchanged — both
+    dialects accept them with the same meaning."""
+    if tok.isdigit():
+        return str((int(tok) % 7) + 1)
+    return tok
+
+
+def _quartz_dow(dow: str) -> str:
+    """Convert a full 5-field-cron day-of-week expression to Quartz numbering,
+    mapping each numeric DAY token while leaving structure (lists `a,b`,
+    ranges `a-b`, steps `/n` — the step count is NOT a day value) intact."""
+    out = []
+    for part in dow.split(","):
+        base, sep, step = part.partition("/")
+        if base != "*" and "-" in base:
+            lo, _, hi = base.partition("-")
+            base = f"{_quartz_dow_token(lo)}-{_quartz_dow_token(hi)}"
+        elif base != "*":
+            base = _quartz_dow_token(base)
+        out.append(f"{base}{sep}{step}")
+    return ",".join(out)
+
+
 def cron_or_period(cron: Optional[str]) -> Tuple[str, str]:
-    """5-field UTC cron -> NiFi cron (`sec min hour dom mon dow`), per
-    compiler-spec §3.1 item 1 / §3.2 ("trigger = cron scheduling on the
-    processor itself when root"): `0 <min> <hour> <dom> <mon> <dow>`.
+    """5-field UTC cron -> NiFi 6-field cron (`sec min hour dom mon dow`),
+    per compiler-spec §3.1 item 1 / §3.2 ("trigger = cron scheduling on the
+    processor itself when root").
+
+    This is a real dialect TRANSLATION, not a positional shift (review
+    finding C1):
+      - seconds are always `0`;
+      - Quartz refuses an expression where day-of-month AND day-of-week are
+        both specified — exactly one must be `?`. When both are `*` the
+        emitted pair is DOM `*` / DOW `?` (live NiFi accepted `* *` for the
+        all-wildcard case — Journey A/B ran `*/2 * * * *` fine — and `?` is
+        accepted by both the Quartz and Spring cron dialects, so `?` is the
+        safe intersection). When DOW is specified, DOW wins and DOM becomes
+        `?`; when only DOM is specified, DOW becomes `?`.
+      - day-of-week numbering converts from standard cron 0-7 (0/7=Sunday)
+        to Quartz 1-7 (1=Sunday), token by token (lists/ranges/steps keep
+        their structure; step counts are not day values and never shift).
 
     Shared by http's `GenerateFlowFile` trigger (root http read/write) and
     jdbc's `QueryDatabaseTableRecord` root scheduling — both need the exact
     same UTC-cron -> NiFi-cron mapping, so it lives here (the one place the
     task brief sanctions a cross-`blocks_*` shared helper) rather than being
-    duplicated. Originally a private `_cron_or_period` in `blocks_http.py`;
-    moved here verbatim when jdbc needed the same mapping.
+    duplicated.
     """
     if not cron:
         return "1 hour", "TIMER_DRIVEN"
@@ -62,6 +101,13 @@ def cron_or_period(cron: Optional[str]) -> Tuple[str, str]:
     if len(fields) != 5:
         raise CompileError(f"Cron must be a 5-field expression (UTC), got {cron!r}")
     minute, hour, dom, mon, dow = fields
+    if dom == "*" and dow == "*":
+        dom, dow = "*", "?"
+    elif dow != "*":
+        dom = "?"  # DOW wins; Quartz requires ? in the other field
+        dow = _quartz_dow(dow)
+    else:
+        dow = "?"
     return f"0 {minute} {hour} {dom} {mon} {dow}", "CRON_DRIVEN"
 
 # Adapted from docs/orchestration/analysis/dedup-reference-flow.md's reference
@@ -163,6 +209,16 @@ def build_chain(
 
 
 def _compile_extract(builder: "BlockBuilder", *, idx: int, rule: TransformRule, tail: Tail) -> Tail:
+    """`extract` = one `EvaluateJsonPath` promoting the path to an attribute.
+
+    A configured `default` CANNOT live on the EvaluateJsonPath itself — every
+    dynamic property there is validated as a JsonPath expression, so any
+    non-JsonPath default makes the processor invalid (review finding M4). It
+    is materialized honestly instead: a follow-up `UpdateAttribute`
+    (`t<idx>__extract__default`) applies
+    `${attr:isEmpty():ifElse('<default>', ${attr})}`, emitted ONLY when a
+    default is configured; without one the chain is unchanged.
+    """
     key = f"t{idx}__extract"
     attribute = str(rule.config.get("attribute", "")) or f"extract_{idx}"
     path = str(rule.config.get("path", "$"))
@@ -174,20 +230,26 @@ def _compile_extract(builder: "BlockBuilder", *, idx: int, rule: TransformRule, 
         "Null Value Representation": "empty string",
         attribute: path,
     }
-    if default not in (None, ""):
-        # `default` is not materialized by a second processor (spec: "each
-        # rule = its own processor") — recorded here for a downstream EL
-        # consumer to apply via `${attr:isEmpty():ifElse('<default>', ${attr})}`.
-        props["Default Value (informational)"] = str(default)
     tail_key, tail_rel = tail
-    from_key, from_rel = key, "matched"
     builder.add_processor(
         ProcessorSpec(key=key, name=key, type="org.apache.nifi.processors.standard.EvaluateJsonPath",
                        properties=props, autoTerminate=["unmatched"])
     )
     builder.link(tail_key, key, [tail_rel])
     builder.to_dlq(key, "failure")
-    return from_key, from_rel
+    if default in (None, ""):
+        return key, "matched"
+
+    default_key = f"t{idx}__extract__default"
+    default_el = "${" + attribute + ":isEmpty():ifElse('" + escape_el_literal(str(default)) + "', ${" + attribute + "})}"
+    builder.add_processor(
+        ProcessorSpec(key=default_key, name=default_key,
+                       type="org.apache.nifi.processors.attributes.UpdateAttribute",
+                       properties={attribute: default_el})
+    )
+    # UpdateAttribute has no failure relationship — nothing to DLQ here.
+    builder.link(key, default_key, ["matched"])
+    return default_key, "success"
 
 
 def _compile_update_record(builder: "BlockBuilder", *, idx: int, kind: str, tail: Tail, field_props: dict) -> Tail:
@@ -244,13 +306,35 @@ def _compile_rename(builder: "BlockBuilder", *, idx: int, rule: TransformRule, t
     return drop_key, "success"
 
 
+def _coerce_el(target_type: str) -> str:
+    """The EL that recomputes the field's own value for a coerce target type.
+
+    `UpdateRecord` with `Replacement Value Strategy: literal-value` evaluates
+    the property VALUE as NiFi EL per record, with the current field exposed
+    as `field.value` (a documented UpdateRecord EL variable) — the simplest
+    correct NiFi 2.9 representation of an in-record cast. Final on-the-wire
+    typing is still enforced by the downstream RecordSetWriter's schema
+    (Avro on kafka_kc, inferred JSON otherwise); this step normalizes the
+    value so that schema coercion succeeds.
+    """
+    t = (target_type or "string").strip().lower()
+    if t in ("integer", "int", "long", "number"):
+        return "${field.value:toNumber()}"
+    if t in ("float", "double", "decimal"):
+        return "${field.value:toDecimal()}"
+    if t in ("boolean", "bool"):
+        return "${field.value:toLower():equals('true')}"
+    if t in ("string", "text"):
+        return "${field.value:toString()}"
+    return "${field.value}"
+
+
 def _compile_coerce(builder: "BlockBuilder", *, idx: int, rule: TransformRule, tail: Tail) -> Tail:
-    """`coerce` compiles to a pass-through `UpdateRecord` (record-path-value,
-    identity path) carrying the target type as an informational property.
-    Real type coercion is enforced by the downstream RecordSetWriter's
-    schema (Avro on kafka_kc, inferred JSON otherwise) on serialize, which is
-    the standard NiFi pattern for loosely-typed JSON records — there is no
-    single-processor "CAST" primitive on `UpdateRecord` itself.
+    """`coerce` = one `UpdateRecord` whose dynamic property NAME is the
+    RecordPath `/field` and whose VALUE is a `${field.value:...}` EL cast
+    (see `_coerce_el`). The previous "informational" extra property was
+    removed (review finding M5): UpdateRecord dynamic property names must be
+    RecordPaths, so a prose-named property fails the processor's validators.
     """
     key = f"t{idx}__coerce"
     field_path = _to_record_path(str(rule.config.get("field", "")))
@@ -262,9 +346,8 @@ def _compile_coerce(builder: "BlockBuilder", *, idx: int, rule: TransformRule, t
             key=key, name=key, type="org.apache.nifi.processors.standard.UpdateRecord",
             properties={
                 "Record Reader": reader_key, "Record Writer": writer_key,
-                "Replacement Value Strategy": "record-path-value",
-                field_path: field_path,
-                "Coerce Target Type (informational)": target_type,
+                "Replacement Value Strategy": "literal-value",
+                field_path: _coerce_el(target_type),
             },
         )
     )
@@ -300,6 +383,19 @@ def _compile_dedup(
     tail: Tail,
     add_param,
 ) -> Tail:
+    # M15 defense in depth: dedup (DetectDuplicate + the hash script) is
+    # per-FlowFile, so the stream feeding it MUST be one record per FlowFile.
+    # validation.py surfaces the same invariant as a validation issue; the
+    # compiler refuses outright rather than compiling a silent batch-dropper.
+    from services.adapter.validation import dedup_stream_not_per_record_reason
+
+    reason = dedup_stream_not_per_record_reason(flow, block)
+    if reason:
+        raise CompileError(
+            f"dedup on block {block.id!r} requires one record per FlowFile — {reason}. "
+            f"Enable per-record splitting or remove the dedup transform."
+        )
+
     identity_fields = [f for f in (rule.config.get("identityFields") or []) if isinstance(f, str) and f.strip()]
     user_excludes = [f for f in (rule.config.get("excludedFields") or []) if isinstance(f, str) and f.strip()]
     window_hours = rule.config.get("windowHours", 24)

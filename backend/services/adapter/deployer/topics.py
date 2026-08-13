@@ -74,6 +74,39 @@ async def count_topic(kafka_conn: Dict[str, Any], topic: str) -> Dict[str, Any]:
     )
 
 
+async def list_topics(kafka_conn: Dict[str, Any]) -> Dict[str, Any]:
+    """Best-effort listing of every live topic name on the Kafbat-managed
+    cluster (M13 — topic-reservation collision check at deploy preflight).
+    Like `delete_topic`, this talks to the Kafbat REST API directly (no
+    native-Kafka path — `kafka_client.py` itself is out of scope for this
+    task's edits, and the native broker is not TCP-reachable from this host
+    in the deployments this platform targets anyway). Never raises: a
+    missing/unreachable Kafbat configuration comes back as `{"ok": False,
+    ...}` and the caller skips the live-cluster half of the check silently
+    rather than treating "couldn't verify" as a deploy blocker."""
+    kafbat_url = (kafka_conn.get("kafbat_url") or "").rstrip("/")
+    if not kafbat_url:
+        return {"ok": False, "error": "No Kafbat URL configured — topic listing needs the Kafbat management API."}
+
+    try:
+        async with httpx.AsyncClient(verify=tls_verify_enabled(), timeout=15.0, follow_redirects=True) as client:
+            await kafka_client._kafbat_login(client, kafbat_url, kafka_conn.get("kafbat_username"), kafka_conn.get("kafbat_password"))
+            cluster = await kafka_client._kafbat_get_cluster_name(client, kafbat_url)
+            if not cluster:
+                return {"ok": False, "error": "Could not determine the Kafbat cluster name."}
+
+            resp = await client.get(f"{kafbat_url}/api/clusters/{quote(cluster, safe='')}/topics")
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"Kafbat topic list returned {resp.status_code}: {resp.text[:200]}"}
+            data = resp.json()
+            items = data.get("topics") if isinstance(data, dict) else data
+            names = [t.get("name") for t in items if isinstance(t, dict) and t.get("name")] if isinstance(items, list) else []
+            return {"ok": True, "topics": names}
+    except Exception as exc:
+        logger.exception("list_topics() failed")
+        return {"ok": False, "error": f"Kafbat topic list failed: {str(exc)[:200]}"}
+
+
 async def delete_topic(kafka_conn: Dict[str, Any], topic: str) -> Dict[str, Any]:
     """Delete `topic` entirely (used by `lifecycle.delete` — DLQ + owned
     data topics — never by `undeploy`, which only empties them)."""
