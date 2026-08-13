@@ -109,6 +109,8 @@ function defaultDraft(type: ConnectionType): Draft {
         bootstrapServers: "",
         mode: "native",
         proxyUrl: "",
+        kafbatUsername: "",
+        kafbatPassword: "",
         securityProtocol: "SASL_SSL",
         saslUsername: "",
         saslPassword: "",
@@ -137,6 +139,7 @@ function connectionToDraft(conn: PlatformConnection): Draft {
         bootstrapServers: str(c.bootstrapServers),
         mode: str(c.mode, "native"),
         proxyUrl: str(c.proxyUrl),
+        kafbatUsername: str(c.kafbatUsername),
         securityProtocol: str(c.securityProtocol, "PLAINTEXT"),
         saslUsername: str(c.saslUsername),
       };
@@ -202,8 +205,15 @@ function validateDraft(type: ConnectionType, d: Draft, isEdit: boolean): DraftEr
   return errors;
 }
 
-/** Build the PlatformConnection to persist. Secrets are write-only: values are
- *  never stored in config — only `hasSecret` records their presence. */
+/**
+ * Build the PlatformConnection to persist. Unlike the old localStorage mock
+ * (which never stored secret values, only a `hasSecret` flag), the real
+ * backend needs the actual secret text to call out with — so when the user
+ * typed something, the value itself is written into `config` under the
+ * field name the backend resolves for that type/auth-mode; a blank secret
+ * field is simply omitted from `config`, and the backend's own "blank keeps
+ * the existing value" merge takes over on update.
+ */
 function draftToConnection(type: ConnectionType, d: Draft, existing?: PlatformConnection): PlatformConnection {
   let config: Record<string, unknown> = {};
   let secretEntered = false;
@@ -211,18 +221,42 @@ function draftToConnection(type: ConnectionType, d: Draft, existing?: PlatformCo
     case "nifi":
       config = { url: d.url.trim(), authMode: d.authMode };
       if (d.authMode === "basic" && d.username.trim()) config.username = d.username.trim();
-      secretEntered = d.authMode === "bearer" ? !!d.token.trim() : !!d.password.trim();
+      if (d.authMode === "bearer" && d.token.trim()) {
+        config.token = d.token.trim();
+        secretEntered = true;
+      }
+      if (d.authMode === "basic" && d.password.trim()) {
+        config.password = d.password.trim();
+        secretEntered = true;
+      }
       break;
     case "kafka":
       config = { bootstrapServers: d.bootstrapServers.trim(), mode: d.mode, securityProtocol: d.securityProtocol };
-      if (d.mode === "kafbat") config.proxyUrl = d.proxyUrl.trim();
+      if (d.mode === "kafbat") {
+        config.proxyUrl = d.proxyUrl.trim();
+        if (d.kafbatUsername.trim()) config.kafbatUsername = d.kafbatUsername.trim();
+        if (d.kafbatPassword.trim()) {
+          config.kafbatPassword = d.kafbatPassword.trim();
+          secretEntered = true;
+        }
+      }
       if (d.saslUsername.trim()) config.saslUsername = d.saslUsername.trim();
-      secretEntered = !!d.saslPassword.trim();
+      if (d.saslPassword.trim()) {
+        config.saslPassword = d.saslPassword.trim();
+        secretEntered = true;
+      }
       break;
     case "apicurio":
       config = { url: d.url.trim(), authMode: d.authMode };
       if (d.authMode === "basic" && d.username.trim()) config.username = d.username.trim();
-      secretEntered = d.authMode === "bearer" ? !!d.token.trim() : d.authMode === "basic" ? !!d.password.trim() : false;
+      if (d.authMode === "bearer" && d.token.trim()) {
+        config.token = d.token.trim();
+        secretEntered = true;
+      }
+      if (d.authMode === "basic" && d.password.trim()) {
+        config.password = d.password.trim();
+        secretEntered = true;
+      }
       break;
     case "kafka_connect":
       config = { url: d.url.trim() };
@@ -235,11 +269,17 @@ function draftToConnection(type: ConnectionType, d: Draft, existing?: PlatformCo
         bookmarksDb: Number(d.bookmarksDb),
         mode: "standalone",
       };
-      secretEntered = !!d.password.trim();
+      if (d.password.trim()) {
+        config.password = d.password.trim();
+        secretEntered = true;
+      }
       break;
     case "apisix":
       config = { adminUrl: d.adminUrl.trim(), runtimeUrl: d.runtimeUrl.trim() };
-      secretEntered = !!d.adminKey.trim();
+      if (d.adminKey.trim()) {
+        config.adminKey = d.adminKey.trim();
+        secretEntered = true;
+      }
       break;
   }
   const noSecretPossible =
@@ -397,13 +437,26 @@ function ConnectionFormFields({
           </Select>
         </div>
         {draft.mode === "kafbat" && (
-          <Field
-            label="Kafbat proxy URL"
-            value={draft.proxyUrl}
-            onChange={(e) => onPatch({ proxyUrl: e.target.value })}
-            error={errors.proxyUrl}
-            hint="HTTP URL used to inspect topics through the Kafbat proxy"
-          />
+          <>
+            <Field
+              label="Kafbat proxy URL"
+              value={draft.proxyUrl}
+              onChange={(e) => onPatch({ proxyUrl: e.target.value })}
+              error={errors.proxyUrl}
+              hint="HTTP URL used to inspect topics through the Kafbat proxy"
+            />
+            <Field
+              label="Kafbat username"
+              value={draft.kafbatUsername}
+              onChange={(e) => onPatch({ kafbatUsername: e.target.value })}
+            />
+            <SecretField
+              label="Kafbat password"
+              isEdit={isEdit}
+              value={draft.kafbatPassword}
+              onChange={(e) => onPatch({ kafbatPassword: e.target.value })}
+            />
+          </>
         )}
         <div>
           <Label>Security protocol</Label>

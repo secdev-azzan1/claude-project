@@ -90,6 +90,9 @@ def _resolve_secret_key(ctype: str, config: Dict[str, Any]) -> Optional[str]:
             return "password"
         return None
     if ctype == "kafka":
+        # kafbat mode authenticates to the Kafbat UI, native mode to the broker
+        if config.get("mode") == "kafbat":
+            return "kafbatPassword"
         return "saslPassword"
     if ctype == "redis":
         return "password"

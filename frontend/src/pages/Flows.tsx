@@ -3,7 +3,7 @@
 // operations, and a rich right-side detail Sheet. The only polling on the
 // page is listFlows every 15s.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -128,8 +128,10 @@ import {
 import { rootBlock } from "@/prototype/legality";
 import { deriveTopicName, dlqName, tokenize } from "@/prototype/naming";
 import type {
+  AdapterId,
   AppService,
   ApprovedSchema,
+  BlockMode,
   ConnectorExport,
   DriftFinding,
   Flow,
@@ -297,19 +299,6 @@ function bulkBlockReason(flow: Flow, action: BulkAction): string | null {
       return getVerbBlockReason(flow, action);
   }
 }
-
-// The canned bundle the mocked import wizard "reads" from disk.
-const IMPORT_BUNDLE = {
-  file: "fortisiem-to-opensearch@1.connector.json",
-  name: "fortisiem-to-opensearch",
-  version: 1,
-  defaultFlowName: "FortiSIEM to OpenSearch (imported)",
-  blocks: [
-    { adapter: "http" as const, mode: "read" as const, name: "Fetch Incidents" },
-    { adapter: "kafka" as const, mode: "write" as const, name: "Events Topic" },
-    { adapter: "kc" as const, name: "OpenSearch Feed" },
-  ],
-};
 
 // ─── Small guarded controls ─────────────────────────────────────────────────
 
@@ -1074,7 +1063,7 @@ function FlowDetailSheet({
   });
   const messagesQuery = useQuery({
     queryKey: ["topic-messages", msgTopic],
-    queryFn: () => getTopicMessages(msgTopic!),
+    queryFn: () => getTopicMessages(flow.id, msgTopic!),
     enabled: tab === "messages" && !!msgTopic,
   });
 
@@ -1702,7 +1691,52 @@ function SaveConnectorDialog({
   );
 }
 
-// ─── Import Connector wizard (mocked) ───────────────────────────────────────
+// ─── Import Connector wizard ─────────────────────────────────────────────────
+
+const KNOWN_ADAPTER_IDS: AdapterId[] = ["http", "jdbc", "kafka", "kafka_kc", "kc"];
+
+/** Minimal shape a picked connector bundle JSON must have (mirrors what
+ *  SaveConnectorDialog's downloadJson writes: {connector, flowName, blocks}). */
+interface PickedBundle {
+  fileName: string;
+  bundleName: string;
+  version: number;
+  blocks: { adapter: AdapterId; mode?: BlockMode; name: string }[];
+}
+
+function parseBundleFile(fileName: string, text: string): PickedBundle {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`"${fileName}" is not valid JSON.`);
+  }
+  if (!parsed || typeof parsed !== "object") throw new Error("The connector bundle must be a JSON object.");
+  const obj = parsed as Record<string, unknown>;
+  const blocksRaw = obj.blocks;
+  if (!Array.isArray(blocksRaw) || blocksRaw.length === 0) {
+    throw new Error("The connector bundle has no blocks.");
+  }
+  const blocks = blocksRaw.map((b, i) => {
+    const rec = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;
+    const adapter = rec.adapter;
+    if (typeof adapter !== "string" || !KNOWN_ADAPTER_IDS.includes(adapter as AdapterId)) {
+      throw new Error(`Block ${i + 1} in the bundle has an unrecognized adapter.`);
+    }
+    return {
+      adapter: adapter as AdapterId,
+      mode: typeof rec.mode === "string" ? (rec.mode as BlockMode) : undefined,
+      name: typeof rec.name === "string" ? rec.name : `Block ${i + 1}`,
+    };
+  });
+  const connector = (obj.connector && typeof obj.connector === "object" ? obj.connector : {}) as Record<string, unknown>;
+  const bundleName =
+    (typeof connector.name === "string" && connector.name) ||
+    (typeof obj.flowName === "string" && obj.flowName) ||
+    fileName.replace(/\.connector\.json$|\.json$/i, "");
+  const version = typeof connector.version === "number" ? connector.version : 1;
+  return { fileName, bundleName, version, blocks };
+}
 
 function ImportConnectorDialog({
   open,
@@ -1714,28 +1748,44 @@ function ImportConnectorDialog({
   onClose: () => void;
 }) {
   const [step, setStep] = useState(1);
-  const [fileChosen, setFileChosen] = useState(false);
+  const [bundle, setBundle] = useState<PickedBundle | null>(null);
   const [httpServiceId, setHttpServiceId] = useState("");
   const [sinkServiceIdSel, setSinkServiceIdSel] = useState("");
-  const [flowName, setFlowName] = useState(IMPORT_BUNDLE.defaultFlowName);
+  const [flowName, setFlowName] = useState("");
   const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (open) {
       setStep(1);
-      setFileChosen(false);
+      setBundle(null);
       setHttpServiceId("");
       setSinkServiceIdSel("");
-      setFlowName(IMPORT_BUNDLE.defaultFlowName);
+      setFlowName("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }, [open]);
+
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const picked = parseBundleFile(file.name, text);
+      setBundle(picked);
+      setFlowName(`${picked.bundleName} (imported)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  };
 
   const httpServices = services.filter((s) => s.type === "http" && !s.retired);
   const sinkServices = services.filter((s) => s.type === "sink_destination" && !s.retired);
 
-  const canNext = step === 1 ? fileChosen : step === 2 ? Boolean(httpServiceId && sinkServiceIdSel) : flowName.trim().length > 0;
+  const canNext = step === 1 ? !!bundle : step === 2 ? Boolean(httpServiceId && sinkServiceIdSel) : flowName.trim().length > 0;
 
   const finish = async () => {
     setImporting(true);
@@ -1746,7 +1796,7 @@ function ImportConnectorDialog({
         sinkServiceId: sinkServiceIdSel,
       });
       queryClient.invalidateQueries({ queryKey: ["flows"] });
-      toast.success(`Imported ${IMPORT_BUNDLE.name}@${IMPORT_BUNDLE.version} as draft "${flow.name}"`, {
+      toast.success(`Imported ${bundle?.bundleName ?? "connector"}@${bundle?.version ?? 1} as draft "${flow.name}"`, {
         description: "Review the bound services and deploy when ready.",
       });
       onClose();
@@ -1768,31 +1818,44 @@ function ImportConnectorDialog({
 
         {step === 1 && (
           <div className="space-y-3">
-            {!fileChosen ? (
-              <Button variant="outline" onClick={() => setFileChosen(true)}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleFilePicked}
+            />
+            {!bundle ? (
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="mr-1.5 h-3.5 w-3.5" /> Choose file…
               </Button>
             ) : (
               <div className="rounded-md border p-3">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <FileJson className="h-4 w-4 text-muted-foreground" />
-                  <code className="text-xs">{IMPORT_BUNDLE.file}</code>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <FileJson className="h-4 w-4 text-muted-foreground" />
+                    <code className="text-xs">{bundle.fileName}</code>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => fileInputRef.current?.click()}>
+                    Change…
+                  </Button>
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
-                  {IMPORT_BUNDLE.name} <code>@{IMPORT_BUNDLE.version}</code>
+                  {bundle.bundleName} <code>@{bundle.version}</code>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {IMPORT_BUNDLE.blocks.map((b, i) => (
-                    <span key={b.name} className="flex items-center gap-1.5">
+                  {bundle.blocks.map((b, i) => (
+                    <span key={`${b.name}-${i}`} className="flex items-center gap-1.5">
                       {i > 0 && <span className="text-muted-foreground">→</span>}
-                      <AdapterChip adapter={b.adapter} mode={"mode" in b ? b.mode : undefined} />
+                      <AdapterChip adapter={b.adapter} mode={b.mode} />
                     </span>
                   ))}
                 </div>
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              UI prototype — the file picker is simulated; a canned bundle is selected for you.
+              Pick a connector bundle exported from "Save as Connector" (JSON). Its identity travels along; the actual
+              read/sink services are re-bound to yours on the next step.
             </p>
           </div>
         )}

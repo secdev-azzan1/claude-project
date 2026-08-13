@@ -44,7 +44,9 @@ import {
   createFlow,
   getEditLockReason,
   getFlow,
+  getGatewayResources,
   getVerbBlockReason,
+  listGatewayProxies,
   listSchemas,
   listServices,
   runFlowVerb,
@@ -134,6 +136,11 @@ export default function FlowBuilder() {
   });
   const { data: services = [] } = useQuery({ queryKey: ["services"], queryFn: listServices });
   const { data: schemas = [] } = useQuery({ queryKey: ["schemas"], queryFn: listSchemas });
+  // `validateFlow`'s gateway param defaults to a localStorage-backed reader
+  // when omitted (a leftover of the retired mock store) — fetched here and
+  // passed explicitly so this page never touches it.
+  const { data: gatewayProxies = [] } = useQuery({ queryKey: ["gateway-proxies"], queryFn: listGatewayProxies });
+  const { data: gatewayResources } = useQuery({ queryKey: ["gateway"], queryFn: getGatewayResources });
 
   useEffect(() => {
     if (serverFlow && (!draft || draft.id !== serverFlow.id)) {
@@ -174,7 +181,13 @@ export default function FlowBuilder() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
-  const issues = useMemo(() => (draft ? validateFlow(draft, services, schemas) : []), [draft, services, schemas]);
+  const issues = useMemo(
+    () =>
+      draft
+        ? validateFlow(draft, services, schemas, { proxies: gatewayProxies, allowlist: gatewayResources?.allowlist ?? [] })
+        : [],
+    [draft, services, schemas, gatewayProxies, gatewayResources],
+  );
   const issuesByNode = useMemo(() => {
     const map = new Map<string, number>();
     for (const i of issues) if (i.blockId) map.set(i.blockId, (map.get(i.blockId) ?? 0) + 1);
