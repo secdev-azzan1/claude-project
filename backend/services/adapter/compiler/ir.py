@@ -268,8 +268,16 @@ class BlockBuilder:
         self.controller_services: List[ControllerServiceSpec] = []
         self.connections: List[ConnectionSpec] = []
         self._cs_keys: set = set()
+        self._processor_keys: set = set()
 
     def add_processor(self, spec: ProcessorSpec) -> ProcessorSpec:
+        if spec.key in self._processor_keys:
+            raise CompileError(
+                f"Duplicate processor key {spec.key!r} within one BlockGroup — two rules/branches "
+                f"produced the same NiFi component name (e.g. two sibling branches sharing a branch "
+                f"name). Give them distinct names."
+            )
+        self._processor_keys.add(spec.key)
         self.processors.append(spec)
         return spec
 

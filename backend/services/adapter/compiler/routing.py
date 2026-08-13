@@ -16,6 +16,13 @@ Routing processors live in the PARENT's BlockGroup (they are the parent's
 egress decision, not the child's) — `compile_flow` attributes their keys to
 the parent's scope-map entry accordingly.
 
+Processor keys are derived from the branch's NAME (`route__<branchToken>`),
+so two conditional children of the same parent sharing a branch name would
+collide on the same key — `BlockBuilder.add_processor` raises `CompileError`
+on that (loud failure, never a silent shadow); nothing today forbids
+duplicate branch names among siblings, so this is a real, reachable case,
+just not one this compiler papers over.
+
 Ambiguity resolved (see the T7.1 report): compiler-spec's IR grammar shows a
 single generic `"outputPort"` connection target, but a parent with more than
 one child needs to route different record subsets to different children

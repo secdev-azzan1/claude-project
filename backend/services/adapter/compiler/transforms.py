@@ -22,7 +22,7 @@ represents a record-level failure is wired to the block's DLQ path via
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, Tuple
 
 from models.adapter import FlowBlock, TransformRule
 

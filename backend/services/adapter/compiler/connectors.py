@@ -22,7 +22,7 @@ tune `tasks.max`, batch sizes, etc. (see frontend seed `b-r7-sink`).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 from models.adapter import FlowBlock
 
