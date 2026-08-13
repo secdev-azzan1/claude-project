@@ -1,0 +1,36 @@
+{
+  "candidates": [
+    {
+      "url": "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv",
+      "status": 200,
+      "contentType": "text/csv",
+      "firstLine": "John,Doe,120 jefferson st.,Riverside, NJ, 08075",
+      "csvish": true,
+      "headerOk": false
+    },
+    {
+      "url": "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv",
+      "status": 200,
+      "contentType": "text/plain; charset=utf-8",
+      "firstLine": "PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked",
+      "csvish": true,
+      "headerOk": true
+    }
+  ],
+  "chosenBaseUrl": "https://raw.githubusercontent.com",
+  "chosenPath": "/datasciencedojo/datasets/master/titanic.csv",
+  "headerCells": [
+    "PassengerId",
+    "Survived",
+    "Pclass",
+    "Name",
+    "Sex",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Ticket",
+    "Fare",
+    "Cabin",
+    "Embarked"
+  ]
+}

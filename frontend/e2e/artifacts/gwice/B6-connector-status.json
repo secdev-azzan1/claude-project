@@ -1,0 +1,20 @@
+{
+  "connectorName": "ice_users.b-wm9mil.kafka_kc",
+  "status": {
+    "name": "ice_users.b-wm9mil.kafka_kc",
+    "connector": {
+      "state": "RUNNING",
+      "worker_id": "kafka-connect:8083",
+      "version": "1.11.0-SNAPSHOT"
+    },
+    "tasks": [
+      {
+        "id": 0,
+        "state": "RUNNING",
+        "worker_id": "kafka-connect:8083",
+        "version": "1.11.0-SNAPSHOT"
+      }
+    ],
+    "type": "sink"
+  }
+}

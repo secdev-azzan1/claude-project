@@ -1,0 +1,5 @@
+topic=raw.gw_via_gateway.gw_user
+flowId=flow-yxhj2r
+messages=30
+waited_seconds=62
+expected=30 per firing

@@ -1,0 +1,175 @@
+{
+  "json": {
+    "phases": {
+      "locate_flow": {
+        "ok": true,
+        "at": "2026-08-13T12:05:45.414Z"
+      },
+      "baseline": {
+        "ok": true,
+        "at": "2026-08-13T12:06:53.542Z"
+      },
+      "restart": {
+        "ok": true,
+        "at": "2026-08-13T12:06:55.542Z"
+      },
+      "dedup_suppression": {
+        "ok": false,
+        "error": "Error: no NiFi activity observed within 330s of restart — cannot attribute a suppressed firing",
+        "at": "2026-08-13T12:15:11.877Z"
+      },
+      "messages_ui": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T12:15:11.989Z"
+      },
+      "metrics_ui": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T12:15:11.991Z"
+      },
+      "stop": {
+        "ok": true,
+        "at": "2026-08-13T12:15:13.696Z"
+      }
+    },
+    "screenshots": [
+      "08b-json-restarted-for-dedup.png",
+      "FAIL-rem-json-dedup_suppression.png",
+      "11-json-stopped.png"
+    ],
+    "data": {
+      "baselineMessages": 30,
+      "baselineMetricsTopicCount": 30,
+      "cronFiredEvidence": {
+        "fired": false,
+        "records24hInStatusWindow": 0
+      },
+      "afterSecondFiring": {
+        "messages": 30,
+        "metricsTopicCount": 30
+      }
+    },
+    "flowName": "dt json products",
+    "topic": "raw.dt_json_products.dt_product",
+    "flowId": "flow-loypce",
+    "started": true,
+    "aborted": true
+  },
+  "csv": {
+    "phases": {
+      "probe": {
+        "ok": true,
+        "at": "2026-08-13T12:15:15.631Z"
+      },
+      "resume_check": {
+        "ok": true,
+        "at": "2026-08-13T12:15:41.889Z"
+      },
+      "messages_ui": {
+        "ok": true,
+        "at": "2026-08-13T12:16:10.223Z"
+      },
+      "stop": {
+        "ok": true,
+        "note": "flow already Stopped from the prior run",
+        "at": "2026-08-13T12:16:10.264Z"
+      }
+    },
+    "screenshots": [
+      "25-csv-messages-ui.png"
+    ],
+    "data": {
+      "probe": {
+        "candidates": [
+          {
+            "url": "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv",
+            "status": 200,
+            "contentType": "text/csv",
+            "firstLine": "John,Doe,120 jefferson st.,Riverside, NJ, 08075",
+            "csvish": true,
+            "headerOk": false
+          },
+          {
+            "url": "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv",
+            "status": 200,
+            "contentType": "text/plain; charset=utf-8",
+            "firstLine": "PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked",
+            "csvish": true,
+            "headerOk": true
+          }
+        ],
+        "chosenBaseUrl": "https://raw.githubusercontent.com",
+        "chosenPath": "/datasciencedojo/datasets/master/titanic.csv",
+        "headerCells": [
+          "PassengerId",
+          "Survived",
+          "Pclass",
+          "Name",
+          "Sex",
+          "Age",
+          "SibSp",
+          "Parch",
+          "Ticket",
+          "Fare",
+          "Cabin",
+          "Embarked"
+        ]
+      },
+      "firstBatchCount": 50,
+      "sample": {
+        "PassengerId": 891,
+        "Survived": 0,
+        "Pclass": 3,
+        "Name": "Dooley, Mr. Patrick",
+        "Sex": "male",
+        "Age": 32,
+        "SibSp": 0,
+        "Parch": 0,
+        "Ticket": 370376,
+        "Fare": 7.75,
+        "Cabin": null,
+        "Embarked": "Q"
+      },
+      "sampleFields": [
+        "PassengerId",
+        "Survived",
+        "Pclass",
+        "Name",
+        "Sex",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Ticket",
+        "Fare",
+        "Cabin",
+        "Embarked"
+      ],
+      "resumedFromPriorRun": true
+    },
+    "flowName": "dt csv addresses",
+    "topic": "raw.dt_csv_addresses.dt_row",
+    "flowId": "flow-cz6z8s"
+  },
+  "xml": {
+    "phases": {
+      "locate_flow": {
+        "ok": true,
+        "at": "2026-08-13T12:16:36.861Z"
+      },
+      "messages_ui": {
+        "ok": true,
+        "at": "2026-08-13T12:17:05.678Z"
+      }
+    },
+    "screenshots": [
+      "35-xml-messages-ui.png"
+    ],
+    "data": {
+      "messagesOnTopic": 39
+    },
+    "flowName": "dt xml feed",
+    "topic": "raw.dt_xml_feed.dt_item",
+    "flowId": "flow-fz6tx9"
+  }
+}

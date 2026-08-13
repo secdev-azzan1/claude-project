@@ -1,0 +1,157 @@
+{
+  "catalogs": {
+    "state": "FINISHED",
+    "rows": [
+      [
+        "bronze"
+      ],
+      [
+        "gold"
+      ],
+      [
+        "iceberg"
+      ],
+      [
+        "silver"
+      ],
+      [
+        "system"
+      ]
+    ]
+  },
+  "schemasFromIceberg": {
+    "state": "FINISHED",
+    "rows": [
+      [
+        "bronze"
+      ],
+      [
+        "bronze.dummyjson"
+      ],
+      [
+        "information_schema"
+      ],
+      [
+        "phase49d_runtime"
+      ],
+      [
+        "system"
+      ]
+    ]
+  },
+  "tablesFromIcebergBronze": {
+    "state": "FINISHED",
+    "rows": []
+  },
+  "schemasFromBronzeCatalog": {
+    "state": "FINISHED",
+    "rows": [
+      [
+        "airflow"
+      ],
+      [
+        "airflow_dedupe"
+      ],
+      [
+        "bronze"
+      ],
+      [
+        "checkpoints"
+      ],
+      [
+        "dev_refinement_fixtures"
+      ],
+      [
+        "dummyjson"
+      ],
+      [
+        "flow_smoke_crm"
+      ],
+      [
+        "flow_smoke_hr"
+      ],
+      [
+        "flow_smoke_iam"
+      ],
+      [
+        "information_schema"
+      ],
+      [
+        "system"
+      ]
+    ]
+  },
+  "tablesFromBronzeBronze": {
+    "state": "FINISHED",
+    "rows": [
+      [
+        "e2ea_user"
+      ],
+      [
+        "ice_user"
+      ]
+    ]
+  },
+  "finalCount": {
+    "state": "FINISHED",
+    "rows": [
+      [
+        94
+      ]
+    ],
+    "rowCount": 94
+  },
+  "sample": {
+    "state": "FINISHED",
+    "columns": [
+      "id",
+      "firstName",
+      "lastName",
+      "age",
+      "gender",
+      "email"
+    ],
+    "rows": [
+      [
+        1,
+        "Emily",
+        "Johnson",
+        29,
+        "female",
+        "emily.johnson@x.dummyjson.com"
+      ],
+      [
+        1,
+        "Emily",
+        "Johnson",
+        29,
+        "female",
+        "emily.johnson@x.dummyjson.com"
+      ],
+      [
+        1,
+        "Emily",
+        "Johnson",
+        29,
+        "female",
+        "emily.johnson@x.dummyjson.com"
+      ],
+      [
+        1,
+        "Emily",
+        "Johnson",
+        29,
+        "female",
+        "emily.johnson@x.dummyjson.com"
+      ],
+      [
+        2,
+        "Michael",
+        "Williams",
+        36,
+        "male",
+        "michael.williams@x.dummyjson.com"
+      ]
+    ]
+  }
+}

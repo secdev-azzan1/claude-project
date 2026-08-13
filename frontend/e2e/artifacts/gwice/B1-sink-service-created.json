@@ -1,0 +1,38 @@
+{
+  "status": 200,
+  "created": {
+    "id": "svc-dmya5u",
+    "type": "sink_destination",
+    "name": "ice polaris",
+    "revision": 1,
+    "retired": false,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "kind": "iceberg_catalog",
+      "catalogUrl": "https://polaris.datapasc.com/api/catalog",
+      "warehouse": "bronze",
+      "oauthClientId": "root",
+      "oauthClientSecret": null,
+      "s3Endpoint": "https://ozones3g.datapasc.com",
+      "s3AccessKey": "eltadmin",
+      "s3SecretKey": null,
+      "s3Region": "us-east-1",
+      "s3PathStyle": true
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T11:43:13.816Z",
+    "updatedAt": "2026-08-13T11:43:13.816Z",
+    "revisions": [],
+    "hasPassword": false,
+    "hasToken": false,
+    "hasClientSecret": false,
+    "hasKeyValue": false,
+    "hasSaslPassword": false,
+    "hasAdminKey": false,
+    "hasS3SecretKey": true,
+    "hasOauthClientSecret": true,
+    "hasKafbatPassword": false
+  }
+}

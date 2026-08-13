@@ -1,0 +1,378 @@
+{
+  "json": {
+    "datatype": "json",
+    "flowName": "dt json products",
+    "flowId": "flow-loypce",
+    "serviceName": "dt dummyjson",
+    "baseUrl": "https://dummyjson.com",
+    "pathValue": "/products",
+    "recordPath": "$.products[*]",
+    "topic": "raw.dt_json_products.dt_product",
+    "phases": {
+      "service": {
+        "ok": true,
+        "at": "2026-08-13T11:37:39.912Z"
+      },
+      "create_flow": {
+        "ok": true,
+        "at": "2026-08-13T11:37:41.273Z"
+      },
+      "configure_root": {
+        "ok": true,
+        "at": "2026-08-13T11:37:43.104Z"
+      },
+      "dedup_panel": {
+        "ok": true,
+        "at": "2026-08-13T11:37:44.034Z"
+      },
+      "kafka_child": {
+        "ok": true,
+        "at": "2026-08-13T11:37:45.158Z"
+      },
+      "block_test": {
+        "ok": true,
+        "at": "2026-08-13T11:37:48.103Z"
+      },
+      "save": {
+        "ok": true,
+        "at": "2026-08-13T11:37:48.436Z"
+      },
+      "deploy": {
+        "ok": true,
+        "at": "2026-08-13T11:38:05.166Z"
+      },
+      "enable_start": {
+        "ok": true,
+        "at": "2026-08-13T11:38:06.607Z"
+      },
+      "records": {
+        "ok": true,
+        "at": "2026-08-13T11:40:20.657Z"
+      },
+      "messages_ui": {
+        "ok": false,
+        "error": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('tab', { name: 'Messages' })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('tab', { name: 'Messages' })\u001b[22m\n",
+        "at": "2026-08-13T11:40:41.756Z"
+      },
+      "dedup_suppression": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:40:41.872Z"
+      },
+      "stop": {
+        "ok": true,
+        "at": "2026-08-13T11:40:43.851Z"
+      }
+    },
+    "screenshots": [
+      "01-json-service.png",
+      "02-json-flow-created.png",
+      "03-json-root-configured.png",
+      "04-json-dedup-panel.png",
+      "05-json-kafka-child.png",
+      "06-json-block-test.png",
+      "07-json-preflight.png",
+      "07-json-deployed.png",
+      "08-json-started.png",
+      "FAIL-json-messages_ui.png",
+      "11-json-stopped.png"
+    ],
+    "deployed": true,
+    "started": true,
+    "firstBatchCount": 30,
+    "sample": {
+      "id": 26,
+      "title": "Green Chili Pepper",
+      "description": "Spicy green chili pepper, ideal for adding heat to your favorite recipes.",
+      "category": "groceries",
+      "price": 0.99,
+      "discountPercentage": 1,
+      "rating": 3.66,
+      "stock": 3,
+      "tags": [
+        "vegetables"
+      ],
+      "sku": "GRO-BRD-GRE-026",
+      "weight": 7,
+      "dimensions": {
+        "width": 15.38,
+        "height": 18.12,
+        "depth": 19.92
+      },
+      "warrantyInformation": "2 year warranty",
+      "shippingInformation": "Ships in 1 week",
+      "availabilityStatus": "Low Stock",
+      "reviews": [
+        {
+          "rating": 4,
+          "comment": "Great product!",
+          "date": "2025-04-30T09:41:02.053Z",
+          "reviewerName": "Luna Russell",
+          "reviewerEmail": "luna.russell@x.dummyjson.com"
+        },
+        {
+          "rating": 1,
+          "comment": "Waste of money!",
+          "date": "2025-04-30T09:41:02.053Z",
+          "reviewerName": "Noah Lewis",
+          "reviewerEmail": "noah.lewis@x.dummyjson.com"
+        },
+        {
+          "rating": 3,
+          "comment": "Very disappointed!",
+          "date": "2025-04-30T09:41:02.053Z",
+          "reviewerName": "Clara Berry",
+          "reviewerEmail": "clara.berry@x.dummyjson.com"
+        }
+      ],
+      "returnPolicy": "30 days return policy",
+      "minimumOrderQuantity": 39,
+      "meta": {
+        "createdAt": "2025-04-30T09:41:02.053Z",
+        "updatedAt": "2025-04-30T09:41:02.053Z",
+        "barcode": "9335000538563",
+        "qrCode": "https://cdn.dummyjson.com/public/qr-code.png"
+      },
+      "images": [
+        "https://cdn.dummyjson.com/product-images/groceries/green-chili-pepper/1.webp"
+      ],
+      "thumbnail": "https://cdn.dummyjson.com/product-images/groceries/green-chili-pepper/thumbnail.webp"
+    },
+    "sampleFields": [
+      "id",
+      "title",
+      "description",
+      "category",
+      "price",
+      "discountPercentage",
+      "rating",
+      "stock",
+      "tags",
+      "sku",
+      "weight",
+      "dimensions",
+      "warrantyInformation",
+      "shippingInformation",
+      "availabilityStatus",
+      "reviews",
+      "returnPolicy",
+      "minimumOrderQuantity",
+      "meta",
+      "images",
+      "thumbnail"
+    ],
+    "aborted": true
+  },
+  "csv": {
+    "datatype": "csv",
+    "flowName": "dt csv addresses",
+    "flowId": "flow-djmsar",
+    "serviceName": "dt csvhost",
+    "baseUrl": "https://raw.githubusercontent.com",
+    "pathValue": "/datasciencedojo/datasets/master/titanic.csv",
+    "recordPath": "",
+    "topic": "raw.dt_csv_addresses.dt_row",
+    "phases": {
+      "probe": {
+        "ok": true,
+        "at": "2026-08-13T11:40:48.161Z"
+      },
+      "service": {
+        "ok": true,
+        "at": "2026-08-13T11:40:50.689Z"
+      },
+      "create_flow": {
+        "ok": true,
+        "at": "2026-08-13T11:40:51.757Z"
+      },
+      "configure_root": {
+        "ok": false,
+        "error": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('CSV encoding is fixed UTF-8 — and the form says so.')\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByText('CSV encoding is fixed UTF-8 — and the form says so.')\u001b[22m\n",
+        "at": "2026-08-13T11:41:13.763Z"
+      },
+      "kafka_child": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:41:13.973Z"
+      },
+      "save": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:41:13.975Z"
+      },
+      "deploy": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:41:13.976Z"
+      },
+      "enable_start": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:41:13.977Z"
+      },
+      "records": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:41:13.978Z"
+      },
+      "messages_ui": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:41:13.979Z"
+      },
+      "stop": {
+        "ok": true,
+        "note": "flow was never started — nothing to stop",
+        "at": "2026-08-13T11:41:13.981Z"
+      }
+    },
+    "screenshots": [
+      "20-csv-service.png",
+      "FAIL-csv-configure_root.png"
+    ],
+    "probe": {
+      "candidates": [
+        {
+          "url": "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv",
+          "status": 200,
+          "contentType": "text/csv",
+          "firstLine": "John,Doe,120 jefferson st.,Riverside, NJ, 08075",
+          "csvish": true,
+          "headerOk": false
+        },
+        {
+          "url": "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv",
+          "status": 200,
+          "contentType": "text/plain; charset=utf-8",
+          "firstLine": "PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked",
+          "csvish": true,
+          "headerOk": true
+        }
+      ],
+      "chosenBaseUrl": "https://raw.githubusercontent.com",
+      "chosenPath": "/datasciencedojo/datasets/master/titanic.csv",
+      "headerCells": [
+        "PassengerId",
+        "Survived",
+        "Pclass",
+        "Name",
+        "Sex",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Ticket",
+        "Fare",
+        "Cabin",
+        "Embarked"
+      ]
+    },
+    "aborted": true
+  },
+  "xml": {
+    "datatype": "xml",
+    "flowName": "dt xml feed",
+    "flowId": "flow-fz6tx9",
+    "serviceName": "dt xmlhost",
+    "baseUrl": "https://feeds.bbci.co.uk",
+    "pathValue": "/news/rss.xml",
+    "recordPath": "$[0].channel.item[*]",
+    "topic": "raw.dt_xml_feed.dt_item",
+    "phases": {
+      "probe": {
+        "ok": true,
+        "at": "2026-08-13T11:41:14.501Z"
+      },
+      "service": {
+        "ok": true,
+        "at": "2026-08-13T11:41:17.061Z"
+      },
+      "create_flow": {
+        "ok": true,
+        "at": "2026-08-13T11:41:18.096Z"
+      },
+      "configure_root": {
+        "ok": true,
+        "at": "2026-08-13T11:41:20.304Z"
+      },
+      "kafka_child": {
+        "ok": true,
+        "at": "2026-08-13T11:41:21.362Z"
+      },
+      "save": {
+        "ok": true,
+        "at": "2026-08-13T11:41:21.586Z"
+      },
+      "deploy": {
+        "ok": true,
+        "at": "2026-08-13T11:41:37.345Z"
+      },
+      "enable_start": {
+        "ok": true,
+        "at": "2026-08-13T11:41:38.350Z"
+      },
+      "records": {
+        "ok": true,
+        "at": "2026-08-13T11:43:16.998Z"
+      },
+      "messages_ui": {
+        "ok": false,
+        "error": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('tab', { name: 'Messages' })\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('tab', { name: 'Messages' })\u001b[22m\n",
+        "at": "2026-08-13T11:43:38.305Z"
+      },
+      "stop": {
+        "ok": true,
+        "at": "2026-08-13T11:43:39.781Z"
+      }
+    },
+    "screenshots": [
+      "30-xml-service.png",
+      "31-xml-root-configured.png",
+      "32-xml-kafka-child.png",
+      "33-xml-preflight.png",
+      "33-xml-deployed.png",
+      "34-xml-started.png",
+      "FAIL-xml-messages_ui.png",
+      "36-xml-stopped.png"
+    ],
+    "probe": {
+      "candidates": [
+        {
+          "url": "https://feeds.bbci.co.uk/news/rss.xml",
+          "status": 200,
+          "contentType": "text/xml; charset=utf-8",
+          "xmlish": true,
+          "head": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:content=\"http://purl.org/rs"
+        }
+      ],
+      "chosenBaseUrl": "https://feeds.bbci.co.uk",
+      "chosenPath": "/news/rss.xml",
+      "recordPath": "$[0].channel.item[*]"
+    },
+    "deployed": true,
+    "started": true,
+    "firstBatchCount": 39,
+    "sample": {
+      "title": "Only wins can stop curfew hokey-cokey for England's 'grown adults'",
+      "description": "England have scrapped their midnight curfew seven months after introducing it. Now, only wins will repair the reputational damage they have sustained, says Stephan Shemilt.",
+      "link": "https://www.bbc.co.uk/sport/cricket/articles/czjl2pelp1go?at_medium=RSS&at_campaign=rss",
+      "guid": {
+        "isPermaLink": false
+      },
+      "pubDate": "Thu, 13 Aug 2026 05:22:07 GMT",
+      "thumbnail": {
+        "width": 240,
+        "url": "https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ed80/live/0b5bf1d0-9693-11f1-ae4a-f77081ebc98e.jpg",
+        "height": 134
+      }
+    },
+    "sampleFields": [
+      "title",
+      "description",
+      "link",
+      "guid",
+      "pubDate",
+      "thumbnail"
+    ],
+    "aborted": true
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "json": {
+    "phases": {
+      "locate_flow": {
+        "ok": true,
+        "at": "2026-08-13T11:52:16.893Z"
+      },
+      "baseline": {
+        "ok": true,
+        "at": "2026-08-13T11:53:25.450Z"
+      },
+      "restart": {
+        "ok": false,
+        "error": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeEnabled\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('button', { name: 'Start', exact: true })\nExpected: enabled\nReceived: disabled\nTimeout:  20000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeEnabled\" with timeout 20000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('button', { name: 'Start', exact: true })\u001b[22m\n\u001b[2m    20 × locator resolved to <button disabled title=\"Runtime connections unavailable: nifi, kafka, apicurio.\" class=\"inline-flex items-center justify-center whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ",
+        "at": "2026-08-13T11:53:46.223Z"
+      },
+      "dedup_suppression": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:53:46.349Z"
+      },
+      "messages_ui": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:53:46.350Z"
+      },
+      "metrics_ui": {
+        "ok": false,
+        "error": "skipped — an earlier phase failed",
+        "at": "2026-08-13T11:53:46.352Z"
+      }
+    },
+    "screenshots": [
+      "FAIL-rem-json-restart.png"
+    ],
+    "data": {
+      "baselineMessages": 30,
+      "baselineMetricsTopicCount": 30
+    },
+    "flowName": "dt json products",
+    "topic": "raw.dt_json_products.dt_product",
+    "flowId": "flow-loypce",
+    "aborted": true
+  },
+  "csv": {
+    "phases": {
+      "probe": {
+        "ok": true,
+        "at": "2026-08-13T11:53:49.996Z"
+      },
+      "service_note": {
+        "ok": true,
+        "note": "service \"dt csvhost\" already existed — reused",
+        "at": "2026-08-13T11:53:50.013Z"
+      },
+      "service": {
+        "ok": true,
+        "at": "2026-08-13T11:53:50.013Z"
+      },
+      "create_flow": {
+        "ok": true,
+        "at": "2026-08-13T11:53:51.327Z"
+      },
+      "configure_root": {
+        "ok": true,
+        "at": "2026-08-13T11:53:53.872Z"
+      },
+      "kafka_child": {
+        "ok": true,
+        "at": "2026-08-13T11:53:55.512Z"
+      },
+      "save": {
+        "ok": true,
+        "at": "2026-08-13T11:53:55.759Z"
+      },
+      "deploy": {
+        "ok": true,
+        "at": "2026-08-13T11:54:12.841Z"
+      },
+      "enable_start": {
+        "ok": true,
+        "at": "2026-08-13T11:54:13.904Z"
+      },
+      "records": {
+        "ok": true,
+        "at": "2026-08-13T11:58:15.156Z"
+      },
+      "messages_ui": {
+        "ok": true,
+        "at": "2026-08-13T11:58:43.995Z"
+      },
+      "stop": {
+        "ok": true,
+        "at": "2026-08-13T11:58:45.323Z"
+      }
+    },
+    "screenshots": [
+      "21-csv-root-configured.png",
+      "22-csv-kafka-child.png",
+      "23-csv-preflight.png",
+      "23-csv-deployed.png",
+      "24-csv-started.png",
+      "25-csv-messages-ui.png",
+      "26-csv-stopped.png"
+    ],
+    "data": {
+      "probe": {
+        "candidates": [
+          {
+            "url": "https://people.sc.fsu.edu/~jburkardt/data/csv/addresses.csv",
+            "status": 200,
+            "contentType": "text/csv",
+            "firstLine": "John,Doe,120 jefferson st.,Riverside, NJ, 08075",
+            "csvish": true,
+            "headerOk": false
+          },
+          {
+            "url": "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv",
+            "status": 200,
+            "contentType": "text/plain; charset=utf-8",
+            "firstLine": "PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked",
+            "csvish": true,
+            "headerOk": true
+          }
+        ],
+        "chosenBaseUrl": "https://raw.githubusercontent.com",
+        "chosenPath": "/datasciencedojo/datasets/master/titanic.csv",
+        "headerCells": [
+          "PassengerId",
+          "Survived",
+          "Pclass",
+          "Name",
+          "Sex",
+          "Age",
+          "SibSp",
+          "Parch",
+          "Ticket",
+          "Fare",
+          "Cabin",
+          "Embarked"
+        ]
+      },
+      "firstBatchCount": 50,
+      "sample": {
+        "PassengerId": 891,
+        "Survived": 0,
+        "Pclass": 3,
+        "Name": "Dooley, Mr. Patrick",
+        "Sex": "male",
+        "Age": 32,
+        "SibSp": 0,
+        "Parch": 0,
+        "Ticket": 370376,
+        "Fare": 7.75,
+        "Cabin": null,
+        "Embarked": "Q"
+      },
+      "sampleFields": [
+        "PassengerId",
+        "Survived",
+        "Pclass",
+        "Name",
+        "Sex",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Ticket",
+        "Fare",
+        "Cabin",
+        "Embarked"
+      ]
+    },
+    "flowName": "dt csv addresses",
+    "topic": "raw.dt_csv_addresses.dt_row",
+    "flowId": "flow-cz6z8s",
+    "deployed": true,
+    "started": true
+  },
+  "xml": {
+    "phases": {
+      "locate_flow": {
+        "ok": true,
+        "at": "2026-08-13T11:59:11.668Z"
+      },
+      "messages_ui": {
+        "ok": true,
+        "at": "2026-08-13T11:59:40.361Z"
+      }
+    },
+    "screenshots": [
+      "35-xml-messages-ui.png"
+    ],
+    "data": {
+      "messagesOnTopic": 39
+    },
+    "flowName": "dt xml feed",
+    "topic": "raw.dt_xml_feed.dt_item",
+    "flowId": "flow-fz6tx9"
+  }
+}

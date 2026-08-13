@@ -1,0 +1,14 @@
+[
+  {
+    "name": "init",
+    "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+    "blockId": "b-h83u1g",
+    "props": [
+      {
+        "name": "request.url",
+        "value": "#{apisix_runtime_url}/gw_dummyjson/users",
+        "sensitive": false
+      }
+    ]
+  }
+]

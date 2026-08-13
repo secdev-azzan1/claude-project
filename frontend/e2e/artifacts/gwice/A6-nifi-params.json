@@ -1,0 +1,252 @@
+{
+  "context": "gw_via_gateway__params",
+  "nifiProcessGroupId": "fae927c5-019f-1000-1bd8-83bec9bd682e",
+  "params": [
+    {
+      "name": "dlq_topic",
+      "sensitive": false,
+      "value": "dlq.gw_via_gateway",
+      "provided": false,
+      "referencedAssets": [],
+      "referencingComponents": [
+        {
+          "revision": {
+            "version": 1
+          },
+          "id": "fae94331-019f-1000-c1a0-7d488c3e9f39",
+          "permissions": {
+            "canRead": true,
+            "canWrite": true
+          },
+          "bulletins": [],
+          "component": {
+            "processGroupId": "fae928af-019f-1000-cd33-47af03e8eaf7",
+            "id": "fae94331-019f-1000-c1a0-7d488c3e9f39",
+            "referenceType": "PROCESSOR",
+            "name": "dlq__publish",
+            "state": "STOPPED",
+            "activeThreadCount": 0
+          },
+          "processGroup": {
+            "id": "fae928af-019f-1000-cd33-47af03e8eaf7",
+            "name": "new_http_read__http"
+          },
+          "referenceType": "PROCESSOR"
+        },
+        {
+          "revision": {
+            "version": 1
+          },
+          "id": "fae94401-019f-1000-579b-bf2e78a78173",
+          "permissions": {
+            "canRead": true,
+            "canWrite": true
+          },
+          "bulletins": [],
+          "component": {
+            "processGroupId": "fae92975-019f-1000-7d73-6e3eebd21cb1",
+            "id": "fae94401-019f-1000-579b-bf2e78a78173",
+            "referenceType": "PROCESSOR",
+            "name": "dlq__publish",
+            "state": "STOPPED",
+            "activeThreadCount": 0
+          },
+          "processGroup": {
+            "id": "fae92975-019f-1000-7d73-6e3eebd21cb1",
+            "name": "new_kafka_write__kafka"
+          },
+          "referenceType": "PROCESSOR"
+        }
+      ],
+      "parameterContext": {
+        "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+        "permissions": {
+          "canRead": true,
+          "canWrite": true
+        },
+        "component": {
+          "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+          "name": "gw_via_gateway__params"
+        }
+      },
+      "inherited": false
+    },
+    {
+      "name": "svc_svc-u30ous_base_url",
+      "sensitive": false,
+      "value": "https://dummyjson.com",
+      "provided": false,
+      "referencedAssets": [],
+      "referencingComponents": [],
+      "parameterContext": {
+        "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+        "permissions": {
+          "canRead": true,
+          "canWrite": true
+        },
+        "component": {
+          "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+          "name": "gw_via_gateway__params"
+        }
+      },
+      "inherited": false
+    },
+    {
+      "name": "kafka_bootstrap",
+      "sensitive": false,
+      "value": "kafka:9092",
+      "provided": false,
+      "referencedAssets": [],
+      "referencingComponents": [
+        {
+          "revision": {
+            "version": 3
+          },
+          "id": "fae933db-019f-1000-af2f-c4ab0d0d2fcd",
+          "permissions": {
+            "canRead": true,
+            "canWrite": true
+          },
+          "bulletins": [],
+          "component": {
+            "processGroupId": "fae92975-019f-1000-7d73-6e3eebd21cb1",
+            "id": "fae933db-019f-1000-af2f-c4ab0d0d2fcd",
+            "referenceType": "CONTROLLER_SERVICE",
+            "name": "kafka_connection",
+            "state": "ENABLED"
+          },
+          "processGroup": {
+            "id": "fae92975-019f-1000-7d73-6e3eebd21cb1",
+            "name": "new_kafka_write__kafka"
+          },
+          "referenceType": "CONTROLLER_SERVICE"
+        },
+        {
+          "revision": {
+            "version": 3
+          },
+          "id": "fae92a38-019f-1000-1c45-83aeeff89838",
+          "permissions": {
+            "canRead": true,
+            "canWrite": true
+          },
+          "bulletins": [],
+          "component": {
+            "processGroupId": "fae928af-019f-1000-cd33-47af03e8eaf7",
+            "id": "fae92a38-019f-1000-1c45-83aeeff89838",
+            "referenceType": "CONTROLLER_SERVICE",
+            "name": "kafka_connection",
+            "state": "ENABLED"
+          },
+          "processGroup": {
+            "id": "fae928af-019f-1000-cd33-47af03e8eaf7",
+            "name": "new_http_read__http"
+          },
+          "referenceType": "CONTROLLER_SERVICE"
+        }
+      ],
+      "parameterContext": {
+        "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+        "permissions": {
+          "canRead": true,
+          "canWrite": true
+        },
+        "component": {
+          "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+          "name": "gw_via_gateway__params"
+        }
+      },
+      "inherited": false
+    },
+    {
+      "name": "topic_b-a1ljwx",
+      "sensitive": false,
+      "value": "raw.gw_via_gateway.gw_user",
+      "provided": false,
+      "referencedAssets": [],
+      "referencingComponents": [
+        {
+          "revision": {
+            "version": 1
+          },
+          "id": "fae94379-019f-1000-a800-8d50f140c521",
+          "permissions": {
+            "canRead": true,
+            "canWrite": true
+          },
+          "bulletins": [],
+          "component": {
+            "processGroupId": "fae92975-019f-1000-7d73-6e3eebd21cb1",
+            "id": "fae94379-019f-1000-a800-8d50f140c521",
+            "referenceType": "PROCESSOR",
+            "name": "publish",
+            "state": "STOPPED",
+            "activeThreadCount": 0
+          },
+          "processGroup": {
+            "id": "fae92975-019f-1000-7d73-6e3eebd21cb1",
+            "name": "new_kafka_write__kafka"
+          },
+          "referenceType": "PROCESSOR"
+        }
+      ],
+      "parameterContext": {
+        "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+        "permissions": {
+          "canRead": true,
+          "canWrite": true
+        },
+        "component": {
+          "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+          "name": "gw_via_gateway__params"
+        }
+      },
+      "inherited": false
+    },
+    {
+      "name": "apisix_runtime_url",
+      "sensitive": false,
+      "value": "https://apisix.datapasc.com",
+      "provided": false,
+      "referencedAssets": [],
+      "referencingComponents": [
+        {
+          "revision": {
+            "version": 1
+          },
+          "id": "fae9421b-019f-1000-fd92-af66ed3ac9c8",
+          "permissions": {
+            "canRead": true,
+            "canWrite": true
+          },
+          "bulletins": [],
+          "component": {
+            "processGroupId": "fae928af-019f-1000-cd33-47af03e8eaf7",
+            "id": "fae9421b-019f-1000-fd92-af66ed3ac9c8",
+            "referenceType": "PROCESSOR",
+            "name": "init",
+            "state": "STOPPED",
+            "activeThreadCount": 0
+          },
+          "processGroup": {
+            "id": "fae928af-019f-1000-cd33-47af03e8eaf7",
+            "name": "new_http_read__http"
+          },
+          "referenceType": "PROCESSOR"
+        }
+      ],
+      "parameterContext": {
+        "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+        "permissions": {
+          "canRead": true,
+          "canWrite": true
+        },
+        "component": {
+          "id": "fae92719-019f-1000-c690-0f6b0d4ba354",
+          "name": "gw_via_gateway__params"
+        }
+      },
+      "inherited": false
+    }
+  ]
+}
