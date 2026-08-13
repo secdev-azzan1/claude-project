@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from db import get_db
 from models.adapter import AppService, ApprovedSchema, Flow, GatewayProxy, PlatformConnection
 from services.adapter import runtime as runtime_svc
-from services.adapter.common import COLLECTIONS, audit, now_iso
+from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
 from services.adapter.deployer import lifecycle
 from services.adapter.deployer.connect_apply import ConnectApplyError
 from services.adapter.deployer.nifi_apply import NifiApplyError
@@ -210,6 +210,11 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
          surfaced instead by `POST /{id}/validate` and enforced for real at
          `deploy`.
     """
+    # API clients may omit/blank the id (the frontend always generates one
+    # client-side); a blank id must never become a stored document key.
+    if not (flow_in.id or "").strip():
+        flow_in.id = new_id("flow")
+
     existing = await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
 
     if existing:

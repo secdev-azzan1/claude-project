@@ -655,3 +655,17 @@ def test_audit_search_and_limit():
         assert resp_over_cap.status_code == 422
     finally:
         _clear_overrides()
+
+def test_save_flow_blank_id_generates_one():
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    client = _make_client(fake_db)
+    try:
+        flow = _valid_flow(flow_id="")
+        resp = client.post("/api/v2/flows/", json=flow)
+        assert resp.status_code in (200, 201), resp.text
+        body = resp.json()
+        assert body["id"].strip(), "blank id must be replaced with a generated one"
+        assert body["id"].startswith("flow-")
+    finally:
+        client.close()
