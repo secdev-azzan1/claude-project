@@ -1441,6 +1441,18 @@ function JdbcSettings({
           onChange={(e) => onPatchConfig(block.id, { columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
         />
       </div>
+      {block.mode === "lookup" && (
+        <div className="grid gap-1.5">
+          <Label>Join field</Label>
+          <Input
+            className="max-w-xs font-mono text-xs"
+            value={(cfg.lookupJoinField as string) ?? ""}
+            disabled={locked}
+            placeholder="field joining the lookup result onto each record"
+            onChange={(e) => onPatchConfig(block.id, { lookupJoinField: e.target.value })}
+          />
+        </div>
+      )}
       {block.mode === "read" && (
         <div className="space-y-2 rounded-md border px-3 py-2">
           <label className="flex items-center gap-2 text-sm">

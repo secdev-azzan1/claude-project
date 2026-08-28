@@ -1,0 +1,65 @@
+{
+  "json": {
+    "flowName": "codex15aug26-json-posts",
+    "flowId": "flow-no3lrw",
+    "serviceName": "codex15aug26-json-service-5",
+    "topic": "raw.codex15aug26_json_posts.codex15aug26_post",
+    "phases": {
+      "service": {
+        "ok": true,
+        "at": "2026-08-15T12:52:19.681Z"
+      },
+      "create_flow": {
+        "ok": true,
+        "at": "2026-08-15T12:52:20.462Z"
+      },
+      "configure_root": {
+        "ok": true,
+        "at": "2026-08-15T12:52:22.446Z"
+      },
+      "dedup_panel": {
+        "ok": true,
+        "at": "2026-08-15T12:52:23.369Z"
+      },
+      "kafka_child": {
+        "ok": true,
+        "at": "2026-08-15T12:52:24.646Z"
+      },
+      "block_test": {
+        "ok": true,
+        "at": "2026-08-15T12:52:26.048Z"
+      },
+      "save": {
+        "ok": true,
+        "at": "2026-08-15T12:52:26.235Z"
+      },
+      "deploy": {
+        "ok": true,
+        "at": "2026-08-15T12:52:43.323Z"
+      },
+      "start": {
+        "ok": true,
+        "at": "2026-08-15T12:52:44.592Z"
+      },
+      "records": {
+        "ok": false,
+        "error": "Error: no messages on raw.codex15aug26_json_posts.codex15aug26_post within 300s of Start",
+        "at": "2026-08-15T12:57:47.929Z"
+      }
+    },
+    "screenshots": [
+      "01-json-service.png",
+      "02-json-flow-created.png",
+      "03-json-root-configured.png",
+      "04-json-dedup-panel.png",
+      "05-json-kafka-child.png",
+      "06-json-block-test.png",
+      "07-json-preflight.png",
+      "07-json-deployed.png",
+      "08-json-started.png"
+    ],
+    "data": {},
+    "deployed": true,
+    "started": true
+  }
+}

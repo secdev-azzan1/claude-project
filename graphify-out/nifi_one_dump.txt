@@ -1,0 +1,3 @@
+processor top-level keys: ['identifier', 'instanceIdentifier', 'name', 'comments', 'position', 'type', 'bundle', 'properties', 'propertyDescriptors', 'style', 'schedulingPeriod', 'schedulingStrategy', 'executionNode', 'penaltyDuration', 'yieldDuration', 'bulletinLevel', 'runDurationMillis', 'concurrentlySchedulableTaskCount', 'autoTerminatedRelationships', 'scheduledState', 'retryCount', 'retriedRelationships', 'backoffMechanism', 'maxBackoffPeriod', 'componentType', 'groupIdentifier']
+config keys: []
+{}

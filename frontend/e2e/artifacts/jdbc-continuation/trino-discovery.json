@@ -1,0 +1,83 @@
+{
+  "catalogs": {
+    "ok": true,
+    "state": "FINISHED",
+    "columns": [
+      "Catalog"
+    ],
+    "rows": [
+      [
+        "bronze"
+      ],
+      [
+        "gold"
+      ],
+      [
+        "iceberg"
+      ],
+      [
+        "silver"
+      ],
+      [
+        "system"
+      ]
+    ]
+  },
+  "schemasFromBronze": {
+    "ok": true,
+    "state": "FINISHED",
+    "columns": [
+      "Schema"
+    ],
+    "rows": [
+      [
+        "airflow"
+      ],
+      [
+        "airflow_dedupe"
+      ],
+      [
+        "bronze"
+      ],
+      [
+        "checkpoints"
+      ],
+      [
+        "dev_refinement_fixtures"
+      ],
+      [
+        "dummyjson"
+      ],
+      [
+        "flow_smoke_crm"
+      ],
+      [
+        "flow_smoke_hr"
+      ],
+      [
+        "flow_smoke_iam"
+      ],
+      [
+        "information_schema"
+      ],
+      [
+        "system"
+      ]
+    ]
+  },
+  "tablesFromBronzeBronze": {
+    "ok": true,
+    "state": "FINISHED",
+    "columns": [
+      "Table"
+    ],
+    "rows": [
+      [
+        "e2ea_user"
+      ],
+      [
+        "ice_user"
+      ]
+    ]
+  }
+}

@@ -1,0 +1,352 @@
+=== rapid7_securado.site__set_metadata  [UpdateRecord] ===
+  /api_endpoint_export_query_identity: ${api_path}
+  /source_platform: rapid7
+  Record Reader: c9d75ee4-1e2a-33c7-8136-d1f65b690781
+  /ingestion_run_batch_identity: ${ingestion_run_batch_identity}
+  /customer_tenant_organization: rapid7_securado
+  Replacement Value Strategy: literal-value
+  /extraction_timestamp: ${extraction_timestamp}
+  /source_event_update_timestamp: 
+  /source_object_id: ${object_id}
+  /payload_hash_fingerprint: ${'content_SHA-256'}
+  Record Writer: 04fe8438-b998-39d2-b01c-026e75eaa49f
+  /cursor_window: ${cursor_window}
+  /object_id: ${object_id_composite}
+  /ingest_ts: ${ingest_ts}
+  /source_object_type: site
+
+=== rapid7_securado.site__dedupe_key  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  dedupe.key: rapid7_securado:site:${object_id}:${'content_SHA-256'}
+  object_id: ${object_id_composite}
+
+=== rapid7_securado.asset__avro__publish  [PublishKafka] ===
+  compression.type: lz4
+  acks: all
+  Kafka Key Attribute Encoding: utf-8
+  Record Reader: ca873136-2fbd-3414-9071-ff7347d41f4f
+  Record Metadata Strategy: FROM_PROPERTIES
+  Header Encoding: UTF-8
+  max.request.size: 500 MB
+  Topic Name: bronze.rapid7_securado.asset__raw.avro
+  Kafka Key: ${source_object_id}
+  Kafka Connection Service: 2f3daa11-2710-57da-a9bf-2ebc3941085b
+  Publish Strategy: USE_VALUE
+  Failure Strategy: Route to Failure
+  partitioner.class: org.apache.kafka.clients.producer.internals.DefaultPartitioner
+  Record Writer: d3a6bdfe-daa7-3e82-afdb-4e3ac985b346
+  Transactions Enabled: false
+  FlowFile Attribute Header Pattern: ^(source_platform|customer_tenant_organization|source_object_type|source_object_id|extraction_timestamp|source_event_update_timestamp|api_endpoint_export_query_identity|cursor_window|payload_hash_fingerprint|ingestion_run_batch_identity|object_id|ingest_ts)$
+
+=== rapid7_securado.asset__raw__cast_ingest_ts  [ExecuteGroovyScript] ===
+  Script Body: 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.apache.nifi.processor.io.InputStreamCallback
+import org.apache.nifi.processor.io.OutputStreamCallback
+
+def flowFile = session.get()
+if (!flowFile) return
+
+try {
+    def textHolder = [value: '']
+    session.read(flowFile, { inputStream -> textHolder.value = inputStream.getText('UTF-8') } as InputStreamCallback)
+    def parsed = new JsonSlurper().parseText(textHolder.value)
+    if (parsed instanceof Map && parsed.containsKey('ingest_ts')) {
+        def v = parsed['ingest_ts']
+        // UpdateRecord's literal-value strategy always types a brand-new field as String, so this
+        // is the one field on the raw (schema-less) topic that needs an explicit numeric cast to
+        // match SentinelOne's convention. Only touches ingest_ts; every other field is untouched.
+        if (v instanceof String && v ==~ /^-?\d+$/) {
+            parsed['ingest_ts'] = v.toLong()
+        }
+    }
+    flowFile = session.write(flowFile, { outputStream -> outputStream.write(JsonOutput.toJson(parsed).getBytes('UTF-8')) } as OutputStreamCallback)
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    flowFile = session.putAttribute(flowFile, 'raw.cast.error', e.message ?: e.toString())
+    log.error('rapid7_securado raw ingest_ts cast failed: ' + e.message, e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+
+  Failure Strategy: rollback
+
+=== rapid7_securado.site__avro__publish  [PublishKafka] ===
+  compression.type: lz4
+  acks: all
+  Kafka Key Attribute Encoding: utf-8
+  Record Reader: a43970cf-f93a-3ef0-ba6d-c9068e466904
+  Record Metadata Strategy: FROM_PROPERTIES
+  Header Encoding: UTF-8
+  max.request.size: 500 MB
+  Topic Name: bronze.rapid7_securado.site__raw.avro
+  Kafka Key: ${source_object_id}
+  Kafka Connection Service: 2f3daa11-2710-57da-a9bf-2ebc3941085b
+  Publish Strategy: USE_VALUE
+  Failure Strategy: Route to Failure
+  partitioner.class: org.apache.kafka.clients.producer.internals.DefaultPartitioner
+  Record Writer: fce5aebb-30b2-3a69-9a90-a7e70aa35009
+  Transactions Enabled: false
+  FlowFile Attribute Header Pattern: ^(source_platform|customer_tenant_organization|source_object_type|source_object_id|extraction_timestamp|source_event_update_timestamp|api_endpoint_export_query_identity|cursor_window|payload_hash_fingerprint|ingestion_run_batch_identity|object_id|ingest_ts)$
+
+=== rapid7_securado.asset__set_metadata  [UpdateRecord] ===
+  /api_endpoint_export_query_identity: ${api_path}
+  /source_platform: rapid7
+  Record Reader: c9d75ee4-1e2a-33c7-8136-d1f65b690781
+  /ingestion_run_batch_identity: ${ingestion_run_batch_identity}
+  /customer_tenant_organization: rapid7_securado
+  Replacement Value Strategy: literal-value
+  /extraction_timestamp: ${extraction_timestamp}
+  /source_event_update_timestamp: 
+  /source_object_id: ${object_id}
+  /payload_hash_fingerprint: ${'content_SHA-256'}
+  Record Writer: 04fe8438-b998-39d2-b01c-026e75eaa49f
+  /cursor_window: ${cursor_window}
+  /object_id: ${object_id_composite}
+  /ingest_ts: ${ingest_ts}
+  /source_object_type: asset
+
+=== rapid7_securado.site__extract  [EvaluateJsonPath] ===
+  site_name: $.name
+  Destination: flowfile-attribute
+  Max String Length: 20 MB
+  Return Type: auto-detect
+  site_id: $.id
+  Null Value Representation: empty string
+  Path Not Found Behavior: ignore
+
+=== rapid7_securado.asset__set_public_headers  [UpdateAttribute] ===
+  ingest_ts: ${now():toNumber()}
+  source_object_type: ${entity}
+  Store State: Do not store state
+  payload_hash_fingerprint: ${'content_SHA-256'}
+  api_endpoint_export_query_identity: ${api_path}
+  customer_tenant_organization: rapid7_securado
+  source_platform: rapid7
+  source_event_update_timestamp: 
+  source_object_id: ${object_id}
+  object_id_composite: rapid7:rapid7_securado:${entity}:${object_id}
+  Cache Value Lookup Cache Size: 100
+
+=== rapid7_securado.asset__set_ids  [UpdateAttribute] ===
+  Store State: Do not store state
+  cursor_window: site=${site_id};page=${page}
+  kafka_topic: bronze.rapid7_securado.asset__raw
+  Cache Value Lookup Cache Size: 100
+  object_id: ${site_id}_${asset_id}
+  api_path: /assets/${asset_id}
+  entity: asset
+
+=== rapid7_securado.site__raw__cast_ingest_ts  [ExecuteGroovyScript] ===
+  Script Body: 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import org.apache.nifi.processor.io.InputStreamCallback
+import org.apache.nifi.processor.io.OutputStreamCallback
+
+def flowFile = session.get()
+if (!flowFile) return
+
+try {
+    def textHolder = [value: '']
+    session.read(flowFile, { inputStream -> textHolder.value = inputStream.getText('UTF-8') } as InputStreamCallback)
+    def parsed = new JsonSlurper().parseText(textHolder.value)
+    if (parsed instanceof Map && parsed.containsKey('ingest_ts')) {
+        def v = parsed['ingest_ts']
+        // UpdateRecord's literal-value strategy always types a brand-new field as String, so this
+        // is the one field on the raw (schema-less) topic that needs an explicit numeric cast to
+        // match SentinelOne's convention. Only touches ingest_ts; every other field is untouched.
+        if (v instanceof String && v ==~ /^-?\d+$/) {
+            parsed['ingest_ts'] = v.toLong()
+        }
+    }
+    flowFile = session.write(flowFile, { outputStream -> outputStream.write(JsonOutput.toJson(parsed).getBytes('UTF-8')) } as OutputStreamCallback)
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    flowFile = session.putAttribute(flowFile, 'raw.cast.error', e.message ?: e.toString())
+    log.error('rapid7_securado raw ingest_ts cast failed: ' + e.message, e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+
+  Failure Strategy: rollback
+
+=== rapid7_securado.site__hash  [ExecuteGroovyScript] ===
+  EXCLUDE_FIELDS: ${literal('')}
+  Script Body: 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import org.apache.nifi.processor.io.InputStreamCallback
+
+def flowFile = session.get()
+if (!flowFile) return
+
+try {
+    def prop = { name ->
+        def p = context.getProperty(name)
+        return p == null ? null : p.evaluateAttributeExpressions(flowFile).getValue()
+    }
+
+    def textHolder = [value: '']
+    session.read(flowFile, { inputStream ->
+        textHolder.value = inputStream.getText('UTF-8')
+    } as InputStreamCallback)
+
+    def parsed = new JsonSlurper().parseText(textHolder.value)
+    def rec = (parsed instanceof List) ? parsed[0] : parsed
+
+    def hash
+    if (rec instanceof Map) {
+        // Key order is left exactly as parsed (no canonicalization/sorting) -- only the
+        // explicitly excluded fields (if any) are stripped before hashing.
+        def excludeRaw = prop('EXCLUDE_FIELDS') ?: ''
+        def excludes = excludeRaw.split(',').collect { it.trim() }.findAll { it }
+        def hashable = rec
+        if (excludes) {
+            hashable = new LinkedHashMap()
+            rec.each { k, v -> if (!excludes.contains(k.toString())) hashable.put(k.toString(), v) }
+        }
+        def hashableJson = JsonOutput.toJson(hashable)
+        hash = MessageDigest.getInstance('SHA-256').digest(hashableJson.getBytes('UTF-8')).encodeHex().toString()
+    } else {
+        // Non-object content (shouldn't happen for these entities) -- hash the raw bytes.
+        hash = MessageDigest.getInstance('SHA-256').digest(textHolder.value.getBytes('UTF-8')).encodeHex().toString()
+    }
+
+    flowFile = session.putAttribute(flowFile, 'content_SHA-256', hash)
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    flowFile = session.putAttribute(flowFile, 'hash.error', e.message ?: e.toString())
+    log.error('rapid7 hash failed: ' + e.message, e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+
+  Failure Strategy: rollback
+
+=== rapid7_securado.maximum__run_metadata  [UpdateAttribute] ===
+  ingestion_run_batch_identity: rapid7_securado-${now():toNumber()}-${uuid}
+  Store State: Do not store state
+  extraction_timestamp: ${now():format("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")}
+  Cache Value Lookup Cache Size: 100
+
+=== rapid7_securado.asset__raw__publish  [PublishKafka] ===
+  compression.type: lz4
+  acks: all
+  Kafka Key Attribute Encoding: utf-8
+  Record Metadata Strategy: FROM_PROPERTIES
+  Header Encoding: UTF-8
+  max.request.size: 16 MB
+  Topic Name: bronze.rapid7_securado.asset__raw
+  Kafka Key: ${source_object_id}
+  Kafka Connection Service: 2f3daa11-2710-57da-a9bf-2ebc3941085b
+  Publish Strategy: USE_VALUE
+  Failure Strategy: Route to Failure
+  partitioner.class: org.apache.kafka.clients.producer.internals.DefaultPartitioner
+  Transactions Enabled: false
+  FlowFile Attribute Header Pattern: ^(source_platform|customer_tenant_organization|source_object_type|source_object_id|extraction_timestamp|source_event_update_timestamp|api_endpoint_export_query_identity|cursor_window|payload_hash_fingerprint|ingestion_run_batch_identity|object_id|ingest_ts)$
+
+=== rapid7_securado.site__raw__publish  [PublishKafka] ===
+  compression.type: lz4
+  acks: all
+  Kafka Key Attribute Encoding: utf-8
+  Record Metadata Strategy: FROM_PROPERTIES
+  Header Encoding: UTF-8
+  max.request.size: 16 MB
+  Topic Name: bronze.rapid7_securado.site__raw
+  Kafka Key: ${source_object_id}
+  Kafka Connection Service: 2f3daa11-2710-57da-a9bf-2ebc3941085b
+  Publish Strategy: USE_VALUE
+  Failure Strategy: Route to Failure
+  partitioner.class: org.apache.kafka.clients.producer.internals.DefaultPartitioner
+  Transactions Enabled: false
+  FlowFile Attribute Header Pattern: ^(source_platform|customer_tenant_organization|source_object_type|source_object_id|extraction_timestamp|source_event_update_timestamp|api_endpoint_export_query_identity|cursor_window|payload_hash_fingerprint|ingestion_run_batch_identity|object_id|ingest_ts)$
+
+=== rapid7_securado.site__set_public_headers  [UpdateAttribute] ===
+  ingest_ts: ${now():toNumber()}
+  source_object_type: ${entity}
+  Store State: Do not store state
+  payload_hash_fingerprint: ${'content_SHA-256'}
+  api_endpoint_export_query_identity: ${api_path}
+  customer_tenant_organization: rapid7_securado
+  source_platform: rapid7
+  source_event_update_timestamp: 
+  source_object_id: ${object_id}
+  object_id_composite: rapid7:rapid7_securado:${entity}:${object_id}
+  Cache Value Lookup Cache Size: 100
+
+=== rapid7_securado.asset__hash  [ExecuteGroovyScript] ===
+  EXCLUDE_FIELDS: ${literal('')}
+  Script Body: 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import org.apache.nifi.processor.io.InputStreamCallback
+
+def flowFile = session.get()
+if (!flowFile) return
+
+try {
+    def prop = { name ->
+        def p = context.getProperty(name)
+        return p == null ? null : p.evaluateAttributeExpressions(flowFile).getValue()
+    }
+
+    def textHolder = [value: '']
+    session.read(flowFile, { inputStream ->
+        textHolder.value = inputStream.getText('UTF-8')
+    } as InputStreamCallback)
+
+    def parsed = new JsonSlurper().parseText(textHolder.value)
+    def rec = (parsed instanceof List) ? parsed[0] : parsed
+
+    def hash
+    if (rec instanceof Map) {
+        // Key order is left exactly as parsed (no canonicalization/sorting) -- only the
+        // explicitly excluded fields (if any) are stripped before hashing.
+        def excludeRaw = prop('EXCLUDE_FIELDS') ?: ''
+        def excludes = excludeRaw.split(',').collect { it.trim() }.findAll { it }
+        def hashable = rec
+        if (excludes) {
+            hashable = new LinkedHashMap()
+            rec.each { k, v -> if (!excludes.contains(k.toString())) hashable.put(k.toString(), v) }
+        }
+        def hashableJson = JsonOutput.toJson(hashable)
+        hash = MessageDigest.getInstance('SHA-256').digest(hashableJson.getBytes('UTF-8')).encodeHex().toString()
+    } else {
+        // Non-object content (shouldn't happen for these entities) -- hash the raw bytes.
+        hash = MessageDigest.getInstance('SHA-256').digest(textHolder.value.getBytes('UTF-8')).encodeHex().toString()
+    }
+
+    flowFile = session.putAttribute(flowFile, 'content_SHA-256', hash)
+    session.transfer(flowFile, REL_SUCCESS)
+} catch (Exception e) {
+    flowFile = session.putAttribute(flowFile, 'hash.error', e.message ?: e.toString())
+    log.error('rapid7 hash failed: ' + e.message, e)
+    session.transfer(flowFile, REL_FAILURE)
+}
+
+  Failure Strategy: rollback
+
+=== rapid7_securado.site__set_ids  [UpdateAttribute] ===
+  Store State: Do not store state
+  cursor_window: page=${page}&size=#{PAGE_SIZE}
+  kafka_topic: bronze.rapid7_securado.site__raw
+  Cache Value Lookup Cache Size: 100
+  object_id: ${site_id}
+  api_path: /sites/${site_id}
+  entity: site
+
+=== rapid7_securado.asset__extract  [EvaluateJsonPath] ===
+  Destination: flowfile-attribute
+  Max String Length: 20 MB
+  Return Type: auto-detect
+  Null Value Representation: empty string
+  asset_id: $.id
+  Path Not Found Behavior: ignore
+
+=== rapid7_securado.asset__dedupe_key  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  dedupe.key: rapid7_securado:asset:${object_id}:${'content_SHA-256'}
+  object_id: ${object_id_composite}

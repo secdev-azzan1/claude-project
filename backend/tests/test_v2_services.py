@@ -705,6 +705,8 @@ def test_sink_iceberg_test_monkeypatched(monkeypatch):
     # T3.3 extended iceberg secrets must be redacted on save.
     assert created["config"]["oauthClientSecret"] is None
     assert created["hasOauthClientSecret"] is True
+    assert created["config"]["s3AccessKey"] is None
+    assert created["hasS3AccessKey"] is True
     assert created["config"]["s3SecretKey"] is None
     assert created["hasS3SecretKey"] is True
     assert created["config"]["s3Endpoint"] == "http://minio.corp:9000"
@@ -719,6 +721,74 @@ def test_sink_iceberg_test_monkeypatched(monkeypatch):
     resp = client.post(f"/api/v2/services/{created['id']}/test")
     assert resp.status_code == 200, resp.text
     assert resp.json()["health"] == "Healthy"
+
+
+def test_sink_iceberg_s3_access_key_keeps_existing_value_on_blank_update():
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = client.post(
+        "/api/v2/services/",
+        json={
+            "type": "sink_destination",
+            "name": "Iceberg Sink",
+            "config": {
+                "kind": "iceberg_catalog",
+                "catalogUrl": "http://polaris.corp:8181/api/catalog",
+                "warehouse": "bronze",
+                "oauthClientId": "cid",
+                "s3Endpoint": "http://minio.corp:9000",
+                "s3AccessKey": "AKIA-ORIGINAL",
+                "s3Region": "us-east-1",
+                "s3PathStyle": True,
+            },
+        },
+    ).json()
+    assert created["config"]["s3AccessKey"] is None
+    assert created["hasS3AccessKey"] is True
+
+    updated = client.post(
+        "/api/v2/services/",
+        json={
+            "id": created["id"],
+            "type": "sink_destination",
+            "name": "Iceberg Sink",
+            "config": {
+                "kind": "iceberg_catalog",
+                "catalogUrl": "http://polaris.corp:8181/api/catalog/v2",
+                "warehouse": "bronze",
+                "oauthClientId": "cid",
+                "s3Endpoint": "http://minio.corp:9000",
+                "s3AccessKey": "",
+                "s3Region": "us-east-1",
+                "s3PathStyle": True,
+            },
+        },
+    ).json()
+    assert updated["config"]["s3AccessKey"] is None
+    assert updated["hasS3AccessKey"] is True
+    assert fake_db.services_v2.docs[0]["config"]["s3AccessKey"] == "AKIA-ORIGINAL"
+
+    replaced = client.post(
+        "/api/v2/services/",
+        json={
+            "id": created["id"],
+            "type": "sink_destination",
+            "name": "Iceberg Sink",
+            "config": {
+                "kind": "iceberg_catalog",
+                "catalogUrl": "http://polaris.corp:8181/api/catalog/v3",
+                "warehouse": "bronze",
+                "oauthClientId": "cid",
+                "s3Endpoint": "http://minio.corp:9000",
+                "s3AccessKey": "AKIA-REPLACED",
+                "s3Region": "us-east-1",
+                "s3PathStyle": True,
+            },
+        },
+    ).json()
+    assert replaced["config"]["s3AccessKey"] is None
+    assert replaced["hasS3AccessKey"] is True
+    assert fake_db.services_v2.docs[0]["config"]["s3AccessKey"] == "AKIA-REPLACED"
 
 
 def test_sink_iceberg_test_failure_monkeypatched(monkeypatch):

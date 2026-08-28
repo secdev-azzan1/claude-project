@@ -1,0 +1,76 @@
+{
+  "proxyId": "gw-proxy-ysb749",
+  "upstream": {
+    "status": 200,
+    "body": {
+      "modifiedIndex": 358,
+      "value": {
+        "type": "roundrobin",
+        "create_time": 1786796079,
+        "id": "dmp_gw-proxy-ysb749",
+        "update_time": 1786796079,
+        "nodes": {
+          "dummyjson.com:443": 1
+        },
+        "scheme": "https",
+        "pass_host": "node",
+        "timeout": {
+          "connect": 5,
+          "send": 30,
+          "read": 30
+        }
+      },
+      "key": "/apisix/upstreams/dmp_gw-proxy-ysb749",
+      "createdIndex": 358
+    }
+  },
+  "routeRoot": {
+    "status": 200,
+    "body": {
+      "modifiedIndex": 359,
+      "value": {
+        "id": "dmp_gw-proxy-ysb749_root",
+        "uri": "/codex15aug26_dummyjson",
+        "methods": [
+          "GET"
+        ],
+        "update_time": 1786796079,
+        "upstream_id": "dmp_gw-proxy-ysb749",
+        "plugins": {
+          "proxy-rewrite": {
+            "uri": "/"
+          }
+        },
+        "create_time": 1786796079
+      },
+      "key": "/apisix/routes/dmp_gw-proxy-ysb749_root",
+      "createdIndex": 359
+    }
+  },
+  "routeWild": {
+    "status": 200,
+    "body": {
+      "modifiedIndex": 360,
+      "value": {
+        "id": "dmp_gw-proxy-ysb749_wild",
+        "uri": "/codex15aug26_dummyjson/*",
+        "methods": [
+          "GET"
+        ],
+        "update_time": 1786796079,
+        "upstream_id": "dmp_gw-proxy-ysb749",
+        "plugins": {
+          "proxy-rewrite": {
+            "regex_uri": [
+              "^/codex15aug26_dummyjson/(.*)",
+              "/$1"
+            ]
+          }
+        },
+        "create_time": 1786796079
+      },
+      "key": "/apisix/routes/dmp_gw-proxy-ysb749_wild",
+      "createdIndex": 360
+    }
+  }
+}

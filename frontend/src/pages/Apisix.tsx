@@ -489,8 +489,8 @@ export default function Apisix() {
 
   return (
     <AppLayout
-      title="APISIX Gateway"
-      description="Named egress proxies an http block routes through. Proxy definitions are self-serve; the host allowlist is administrator-managed."
+      title="Proxies"
+      description="Named egress proxies an HTTP block routes through. Proxy definitions are self-serve; the host allowlist is administrator-managed."
       actions={
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" /> Add Proxy

@@ -77,6 +77,7 @@ describe("add menu after a block", () => {
     const read = block({ id: "r", adapter: "http", mode: "read" });
     const menu = computeAddMenu(flow([read]), "r");
     expect(menu.every((e) => !!e.adapter || !!e.futureScope)).toBe(true);
+    expect(menu.find((e) => e.key === "jdbc-read")).toBeUndefined();
     expect(menu.find((e) => e.key === "fork")).toBeUndefined();
   });
 

@@ -197,6 +197,11 @@ class TestAddMenu:
         kkc = next(e for e in menu if e.key == "kafka_kc")
         assert "R8" in kkc.disabledReason
 
+    def test_jdbc_read_is_not_advertised_mid_chain(self):
+        read = make_block(id="r", adapter="http", mode="read")
+        menu = legality.compute_add_menu(make_flow([read]), "r")
+        assert all(e.key != "jdbc-read" for e in menu)
+
     def test_raw_status_propagates_down_branch(self):
         raw_read = make_block(id="r", adapter="kafka", mode="read", config={"parseFormat": "raw"})
         child = make_block(id="w", adapter="kafka", mode="write", parentId="r")
@@ -337,6 +342,16 @@ class TestValidatePlacement:
         f = make_flow([kafka_root], cron="0 * * * *")
         violations = legality.validate_placement(f)
         assert any(v.blockId is None and "R1" in v.message for v in violations)
+
+    def test_jdbc_read_rejected_when_not_root(self):
+        root = make_block(id="root", adapter="http", mode="read")
+        child = make_block(id="jdbc", adapter="jdbc", mode="read", parentId="root")
+        f = make_flow([root, child])
+        violations = legality.validate_placement(f)
+        assert any(
+            v.blockId == "jdbc" and "R2" in v.message and "root block" in v.message
+            for v in violations
+        )
 
     def test_legal_tree_has_no_violations(self):
         root = make_block(id="root", adapter="http", mode="read")

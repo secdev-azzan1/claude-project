@@ -268,6 +268,10 @@ function downloadJson(filename: string, data: unknown) {
   URL.revokeObjectURL(url);
 }
 
+export function clearTopicActionLabel(flowName: string, clearTopicTarget: string | null): string {
+  return clearTopicTarget === dlqName(flowName) ? "Clear DLQ" : "Clear topic";
+}
+
 const VERB_META: Record<FlowVerb, { label: string; done: string; detail?: string }> = {
   deploy: { label: "Deploy", done: "Deployed", detail: "Process group created — stopped until Start." },
   start: { label: "Start", done: "Started" },
@@ -1006,7 +1010,7 @@ function RuntimeTab({
 
 // ─── Detail sheet ───────────────────────────────────────────────────────────
 
-function FlowDetailSheet({
+export function FlowDetailSheet({
   flow,
   services,
   schemas,
@@ -1068,6 +1072,8 @@ function FlowDetailSheet({
     setMsgTopic(flow.topics[0]?.name ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.id]);
+
+  const clearTopicActionLabelValue = clearTopicActionLabel(flow.name, clearTopicTarget);
 
   const metricsQuery = useQuery({
     queryKey: ["flow-metrics", flow.id],
@@ -1637,7 +1643,7 @@ function FlowDetailSheet({
                 setClearTopicTarget(null);
               }}
             >
-              Clear topic
+              {clearTopicActionLabelValue}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

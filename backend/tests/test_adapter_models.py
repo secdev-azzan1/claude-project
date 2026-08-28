@@ -199,6 +199,7 @@ class TestAppServiceRedact:
         "keyValue": "http",
         "saslPassword": "external_kafka",
         "adminKey": "http",  # type doesn't matter for redact(); any is fine
+        "s3AccessKey": "sink_destination",
         "s3SecretKey": "http",
         "oauthClientSecret": "sink_destination",
         "kafbatPassword": "http",  # connection-level key; type irrelevant for redact()

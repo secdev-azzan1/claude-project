@@ -1,0 +1,445 @@
+{
+  "type": "record",
+  "name": "sentinelone_site_raw_avro",
+  "namespace": "bronze.sentinelone",
+  "fields": [
+    {
+      "name": "source_platform",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "customer_tenant_organization",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_object_type",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_object_id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "extraction_timestamp",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_event_update_timestamp",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "api_endpoint_export_query_identity",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "cursor_window",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "payload_hash_fingerprint",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "ingestion_run_batch_identity",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "ingest_ts",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "accountId",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "accountName",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "activeLicenses",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null
+    },
+    {
+      "name": "createdAt",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "creator",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "creatorId",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "description",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "expiration",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "externalId",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "healthStatus",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "inheritAccountExpiration",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "irFields",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "isDefault",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "licenses",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "sentinelone_site_raw_avro_licenses",
+          "namespace": "bronze.sentinelone",
+          "fields": [
+            {
+              "name": "bundles",
+              "type": [
+                "null",
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "record",
+                    "name": "sentinelone_site_raw_avro_licenses_bundles_item",
+                    "namespace": "bronze.sentinelone",
+                    "fields": [
+                      {
+                        "name": "displayName",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "majorVersion",
+                        "type": [
+                          "null",
+                          "int"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "minorVersion",
+                        "type": [
+                          "null",
+                          "int"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "name",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "surfaces",
+                        "type": [
+                          "null",
+                          {
+                            "type": "array",
+                            "items": "string"
+                          }
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "totalSurfaces",
+                        "type": [
+                          "null",
+                          "int"
+                        ],
+                        "default": null
+                      }
+                    ]
+                  }
+                }
+              ],
+              "default": null
+            },
+            {
+              "name": "modules",
+              "type": [
+                "null",
+                {
+                  "type": "array",
+                  "items": "string"
+                }
+              ],
+              "default": null
+            },
+            {
+              "name": "settings",
+              "type": [
+                "null",
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "record",
+                    "name": "sentinelone_site_raw_avro_licenses_settings_item",
+                    "namespace": "bronze.sentinelone",
+                    "fields": [
+                      {
+                        "name": "displayName",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "groupName",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "setting",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "settingGroup",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "settingGroupDisplayName",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      }
+                    ]
+                  }
+                }
+              ],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "name",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "promptFields",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "siteType",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "sku",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "state",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "suite",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "totalLicenses",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null
+    },
+    {
+      "name": "unlimitedExpiration",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "unlimitedLicenses",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "updatedAt",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "usageType",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    }
+  ]
+}

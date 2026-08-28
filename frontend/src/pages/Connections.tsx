@@ -966,10 +966,10 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
                                 size="sm"
                                 variant="outline"
                                 asChild
-                                title="Proxies, certificate profiles and the host allowlist live on the APISIX Gateway page."
+                                title="Proxies, certificate profiles and the host allowlist live on the Proxies page."
                               >
                                 <Link to="/apisix">
-                                  <Globe className="h-3.5 w-3.5" /> Gateway resources
+                                  <Globe className="h-3.5 w-3.5" /> Proxy resources
                                 </Link>
                               </Button>
                             )}

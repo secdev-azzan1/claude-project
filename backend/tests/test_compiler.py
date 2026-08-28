@@ -562,6 +562,98 @@ def test_jdbc_write():
     assert port_link is not None and port_link.fromBlockId == "b-read"
 
 
+def test_jdbc_lookup_respects_join_field():
+    from services.adapter.compiler.blocks_jdbc import _compile_lookup
+    from services.adapter.compiler.ir import BlockBuilder
+
+    flow = Flow(
+        id="flow-jdbc-lookup", name="Jdbc Lookup Flow", cron=None, state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(id="b-root", adapter="http", mode="read", name="Root", parentId=None, serviceId=None, config={}),
+            FlowBlock(
+                id="b-lookup", adapter="jdbc", mode="lookup", name="Lookup", parentId="b-root", serviceId="svc-db",
+                config={"table": "cmdb_assets", "lookupJoinField": "asset_id"},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    ctx = jdbc_ctx()
+    builder = BlockBuilder()
+    params = []
+    _compile_lookup(
+        builder,
+        flow=flow,
+        block=flow.blocks[1],
+        ctx=ctx,
+        flow_token="jdbc_lookup",
+        is_root=False,
+        add_param=lambda name, value, sensitive: params.append((name, value, sensitive)),
+    )
+
+    lookup = next(p for p in builder.processors if p.key == "lookup")
+    assert lookup.type == "org.apache.nifi.processors.standard.LookupRecord"
+    assert lookup.properties["Lookup Service"] == "cs_db_lookup"
+    assert lookup.properties["Result RecordPath"] == "/asset_id_lookup"
+    assert lookup.properties["asset_id"] == "/asset_id"
+
+    lookup_service = next(cs for cs in builder.controller_services if cs.key == "cs_db_lookup")
+    assert lookup_service.type == "org.apache.nifi.lookup.db.DatabaseRecordLookupService"
+    assert lookup_service.properties["Lookup Key Column"] == "asset_id"
+
+
+def test_jdbc_read_mid_chain_is_rejected():
+    from services.adapter.compiler.blocks_jdbc import _compile_read
+    from services.adapter.compiler.ir import BlockBuilder
+
+    flow = Flow(
+        id="flow-jdbc-invalid", name="Jdbc Invalid Flow", cron="0 */2 * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(id="b-parent", adapter="http", mode="read", name="Root", parentId=None, serviceId=None, config={}),
+            FlowBlock(
+                id="b-read", adapter="jdbc", mode="read", name="Read Assets", parentId="b-parent", serviceId="svc-db",
+                config={"table": "cmdb_assets"},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    builder = BlockBuilder()
+    with pytest.raises(CompileError, match="cannot be placed mid-chain"):
+        _compile_read(
+            builder,
+            flow=flow,
+            block=flow.blocks[1],
+            ctx=jdbc_ctx(),
+            flow_token="jdbc_invalid",
+            is_root=False,
+            add_param=lambda *args: None,
+        )
+
+
+def test_compile_flow_rejects_non_root_jdbc_read():
+    flow = Flow(
+        id="flow-jdbc-public", name="Jdbc Public Invalid Flow", cron="0 */2 * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(id="b-parent", adapter="http", mode="read", name="Root", parentId=None, serviceId="svc-http", config={"path": "/x"}),
+            FlowBlock(
+                id="b-read", adapter="jdbc", mode="read", name="Read Assets", parentId="b-parent", serviceId="svc-db",
+                config={"table": "cmdb_assets"},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    ctx = CompileContext(
+        services={"svc-http": make_service(id="svc-http", type="http", name="X", config={"baseUrl": "https://x", "authMode": "none"})},
+        connections={},
+        gateway_proxies={},
+        approved_schemas={},
+    )
+    with pytest.raises(CompileError, match="jdbc read is only legal as a root block"):
+        compile_flow(flow, ctx)
+
+
 def trino_flow() -> Flow:
     """Root jdbc read against a Trino lakehouse service -- exercises the
     dialect-conditional URL branch (`_ensure_db_pool`) confirmed against
@@ -779,6 +871,59 @@ def test_http_write_response_continuation_reuses_parse_chain():
     assert onward and onward[0].relationships == ["split"]
 
 
+def http_write_paginated_flow(*, write_forwards: str = "response") -> Flow:
+    return Flow(
+        id="flow-hwrite-page", name="Http Write Paginated Flow", cron=None, state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-write", adapter="http", mode="write", name="Query CMDB", parentId=None, serviceId="svc-http",
+                config={"method": "POST", "path": "/query/cmdb",
+                        "bodyTemplate": '{"start": ${offset}, "size": ${limit}}',
+                        "writeForwards": write_forwards, "responseFormat": "json", "recordPath": "$.data[*]",
+                        "split": True, "pagination": {"type": "offset", "fields": {"limitValue": 500}}},
+            ),
+            FlowBlock(
+                id="b-continue", adapter="kafka", mode="write", name="Log Result", parentId="b-write",
+                entity="cmdb_result", config={},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_http_write_offset_pagination_seeds_counters_and_loops_to_render_body():
+    plan = compile_flow(http_write_paginated_flow(), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    keys = [p.key for p in group.processors]
+    assert {"init", "render_body", "write", "split", "page_meta", "has_more", "next"} <= set(keys)
+
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["offset"] == "0"
+    assert init.properties["limit"] == "500"
+    assert init.properties["page_count"] == "0"
+
+    render = next(p for p in group.processors if p.key == "render_body")
+    assert render.properties["Replacement Value"] == '{"start": ${offset}, "size": ${limit}}'
+
+    next_proc = next(p for p in group.processors if p.key == "next")
+    assert next_proc.properties["offset"] == "${offset:toNumber():plus(500)}"
+
+    # loop-back target is render_body (re-renders the body from the updated
+    # counters), not write directly -- write has no per-page state of its own.
+    loop_edge = [c for c in group.connections if c.from_ == "next" and c.to == "render_body"]
+    assert loop_edge and loop_edge[0].relationships == ["success"]
+
+    # "original" no longer auto-terminates once pagination needs it for page_meta.
+    split = next(p for p in group.processors if p.key == "split")
+    assert "original" not in split.autoTerminate
+
+
+def test_http_write_pagination_requires_write_forwards_response():
+    with pytest.raises(CompileError, match="writeForwards"):
+        compile_flow(http_write_paginated_flow(write_forwards="original"), http_svc_ctx())
+
+
 def http_lookup_flow() -> Flow:
     return Flow(
         id="flow-hlookup", name="Http Lookup Flow", cron="0 * * * *", state="Draft", enabled=True,
@@ -818,6 +963,117 @@ def test_http_lookup_join_merge():
     merge = next(p for p in group.processors if p.key == "lookup_merge")
     assert merge.type == "org.apache.nifi.processors.standard.UpdateRecord"
     assert merge.properties["/details_lookup"] == "${lookup_value}"
+
+
+# --------------------------------------------------------------------------
+# 10b. http read: chained (non-root) read promotes parent-record fields
+# --------------------------------------------------------------------------
+#
+# Regression coverage for a bug where a non-root http-read block's `path`
+# could reference a parent record field (e.g. "/sites/${site_id}/assets")
+# but the field was never extracted from the incoming record into a
+# flowfile attribute -- so the URL silently compiled with an empty value.
+# _compile_write and _compile_lookup already did this extraction; compile_read
+# did not. Two cases matter because they freeze the URL at different points:
+#   - pagination "page" (and offset/cursor): the template lives directly on
+#     `fetch`'s own "HTTP URL" property, evaluated fresh per FlowFile.
+#   - pagination "none" (and next_url): `init` evaluates the template ONCE
+#     and freezes the result into the `request.url` ATTRIBUTE -- so the
+#     field must already be a resolvable attribute by the time `init` runs,
+#     not merely by the time `fetch` runs.
+
+
+def http_chained_read_flow(*, child_pagination: dict) -> Flow:
+    return Flow(
+        id="flow-hchain", name="Http Chained Read Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-site", adapter="http", mode="read", name="List Sites", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/sites", "responseFormat": "json", "recordPath": "$[*]",
+                        "split": True, "pagination": {"type": "none", "fields": {}}},
+            ),
+            FlowBlock(
+                id="b-asset", adapter="http", mode="read", name="List Site Assets", parentId="b-site",
+                serviceId="svc-http",
+                config={"method": "GET", "path": "/sites/${site_id}/assets", "responseFormat": "json",
+                        "recordPath": "$[*]", "split": True, "pagination": child_pagination},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_http_read_chained_child_promotes_field_paginated():
+    """pagination: page -- the template lives on fetch's own property."""
+    plan = compile_flow(
+        http_chained_read_flow(child_pagination={"type": "page", "fields": {"pageParam": "page", "sizeParam": "size", "sizeValue": "50"}}),
+        http_svc_ctx(),
+    )
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-asset")
+    keys = [p.key for p in group.processors]
+    assert keys.index("extract_path_fields") < keys.index("init") < keys.index("fetch")
+
+    extract = next(p for p in group.processors if p.key == "extract_path_fields")
+    assert extract.properties["site_id"] == "$.site_id"
+    gate = next(p for p in group.processors if p.key == "extract_path_fields__check_0")
+    assert gate.type == "org.apache.nifi.processors.standard.RouteOnAttribute"
+    assert gate.properties["present"] == "${site_id:isEmpty():not()}"
+    assert gate.properties["missing"] == "${site_id:isEmpty()}"
+    entry_link = [c for c in group.connections if c.from_ == "inputPort" and c.to == "extract_path_fields__check_0"]
+    assert entry_link and entry_link[0].relationships == []
+    present_to_merge = [c for c in group.connections
+                        if c.from_ == "extract_path_fields__check_0" and c.to == "extract_path_fields__merge_0"]
+    missing_to_extract = [c for c in group.connections
+                          if c.from_ == "extract_path_fields__check_0" and c.to == "extract_path_fields"]
+    extract_to_merge = [c for c in group.connections
+                        if c.from_ == "extract_path_fields" and c.to == "extract_path_fields__merge_0"]
+    merge_to_init = [c for c in group.connections
+                     if c.from_ == "extract_path_fields__merge_0" and c.to == "init"]
+    assert present_to_merge and present_to_merge[0].relationships == ["present"]
+    assert missing_to_extract and missing_to_extract[0].relationships == ["missing"]
+    assert extract_to_merge and extract_to_merge[0].relationships == ["matched"]
+    assert merge_to_init and merge_to_init[0].relationships == ["success"]
+
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "#{svc_svc-http_base_url}/sites/${site_id}/assets?page=${page}&size=${page_size}"
+
+
+def test_http_read_chained_child_promotes_field_unpaginated():
+    """pagination: none -- init freezes the URL into request.url, so the
+    field must be extracted BEFORE init, not merely before fetch."""
+    plan = compile_flow(
+        http_chained_read_flow(child_pagination={"type": "none", "fields": {}}),
+        http_svc_ctx(),
+    )
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-asset")
+    keys = [p.key for p in group.processors]
+    assert keys.index("extract_path_fields") < keys.index("init") < keys.index("fetch")
+
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["request.url"] == "#{svc_svc-http_base_url}/sites/${site_id}/assets"
+
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "${request.url}"
+
+
+def test_http_read_root_rejects_path_field_reference():
+    """A root read has no incoming record to extract from -- a ${field} in
+    its path is a config error, not a silently-empty URL."""
+    flow = Flow(
+        id="flow-hroot-bad", name="Bad Root Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-root", adapter="http", mode="read", name="Bad Root", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/sites/${site_id}/assets", "responseFormat": "json",
+                        "recordPath": "$[*]", "split": True, "pagination": {"type": "none", "fields": {}}},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+    with pytest.raises(CompileError, match="site_id"):
+        compile_flow(flow, http_svc_ctx())
 
 
 # --------------------------------------------------------------------------
@@ -966,6 +1222,12 @@ def _read_group(plan):
     return next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
 
 
+def _paginated_read_flow_with_path(pagination: dict, path: str) -> Flow:
+    flow = _paginated_read_flow(pagination)
+    flow.blocks[0].config["path"] = path
+    return flow
+
+
 def test_pagination_offset_template_on_fetch_url():
     plan = compile_flow(_paginated_read_flow(
         {"type": "offset", "fields": {"offsetParam": "offset", "limitParam": "limit", "limitValue": "30"}}
@@ -1013,6 +1275,44 @@ def test_pagination_cursor_template_on_fetch_url():
     assert page_meta.properties["next_cursor"] == "$.meta.next"
     nxt = next(p for p in group.processors if p.key == "next")
     assert nxt.properties["cursor"] == "${next_cursor}"
+
+
+def test_pagination_cursor_with_size_on_fetch_url():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "cursor", "fields": {"cursorParam": "cursor", "cursorPath": "$.meta.next", "sizeValue": "100"}}
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "#{svc_svc-http_base_url}/items?cursor=${cursor}&limit=${page_size}"
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["page_size"] == "100"
+
+
+def test_pagination_cursor_with_custom_size_param_name():
+    plan = compile_flow(_paginated_read_flow(
+        {"type": "cursor", "fields": {"cursorParam": "cursor", "sizeParam": "pageSize", "sizeValue": "25"}}
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == "#{svc_svc-http_base_url}/items?cursor=${cursor}&pageSize=${page_size}"
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["page_size"] == "25"
+
+
+def test_pagination_cursor_with_static_query_filter_in_path():
+    """A block `path` may embed its own literal "?..." query (e.g. a static
+    date-math lookback filter) ahead of cursor pagination's own params — the
+    two must join with "&", not clash on a second "?"."""
+    plan = compile_flow(_paginated_read_flow_with_path(
+        {"type": "cursor", "fields": {"cursorParam": "cursor", "cursorPath": "$.meta.next", "sizeValue": "100"}},
+        "/items?updatedAt__gte=${now():toNumber():minus(3600000)}",
+    ), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    assert fetch.properties["HTTP URL"] == (
+        "#{svc_svc-http_base_url}/items?updatedAt__gte=${now():toNumber():minus(3600000)}"
+        "&cursor=${cursor}&limit=${page_size}"
+    )
 
 
 def test_pagination_offset_page_meta_probe_return_type_json():

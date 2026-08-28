@@ -161,7 +161,6 @@ def compute_add_menu(flow: Flow, after_block_id: str) -> List[AddMenuEntry]:
         AddMenuEntry(key="http-read", adapter="http", mode="read", label="http · read", description="Chained request per record"),
         AddMenuEntry(key="http-lookup", adapter="http", mode="lookup", label="http · lookup", description="Enrich records from an API"),
         AddMenuEntry(key="http-write", adapter="http", mode="write", label="http · write", description="POST records onward"),
-        AddMenuEntry(key="jdbc-read", adapter="jdbc", mode="read", label="jdbc · read", description="Read a table per record"),
         AddMenuEntry(key="jdbc-lookup", adapter="jdbc", mode="lookup", label="jdbc · lookup", description="Enrich records from a table"),
         AddMenuEntry(key="jdbc-write", adapter="jdbc", mode="write", label="jdbc · write", description="Write records to a table"),
         AddMenuEntry(
@@ -426,6 +425,10 @@ def validate_placement(flow: Flow) -> List[PlacementViolation]:
                 add(b.id, "R2 — kafka+connect is always a destination; it can never start a flow.")
             elif b.adapter == "kc":
                 add(b.id, "kc subscribes to a topic, never to a block (R5) — it cannot be a bare root.")
+            continue
+
+        if b.adapter == "jdbc" and b.mode == "read":
+            add(b.id, "jdbc read is only legal as a root block (R2) - it cannot follow another block.")
             continue
 
         topic = topic_by_id(flow, b.parentId)

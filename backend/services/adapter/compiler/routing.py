@@ -44,7 +44,7 @@ in `ConnectionSpec.to` (inside the parent's group) and in the root-level
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from models.adapter import FlowBlock
 from services.adapter.naming import tokenize
@@ -69,6 +69,74 @@ def _branch_token(child: FlowBlock) -> str:
 
 def out_port(child_id: str) -> str:
     return f"outputPort:{child_id}"
+
+
+def _extract_route_fields_preserving_existing(
+    builder: "BlockBuilder", *, fields: List[str], source: "Tail"
+) -> "Tail":
+    """Promote branch-rule fields without clobbering existing attributes.
+
+    A parent transform may already have extracted a field such as ``name``.
+    Re-running one unconditional EvaluateJsonPath for routing can replace
+    that attribute with an empty value when the current content is not a
+    direct JSON object at that point.  An empty value makes a ``not_equals``
+    rule match, which silently sends the excluded record down the branch.
+
+    Each field therefore takes a present path (keep the attribute) or a
+    missing path (extract from JSON), then rejoins before RouteOnAttribute.
+    """
+    working_key, working_rel = source
+    for index, field in enumerate(fields):
+        gate_key = f"route_fields__check_{index}"
+        extract_key = "route_fields" if len(fields) == 1 else f"route_fields__extract_{index}"
+        merge_key = f"route_fields__merge_{index}"
+
+        builder.add_processor(
+            ProcessorSpec(
+                key=gate_key,
+                name=gate_key,
+                type="org.apache.nifi.processors.standard.RouteOnAttribute",
+                properties={
+                    "Routing Strategy": "Route to Property name",
+                    "present": f"${{{field}:isEmpty():not()}}",
+                    "missing": f"${{{field}:isEmpty()}}",
+                },
+                autoTerminate=["unmatched"],
+            )
+        )
+        builder.link(working_key, gate_key, [working_rel] if working_rel else [])
+        builder.to_dlq(gate_key, "failure")
+
+        props: Dict[str, Any] = {
+            "Destination": "flowfile-attribute",
+            "Path Not Found Behavior": "ignore",
+            "Return Type": "scalar",
+            field: f"$.{field}",
+        }
+        builder.add_processor(
+            ProcessorSpec(
+                key=extract_key,
+                name=extract_key,
+                type="org.apache.nifi.processors.standard.EvaluateJsonPath",
+                properties=props,
+                autoTerminate=["unmatched"],
+            )
+        )
+        builder.link(gate_key, extract_key, ["missing"])
+        builder.to_dlq(extract_key, "failure")
+
+        builder.add_processor(
+            ProcessorSpec(
+                key=merge_key,
+                name=merge_key,
+                type="org.apache.nifi.processors.attributes.UpdateAttribute",
+            )
+        )
+        builder.link(gate_key, merge_key, ["present"])
+        builder.link(extract_key, merge_key, ["matched"])
+        working_key, working_rel = merge_key, "success"
+
+    return working_key, working_rel
 
 
 def wire_children(
@@ -99,18 +167,24 @@ def wire_children(
                 if rule.field and rule.field not in seen:
                     seen.add(rule.field)
                     fields.append(rule.field)
-        props = {"Destination": "flowfile-attribute", "Path Not Found Behavior": "ignore", "Return Type": "scalar"}
-        for f in fields:
-            props[f] = f"$.{f}"
-        builder.add_processor(
-            ProcessorSpec(key="route_fields", name="route_fields",
-                          type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                          properties=props, autoTerminate=["unmatched"])
+        # Keep the guarded field promotion shape even for one field.  The
+        # old direct multi-property EvaluateJsonPath could overwrite an
+        # existing value with empty text immediately before routing.
+        working_key, working_rel = _extract_route_fields_preserving_existing(
+            builder, fields=fields, source=(tail_key, tail_rel)
         )
-        builder.link(tail_key, "route_fields", [tail_rel])
-        builder.to_dlq("route_fields", "failure")
-        added_keys.append("route_fields")
-        working_key, working_rel = "route_fields", "matched"
+        added_keys.extend(
+            [
+                f"route_fields__check_{index}" for index in range(len(fields))
+            ]
+        )
+        added_keys.extend(
+            [
+                "route_fields" if len(fields) == 1 else f"route_fields__extract_{index}"
+                for index in range(len(fields))
+            ]
+        )
+        added_keys.extend([f"route_fields__merge_{index}" for index in range(len(fields))])
 
     for child in children:
         if _is_unconditional(child):

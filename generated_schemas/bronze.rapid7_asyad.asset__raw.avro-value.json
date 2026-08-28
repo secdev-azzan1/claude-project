@@ -1,0 +1,1191 @@
+{
+  "type": "record",
+  "name": "rapid7_asyad_asset_raw_avro",
+  "namespace": "bronze.rapid7_asyad",
+  "fields": [
+    {
+      "name": "addresses",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_addresses_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "ip",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "mac",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "assessedForPolicies",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "assessedForVulnerabilities",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null
+    },
+    {
+      "name": "files",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_files_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "attributes",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "rapid7_asyad_asset_raw_avro_files_item_attributes_item",
+                      "namespace": "bronze.rapid7_asyad",
+                      "fields": [
+                        {
+                          "name": "name",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "value",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "name",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "type",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "size",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "history",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_history_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "date",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "scanId",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              },
+              {
+                "name": "type",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "version",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              },
+              {
+                "name": "description",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "vulnerabilityExceptionId",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "hostName",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "hostNames",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_hostNames_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "name",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "source",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "id",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null
+    },
+    {
+      "name": "ids",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_ids_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "id",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "source",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "ip",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "links",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_links_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "href",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "rel",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "os",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "osCertainty",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "osFingerprint",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "rapid7_asyad_asset_raw_avro_osFingerprint",
+          "namespace": "bronze.rapid7_asyad",
+          "fields": [
+            {
+              "name": "architecture",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "description",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "family",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "id",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            },
+            {
+              "name": "product",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "systemName",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "type",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "vendor",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "version",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "cpe",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "rapid7_asyad_asset_raw_avro_osFingerprint_cpe",
+                  "namespace": "bronze.rapid7_asyad",
+                  "fields": [
+                    {
+                      "name": "edition",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "part",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "product",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "swEdition",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "update",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "v2_2",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "v2_3",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "vendor",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "version",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    },
+                    {
+                      "name": "targetHW",
+                      "type": [
+                        "null",
+                        "string"
+                      ],
+                      "default": null
+                    }
+                  ]
+                }
+              ],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "rawRiskScore",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "riskScore",
+      "type": [
+        "null",
+        "double"
+      ],
+      "default": null
+    },
+    {
+      "name": "services",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_services_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "configurations",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "rapid7_asyad_asset_raw_avro_services_item_configurations_item",
+                      "namespace": "bronze.rapid7_asyad",
+                      "fields": [
+                        {
+                          "name": "name",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "value",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "links",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "rapid7_asyad_asset_raw_avro_services_item_links_item",
+                      "namespace": "bronze.rapid7_asyad",
+                      "fields": [
+                        {
+                          "name": "href",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "rel",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "name",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "port",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              },
+              {
+                "name": "product",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "protocol",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "vendor",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "version",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "family",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "webApplications",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "rapid7_asyad_asset_raw_avro_services_item_webApplications_item",
+                      "namespace": "bronze.rapid7_asyad",
+                      "fields": [
+                        {
+                          "name": "id",
+                          "type": [
+                            "null",
+                            "int"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "pages",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "root",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "virtualHost",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "databases",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "rapid7_asyad_asset_raw_avro_services_item_databases_item",
+                      "namespace": "bronze.rapid7_asyad",
+                      "fields": [
+                        {
+                          "name": "id",
+                          "type": [
+                            "null",
+                            "int"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "name",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "software",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_software_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "description",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "id",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              },
+              {
+                "name": "product",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "type",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "version",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "family",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "vendor",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "configurations",
+                "type": [
+                  "null",
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "record",
+                      "name": "rapid7_asyad_asset_raw_avro_software_item_configurations_item",
+                      "namespace": "bronze.rapid7_asyad",
+                      "fields": [
+                        {
+                          "name": "name",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        },
+                        {
+                          "name": "value",
+                          "type": [
+                            "null",
+                            "string"
+                          ],
+                          "default": null
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "default": null
+              },
+              {
+                "name": "cpe",
+                "type": [
+                  "null",
+                  {
+                    "type": "record",
+                    "name": "rapid7_asyad_asset_raw_avro_software_item_cpe",
+                    "namespace": "bronze.rapid7_asyad",
+                    "fields": [
+                      {
+                        "name": "part",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "product",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "v2_2",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "v2_3",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "vendor",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "version",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "update",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "targetSW",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      },
+                      {
+                        "name": "targetHW",
+                        "type": [
+                          "null",
+                          "string"
+                        ],
+                        "default": null
+                      }
+                    ]
+                  }
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "type",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "userGroups",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_userGroups_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "id",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              },
+              {
+                "name": "name",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "users",
+      "type": [
+        "null",
+        {
+          "type": "array",
+          "items": {
+            "type": "record",
+            "name": "rapid7_asyad_asset_raw_avro_users_item",
+            "namespace": "bronze.rapid7_asyad",
+            "fields": [
+              {
+                "name": "fullName",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              },
+              {
+                "name": "id",
+                "type": [
+                  "null",
+                  "int"
+                ],
+                "default": null
+              },
+              {
+                "name": "name",
+                "type": [
+                  "null",
+                  "string"
+                ],
+                "default": null
+              }
+            ]
+          }
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "vulnerabilities",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "rapid7_asyad_asset_raw_avro_vulnerabilities",
+          "namespace": "bronze.rapid7_asyad",
+          "fields": [
+            {
+              "name": "critical",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            },
+            {
+              "name": "exploits",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            },
+            {
+              "name": "malwareKits",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            },
+            {
+              "name": "moderate",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            },
+            {
+              "name": "severe",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            },
+            {
+              "name": "total",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null
+            }
+          ]
+        }
+      ],
+      "default": null
+    },
+    {
+      "name": "api_endpoint_export_query_identity",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "ingest_id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "ingestion_run_batch_identity",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "ingest_ts",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null
+    },
+    {
+      "name": "customer_tenant_organization",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "extraction_timestamp",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_event_update_timestamp",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "cursor_window",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_object_type",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_platform",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "payload_hash_fingerprint",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "source_object_id",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    },
+    {
+      "name": "mac",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null
+    }
+  ]
+}

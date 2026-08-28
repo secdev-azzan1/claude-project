@@ -21,6 +21,8 @@ import type { AppService, HttpAuthMode, JdbcDialect, ServiceType, SinkKind } fro
 const str = (v: unknown, fb = ""): string => (typeof v === "string" ? v : fb);
 const numStr = (v: unknown, fb = ""): string =>
   typeof v === "number" || typeof v === "string" ? String(v) : fb;
+const boolish = (v: unknown, fb = false): boolean =>
+  typeof v === "boolean" ? v : typeof v === "string" ? v.toLowerCase() === "true" : fb;
 
 // --------------------------------------------------------------- form model
 
@@ -66,6 +68,13 @@ export interface ServiceForm {
   writeMode: "upsert" | "index";
   catalogUrl: string;
   warehouse: string;
+  oauthClientId: string;
+  oauthClientSecret: string;
+  s3Endpoint: string;
+  s3AccessKey: string;
+  s3SecretKey: string;
+  s3Region: string;
+  s3PathStyle: boolean;
 }
 
 export const emptyForm = (): ServiceForm => ({
@@ -105,12 +114,19 @@ export const emptyForm = (): ServiceForm => ({
   writeMode: "upsert",
   catalogUrl: "",
   warehouse: "",
+  oauthClientId: "",
+  oauthClientSecret: "",
+  s3Endpoint: "",
+  s3AccessKey: "",
+  s3SecretKey: "",
+  s3Region: "",
+  s3PathStyle: true,
 });
 
 export function formFromService(svc: AppService): ServiceForm {
   const c = svc.config;
   const caps = Array.isArray(c.capabilities) ? (c.capabilities as string[]) : ["read"];
-  return {
+  const form = {
     ...emptyForm(),
     name: svc.name,
     baseUrl: str(c.baseUrl),
@@ -142,7 +158,15 @@ export function formFromService(svc: AppService): ServiceForm {
     writeMode: str(c.writeMode) === "index" ? "index" : "upsert",
     catalogUrl: str(c.catalogUrl),
     warehouse: str(c.warehouse),
+    oauthClientId: str(c.oauthClientId),
+    s3Endpoint: str(c.s3Endpoint),
+    s3AccessKey: str(c.s3AccessKey),
+    s3Region: str(c.s3Region),
+    s3PathStyle: boolish(c.s3PathStyle, true),
   };
+  if (c.oauthClientSecret != null) form.oauthClientSecret = str(c.oauthClientSecret);
+  if (c.s3SecretKey != null) form.s3SecretKey = str(c.s3SecretKey);
+  return form;
 }
 
 /** Non-secret config only — secret values are write-only and never stored. */
@@ -190,7 +214,18 @@ export function buildConfig(type: ServiceType, f: ServiceForm): Record<string, u
     case "sink_destination":
       return f.sinkKind === "opensearch"
         ? { kind: "opensearch", url: f.sinkUrl.trim(), indexPrefix: f.indexPrefix.trim(), writeMode: f.writeMode }
-        : { kind: "iceberg_catalog", catalogUrl: f.catalogUrl.trim(), warehouse: f.warehouse.trim() };
+        : {
+            kind: "iceberg_catalog",
+            catalogUrl: f.catalogUrl.trim(),
+            warehouse: f.warehouse.trim(),
+            oauthClientId: f.oauthClientId.trim(),
+            s3Endpoint: f.s3Endpoint.trim(),
+            s3AccessKey: f.s3AccessKey.trim(),
+            s3Region: f.s3Region.trim(),
+            s3PathStyle: f.s3PathStyle,
+            ...(f.oauthClientSecret.trim() ? { oauthClientSecret: f.oauthClientSecret.trim() } : {}),
+            ...(f.s3SecretKey.trim() ? { s3SecretKey: f.s3SecretKey.trim() } : {}),
+          };
   }
 }
 
@@ -199,6 +234,7 @@ export function secretTyped(type: ServiceType, f: ServiceForm): boolean {
     return [f.password, f.token, f.keyValue, f.clientSecret].some((v) => v.length > 0);
   if (type === "database") return f.dbPassword.length > 0;
   if (type === "external_kafka") return f.saslPassword.length > 0;
+  if (type === "sink_destination") return [f.oauthClientSecret, f.s3AccessKey, f.s3SecretKey].some((v) => v.length > 0);
   return false;
 }
 
@@ -545,10 +581,45 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                       </div>
                     </>
                   ) : (
-                    <>
+                    <div className="grid gap-3">
                       <TextField label="Catalog URL" mono value={form.catalogUrl} placeholder="http://polaris.corp:8181/api/catalog" onChange={(catalogUrl) => setForm((p) => ({ ...p, catalogUrl }))} />
                       <TextField label="Warehouse" mono value={form.warehouse} placeholder="bronze" onChange={(warehouse) => setForm((p) => ({ ...p, warehouse }))} />
-                    </>
+                      <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">OAuth</div>
+                        <TextField label="OAuth client id" value={form.oauthClientId} onChange={(oauthClientId) => setForm((p) => ({ ...p, oauthClientId }))} />
+                        <SecretField
+                          label="OAuth client secret"
+                          value={form.oauthClientSecret}
+                          editing={!!editing}
+                          onChange={(oauthClientSecret) => setForm((p) => ({ ...p, oauthClientSecret }))}
+                        />
+                      </div>
+                      <div className="grid gap-3 rounded-md border bg-muted/20 p-3">
+                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">S3</div>
+                        <TextField label="S3 endpoint" mono value={form.s3Endpoint} placeholder="https://ozones3.corp" onChange={(s3Endpoint) => setForm((p) => ({ ...p, s3Endpoint }))} />
+                        <SecretField
+                          label="S3 access key"
+                          value={form.s3AccessKey}
+                          editing={!!editing}
+                          onChange={(s3AccessKey) => setForm((p) => ({ ...p, s3AccessKey }))}
+                        />
+                        <SecretField
+                          label="S3 secret key"
+                          value={form.s3SecretKey}
+                          editing={!!editing}
+                          onChange={(s3SecretKey) => setForm((p) => ({ ...p, s3SecretKey }))}
+                        />
+                        <TextField label="S3 region" mono value={form.s3Region} placeholder="us-east-1" onChange={(s3Region) => setForm((p) => ({ ...p, s3Region }))} />
+                        <label className="inline-flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={form.s3PathStyle}
+                            onCheckedChange={(v) => setForm((p) => ({ ...p, s3PathStyle: v === true }))}
+                            aria-label="Path-style access"
+                          />
+                          Path-style access
+                        </label>
+                      </div>
+                    </div>
                   )}
                 </>
               )}

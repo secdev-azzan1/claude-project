@@ -390,6 +390,20 @@ def ensure_json_record_services(builder: "BlockBuilder") -> "tuple[str, str]":
     (alpha) implementation's `RemoveRecordField`/`UpdateRecord` calls. One
     shared pair per block group is enough — every step in a block's chain
     reads/writes the same loosely-typed JSON record shape.
+
+    `Output Grouping: output-oneline` (not `output-array`): every flowfile
+    that ever reaches this writer already carries exactly one record — every
+    read path (`http`/`kafka`/`jdbc`) splits to one-record-per-flowfile
+    before any transform runs, and nothing downstream of this writer
+    (`UpdateRecord`, `RemoveRecordField`, `PublishKafka`) batches records back
+    together. `output-array` wrapped that single record in `[...]` anyway,
+    which silently broke any bare `$.field` EvaluateJsonPath run after an
+    `add_field`/`remove_field` step (both user-authored `extract` transforms
+    and `routing.py`'s own branch-field-promotion step) — the field would
+    resolve to `""` (Path Not Found Behavior: ignore) instead of erroring,
+    which is exactly wrong for a `not_equals` exclusion rule. `output-oneline`
+    writes a bare object for the single-record case, so `$.field` keeps
+    working wherever it appears in the chain.
     """
     reader_key, writer_key = "cs_json_reader", "cs_json_writer"
     if not builder.has_cs(reader_key):
@@ -404,7 +418,7 @@ def ensure_json_record_services(builder: "BlockBuilder") -> "tuple[str, str]":
             ControllerServiceSpec(
                 key=writer_key, name="json_writer", type="org.apache.nifi.json.JsonRecordSetWriter",
                 properties={"Schema Access Strategy": "inherit-record-schema", "Schema Write Strategy": "no-schema",
-                            "Output Grouping": "output-array"},
+                            "Output Grouping": "output-oneline"},
             )
         )
     return reader_key, writer_key

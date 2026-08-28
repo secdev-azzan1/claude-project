@@ -1,0 +1,348 @@
+=== TOTAL PROCESSORS: 346 ===
+=== TOTAL CONNECTIONS: 367 ===
+
+=== PROCESSOR TYPE COUNTS ===
+  ExecuteGroovyScript: 92
+  PublishKafka: 54
+  EvaluateJsonPath: 47
+  UpdateAttribute: 47
+  InvokeHTTP: 28
+  DetectDuplicate: 28
+  RouteOnAttribute: 24
+  SplitJson: 24
+  GenerateFlowFile: 2
+
+=== INVALID PROCESSORS: 82 ===
+  - 'sentinelone.restriction__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.ioc__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.installed_application__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c37ce4-01a0-1000-2c16-ae5bb63c11f3' is invalid because Controller Service with ID 14c37ce4-01a0-1000-2c16-ae5bb63c11f3 is disabled
+      ERROR: 'Record Writer' validated against '14c38019-01a0-1000-70e6-d0b6429ecba5' is invalid because Controller Service with ID 14c38019-01a0-1000-70e6-d0b6429ecba5 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.role__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14fe54bb-01a0-1000-ce77-265c680e6b7c' is invalid because Controller Service with ID 14fe54bb-01a0-1000-ce77-265c680e6b7c is disabled
+      ERROR: 'Record Writer' validated against '14fe5c24-01a0-1000-b7da-6d2524f2a022' is invalid because Controller Service with ID 14fe5c24-01a0-1000-b7da-6d2524f2a022 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.service_user__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.tenant_policy__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18ae9cdc-01a0-1000-c525-91641dd9ed1a' is invalid because Controller Service with ID 18ae9cdc-01a0-1000-c525-91641dd9ed1a is disabled
+      ERROR: 'Record Writer' validated against '18aea6c3-01a0-1000-8bae-b68502d7f2ea' is invalid because Controller Service with ID 18aea6c3-01a0-1000-8bae-b68502d7f2ea is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.service_user__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.role__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.service_user__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18ae3561-01a0-1000-6c7f-92b8691fda9b' is invalid because Controller Service with ID 18ae3561-01a0-1000-6c7f-92b8691fda9b is disabled
+      ERROR: 'Record Writer' validated against '18ae39fc-01a0-1000-7f70-a01b41067170' is invalid because Controller Service with ID 18ae39fc-01a0-1000-7f70-a01b41067170 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.site_policy__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.threat_note__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.site__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.agent__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c36c65-01a0-1000-22cf-58ff4028a527' is invalid because Controller Service with ID 14c36c65-01a0-1000-22cf-58ff4028a527 is disabled
+      ERROR: 'Record Writer' validated against '14c36fe6-01a0-1000-3df5-1e278ad14a5e' is invalid because Controller Service with ID 14c36fe6-01a0-1000-3df5-1e278ad14a5e is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.agent_tag__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18adef1f-01a0-1000-a5d0-a216b85ac77f' is invalid because Controller Service with ID 18adef1f-01a0-1000-a5d0-a216b85ac77f is disabled
+      ERROR: 'Record Writer' validated against '18adf3d0-01a0-1000-eeb9-3ba5a2b7a7d2' is invalid because Controller Service with ID 18adf3d0-01a0-1000-eeb9-3ba5a2b7a7d2 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.cloud_detection_rule__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.alert__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14ff356f-01a0-1000-e2bb-7c3db5050ce1' is invalid because Controller Service with ID 14ff356f-01a0-1000-e2bb-7c3db5050ce1 is disabled
+      ERROR: 'Record Writer' validated against '14ff3e65-01a0-1000-45b3-16d21596eb23' is invalid because Controller Service with ID 14ff3e65-01a0-1000-45b3-16d21596eb23 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.agent_tag__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.threat_timeline__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14ff60b8-01a0-1000-c552-133f6e47b87f' is invalid because Controller Service with ID 14ff60b8-01a0-1000-c552-133f6e47b87f is disabled
+      ERROR: 'Record Writer' validated against '14ff7e00-01a0-1000-0c9c-20f6ec6f9462' is invalid because Controller Service with ID 14ff7e00-01a0-1000-0c9c-20f6ec6f9462 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.exclusion__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14fe8336-01a0-1000-b975-28ac4f467706' is invalid because Controller Service with ID 14fe8336-01a0-1000-b975-28ac4f467706 is disabled
+      ERROR: 'Record Writer' validated against '14fe8a54-01a0-1000-11ac-9c346048e5ba' is invalid because Controller Service with ID 14fe8a54-01a0-1000-11ac-9c346048e5ba is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.xdr_asset_tag__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.role__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.activity_type__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.user__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.group__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c35b7f-01a0-1000-5c20-364a1f1ffc1e' is invalid because Controller Service with ID 14c35b7f-01a0-1000-5c20-364a1f1ffc1e is disabled
+      ERROR: 'Record Writer' validated against '14c35f4e-01a0-1000-29d3-bfe841538056' is invalid because Controller Service with ID 14c35f4e-01a0-1000-29d3-bfe841538056 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.agent_package__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18ae56b2-01a0-1000-593e-a24a608ed0c6' is invalid because Controller Service with ID 18ae56b2-01a0-1000-593e-a24a608ed0c6 is disabled
+      ERROR: 'Record Writer' validated against '18ae5c4a-01a0-1000-8059-484571fa27e3' is invalid because Controller Service with ID 18ae5c4a-01a0-1000-8059-484571fa27e3 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.application_cve__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c3900e-01a0-1000-e40b-a91857b4d972' is invalid because Controller Service with ID 14c3900e-01a0-1000-e40b-a91857b4d972 is disabled
+      ERROR: 'Record Writer' validated against '14c393fc-01a0-1000-a3c9-48d696f92738' is invalid because Controller Service with ID 14c393fc-01a0-1000-a3c9-48d696f92738 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.activity__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.agent_package__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.config_override__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.threat_note__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.application_cve__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.xdr_asset_tag__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18adcf0f-01a0-1000-a2fd-2e20aa0326a3' is invalid because Controller Service with ID 18adcf0f-01a0-1000-a2fd-2e20aa0326a3 is disabled
+      ERROR: 'Record Writer' validated against '18add45c-01a0-1000-43ea-096f8d2c0d9e' is invalid because Controller Service with ID 18add45c-01a0-1000-43ea-096f8d2c0d9e is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.activity__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c3b50d-01a0-1000-78fa-38629bf5e535' is invalid because Controller Service with ID 14c3b50d-01a0-1000-78fa-38629bf5e535 is disabled
+      ERROR: 'Record Writer' validated against '14c3b8bf-01a0-1000-cf39-c33934657d1e' is invalid because Controller Service with ID 14c3b8bf-01a0-1000-cf39-c33934657d1e is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.group__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.config_override__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14fedd74-01a0-1000-5582-b51b9defcc25' is invalid because Controller Service with ID 14fedd74-01a0-1000-5582-b51b9defcc25 is disabled
+      ERROR: 'Record Writer' validated against '14fee561-01a0-1000-de5a-69630bc41666' is invalid because Controller Service with ID 14fee561-01a0-1000-de5a-69630bc41666 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.threat_timeline__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.alert__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.location__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18ae75e4-01a0-1000-380a-710b5530797b' is invalid because Controller Service with ID 18ae75e4-01a0-1000-380a-710b5530797b is disabled
+      ERROR: 'Record Writer' validated against '18ae7d9e-01a0-1000-1f60-f610f668ed8f' is invalid because Controller Service with ID 18ae7d9e-01a0-1000-1f60-f610f668ed8f is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.activity__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.xdr_asset__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.threat__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.agent_package__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.installed_application__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.system_info__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.agent__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.site_policy__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c3c835-01a0-1000-e3c3-e65eb9ec0c72' is invalid because Controller Service with ID 14c3c835-01a0-1000-e3c3-e65eb9ec0c72 is disabled
+      ERROR: 'Record Writer' validated against '14c3cbe1-01a0-1000-139c-d5c0be8df415' is invalid because Controller Service with ID 14c3cbe1-01a0-1000-139c-d5c0be8df415 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.restriction__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.ioc__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.alert__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.config_override__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.activity_type__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.location__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.group_policy__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18aeeaeb-01a0-1000-213e-a2f31f8a86b1' is invalid because Controller Service with ID 18aeeaeb-01a0-1000-213e-a2f31f8a86b1 is disabled
+      ERROR: 'Record Writer' validated against '18aef122-01a0-1000-e83f-20e25009b34d' is invalid because Controller Service with ID 18aef122-01a0-1000-e83f-20e25009b34d is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.tenant_policy__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.tenant_policy__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.site__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c34adf-01a0-1000-2893-426e0cfe88d4' is invalid because Controller Service with ID 14c34adf-01a0-1000-2893-426e0cfe88d4 is disabled
+      ERROR: 'Record Writer' validated against '14c34e0d-01a0-1000-d589-b917de1027ec' is invalid because Controller Service with ID 14c34e0d-01a0-1000-d589-b917de1027ec is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.restriction__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14feb1ad-01a0-1000-899f-23ef0096ddf8' is invalid because Controller Service with ID 14feb1ad-01a0-1000-899f-23ef0096ddf8 is disabled
+      ERROR: 'Record Writer' validated against '14feb956-01a0-1000-8359-5658d03e2d1b' is invalid because Controller Service with ID 14feb956-01a0-1000-8359-5658d03e2d1b is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.threat__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.installed_application__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.cloud_detection_rule__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.agent__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.system_info__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.user__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14fe2bcf-01a0-1000-d2a5-e6bc08ba201e' is invalid because Controller Service with ID 14fe2bcf-01a0-1000-d2a5-e6bc08ba201e is disabled
+      ERROR: 'Record Writer' validated against '14fe320d-01a0-1000-6cfc-2c60aba439d1' is invalid because Controller Service with ID 14fe320d-01a0-1000-6cfc-2c60aba439d1 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.threat_timeline__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.activity_type__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14ff04f4-01a0-1000-e775-9835cbcd4688' is invalid because Controller Service with ID 14ff04f4-01a0-1000-e775-9835cbcd4688 is disabled
+      ERROR: 'Record Writer' validated against '14ff109c-01a0-1000-8920-193deb17c8c8' is invalid because Controller Service with ID 14ff109c-01a0-1000-8920-193deb17c8c8 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.threat__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '14c3a34f-01a0-1000-cf22-e19e9716c6e0' is invalid because Controller Service with ID 14c3a34f-01a0-1000-cf22-e19e9716c6e0 is disabled
+      ERROR: 'Record Writer' validated against '14c3a659-01a0-1000-5d0f-4d418f52c495' is invalid because Controller Service with ID 14c3a659-01a0-1000-5d0f-4d418f52c495 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.group__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.group_policy__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.location__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.xdr_asset__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18adad3f-01a0-1000-f7df-658f01c16c4f' is invalid because Controller Service with ID 18adad3f-01a0-1000-f7df-658f01c16c4f is disabled
+      ERROR: 'Record Writer' validated against '18adb2d3-01a0-1000-ef76-c5e1af4f35f8' is invalid because Controller Service with ID 18adb2d3-01a0-1000-ef76-c5e1af4f35f8 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.cloud_detection_rule__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18ae138e-01a0-1000-d8c7-0e64c84d3821' is invalid because Controller Service with ID 18ae138e-01a0-1000-d8c7-0e64c84d3821 is disabled
+      ERROR: 'Record Writer' validated against '18ae1b6a-01a0-1000-faf3-b59a26f629a2' is invalid because Controller Service with ID 18ae1b6a-01a0-1000-faf3-b59a26f629a2 is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.system_info__avro__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Record Reader' validated against '18aec820-01a0-1000-70fa-5e77870ce477' is invalid because Controller Service with ID 18aec820-01a0-1000-70fa-5e77870ce477 is disabled
+      ERROR: 'Record Writer' validated against '18aed053-01a0-1000-b582-8d02060d7a4a' is invalid because Controller Service with ID 18aed053-01a0-1000-b582-8d02060d7a4a is disabled
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.group_policy__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.exclusion__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.exclusion__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.xdr_asset__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.user__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.agent_tag__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+  - 'sentinelone.site__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.site_policy__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.xdr_asset_tag__raw__publish' (PublishKafka) state=STOPPED runStatus=Invalid
+      ERROR: 'Kafka Connection Service' validated against '40675f79-8eaa-3193-8f8d-026c8c1ee947' is invalid because Controller Service with ID 40675f79-8eaa-3193-8f8d-026c8c1ee947 is disabled
+  - 'sentinelone.application_cve__raw__dedupe_detect' (DetectDuplicate) state=STOPPED runStatus=Invalid
+      ERROR: 'Distributed Cache Service' validated against '14ab85e8-01a0-1000-56df-e6c4ea56bb3b' is invalid because Controller Service with ID 14ab85e8-01a0-1000-56df-e6c4ea56bb3b is disabled
+
+=== RUN STATE COUNTS ===
+  STOPPED: 346
+
+=== InvokeHTTP PROCESSORS: 28 ===
+
+  [sentinelone.agent__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/agents?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.installed_application__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/installed-applications?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.xdr_asset_tag__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/xdr/assets/tags?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.location__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/locations?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.ioc__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/threat-intelligence/iocs?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.activity_type__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/activities/types
+
+  [sentinelone.group_policy__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/groups/${s1_object_id}/policy
+
+  [sentinelone.role__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/rbac/roles?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.cloud_detection_rule__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/cloud-detection/rules?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.tenant_policy__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/tenant/policy
+
+  [sentinelone.site_policy__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/sites/${s1_site_id}/policy
+
+  [sentinelone.system_info__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/system/info
+
+  [sentinelone.agent_tag__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/agents/tags?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.threat_note__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/threats/${s1_threat_id}/notes?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.restriction__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/restrictions?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.application_cve__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/installed-applications/cves?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.user__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/users?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.agent_package__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/update/agent/packages?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.group__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/groups?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.service_user__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/service-users?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.config_override__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/config-override?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.threat__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/threats?limit=#{CURSOR_LIMIT}&cursor=${cursor}&updatedAt__gte=${window_24h}
+
+  [sentinelone.alert__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/cloud-detection/alerts?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.activity__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/activities?limit=#{CURSOR_LIMIT}&cursor=${cursor}&createdAt__gte=${window_4h}
+
+  [sentinelone.threat_timeline__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/threats/${s1_threat_id}/timeline?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.xdr_asset__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/xdr/assets?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.exclusion__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/exclusions?limit=#{CURSOR_LIMIT}&cursor=${cursor}
+
+  [sentinelone.site__list__fetch] state=STOPPED valid=VALID
+      HTTP Method = GET
+      HTTP URL = #{SOURCE_API_BASE}/sites?limit=#{CURSOR_LIMIT}&cursor=${cursor}

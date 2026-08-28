@@ -1,0 +1,180 @@
+[
+  {
+    "key": "organization_list_v2",
+    "method": "GET",
+    "url": "#{SOURCE_API_BASE}/organization/list",
+    "log_bulletins": [
+      {
+        "level": "WARNING",
+        "message": "LogAttribute[id=376c619a-01a0-1000-9fd2-eee0c946d284] logging for FlowFile StandardFlowFileRecord[uuid=c8253e95-a794-454d-a640-06e1b918657f,claim=StandardContentClaim [resourceClaim=StandardResourceClaim[id=1787636050033-367817, container=default, section=201], offset=406, length=7320],offset=0,name=51bb160b-6f76-46fe-9f3b-b8a2bd104dad,size=7320]\n--------------------------------------------------\nFlowFile Properties\nKey: 'entryDate'\n\tValue: 'Tue Aug 25 05:37:26 UTC 2026'\nKey: 'lineageStartDate'\n\tValue: 'Tue Aug 25 05:37:26 UTC 2026'\nKey: 'fileSize'\n\tValue: '7320'\nFlowFile Attribute Map Content\nKey: 'Connection'\n\tValue: 'keep-alive'\nKey: 'Content-Length'\n\tValue: '7320'\nKey: 'Content-Security-Policy'\n\tValue: 'default-src 'self' https://*.duosecurity.com https://*.googleapis.com https://*.gstatic.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; style-src 'self' 'unsafe-inline' https://*.googleapis.com;'\nKey: 'Content-Type'\n\tValue: 'application/xml'\nKey: 'Date'\n\tValue: 'Tue, 25 Aug 2026 05:37:26 GMT'\nKey: 'Referrer-Policy'\n\tValue: 'no-referrer-when-downgrade'\nKey: 'Server'\n\tValue: 'APISIX/3.14.1'\nKey: 'Set-Cookie'\n\tValue: 'JSESSIONID=76c68d7385c4b134b492759e5bc1; Path=/phoenix; HttpOnly;Secure;SameSite=Strict, s=Z0FEVduFRoXYuXQa1J7aCZGrByBes3GFuB9hMKO7; Path=/phoenix;Secure;SameSite=Strict'\nKey: 'Strict-Transport-Security'\n\tValue: 'max-age=31536000; includeSubDomains'\nKey: 'X-Content-Type-Options'\n\tValue: 'nosniff'\nKey: 'X-XSS-Protection'\n\tValue: '1; mode=block'\nKey: 'filename'\n\tValue: '51bb160b-6f76-46fe-9f3b-b8a2bd104dad'\nKey: 'invokehttp.request.duration'\n\tValue: '49'\nKey: 'invokehttp.request.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/organization/list'\nKey: 'invokehttp.response.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/organization/list'\nKey: 'invokehttp.status.code'\n\tValue: '200'\nKey: 'invokehttp.status.message'\n\tValue: 'OK'\nKey: 'invokehttp.tx.id'\n\tValue: 'e04c2f6a-5b35-4ca7-9102-43a2fa3abd76'\nKey: 'mime.type'\n\tValue: 'application/xml'\nKey: 'path'\n\tValue: './'\nKey: 'uuid'\n\tValue: 'c8253e95-a794-454d-a640-06e1b918657f'\nKey: 'x-Frame-Options'\n\tValue: 'SAMEORIGIN'\n--------------------------------------------------\n<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><response requestId=\"0\" timestamp=\"1787636246749\"><result><domains><domain entityVersion=\"0\" creationTime=\"1613652053217\" custId=\"0\" id=\"500100\" lastModified=\"1613652053217\" ownerId=\"0\" xmlId=\"Domain$system\"><custProperties/><disabled>false</disabled><domainId>0</domainId><initialized>false</initialized><name>system</name></domain><domain entityVersion=\"0\" creationTime=\"1613652053329\" custId=\"0\" id=\"500101\" lastModified=\"1613652053329\" ownerId=\"0\" xmlId=\"Domain$service\"><custProperties/><disabled>false</disabled><domainId>2</domainId><initialized>false</initialized><name>service</name></domain><domain entityVersion=\"2\" creationTime=\"1613652358587\" custId=\"0\" id=\"500102\" lastModified=\"1613738439395\" ownerId=\"0\" xmlId=\"Domain$Super\"><custProperties/><disabled>false</disabled><domainId>1</domainId><initialized>true</initialized><name>Super</name></domain><domain entityVersion=\"4\" creationTime=\"1636003921606\" custId=\"0\" id=\"178292100\" lastModified=\"1645073482910\" ownerId=\"500151\" xmlId=\"Domain$CCEDORG\"><collectors><collector>EventCollector$81C84D56-544B-5B1B-2953-D1380B6DAE00</collector></collectors><custProperties/><disabled>false</disabled><domainId>2011</domainId><initialized>true</initialized><name>CCEDORG</name></domain><domain entityVersion=\"7\" creationTime=\"1616670057444\" custId=\"0\" id=\"2855100\" lastModified=\"1648370510633\" ownerId=\"500151\" xmlId=\"Domain$MDC\"><collectors><collector>EventCollector$42C14D56-EE6A-671A-C3E0-3B7D3B641348</collector></collectors><custProperties/><disabled>false</disabled><domainId>2005</domainId><initialized>true</initialized><name>MDC</name></domain><domain entityVersion=\"4\" creationTime=\"1669643834082\" custId=\"0\" id=\"541428001\" lastModified=\"1669643991174\" ownerId=\"500151\" xmlId=\"Domain$National_University\"><custProperties/><disabled>false</disabled><domainId>2022</domainId><initialized>true</initialized><name>National_University</name></domain><domain entityVersion=\"13\" creationTime=\"1613745919085\" custId=\"0\" id=\"865350\" lastModified=\"1698053305189\" ownerId=\"500151\" xmlId=\"Domain$X-LABS\"><collectors><collector>EventCollector$564D3D18-71AE-0B0B-497B-667382F30CEC</collector></collectors><custProperties/><disabled>false</disabled><domainId>2001</domainId><includeRange>192.168.20.10,192.168.20.51,192.168.20.120,192.168.1.0-192.168.1.254,10.245.16.2,10.245.16.3,192.168.200.1,172.16.20.205,192.168.200.254,172.16.30.124,172.16.10.1</includeRange><initialized>true</initialized><name>X-LABS</name></domain><domain entityVersion=\"2\" creationTime=\"1703770012744\" custId=\"0\" id=\"872318351\" lastModified=\"1703770055204\" ownerId=\"500151\" xmlId=\"Domain$MPC\"><collectors><collector>EventCollector$DC604D56-2AF8-8F76-4995-4BAC6657E1F8</collector></collectors><custProperties/><disabled>false</disabled><domainId>2027</domainId><initialized>true</initialized><name>MPC</name></domain><domain entityVersion=\"3\" creationTime=\"1699331253928\" custId=\"0\" id=\"822271601\" lastModified=\"1706696471158\" ownerId=\"500151\" xmlId=\"Domain$SMNPOWER\"><collectors><collector>EventCollector$37644D56-C6BF-699C-DA6E-0FAF929BDB3E</collector></collectors><custProperties/><disabled>false</disabled><domainId>2026</domainId><initialized>true</initialized><name>SMNPOWER</name></domain><domain entityVersion=\"3\" creationTime=\"1704720403208\" custId=\"0\" id=\"872318352\" lastModified=\"1707305027943\" ownerId=\"500151\" xmlId=\"Domain$UFC\"><collectors><collector>EventCollector$DA2B4D56-8DAF-0FF1-AE87-6C62DD127B59</collector></collectors><custProperties/><disabled>false</disabled><domainId>2028</domainId><initialized>true</initialized><name>UFC</name></domain><domain entityVersion=\"3\" creationTime=\"1742966805953\" custId=\"0\" id=\"1340468802\" lastModified=\"1742967244479\" ownerId=\"500151\" xmlId=\"Domain$AJX\"><collectors><collector>EventCollector$8D1A473D-E24F-0F4B-83A9-AEC50B95FB39</collector></collectors><custProperties/><disabled>false</disabled><domainId>2035</domainId><initialized>true</initialized><name>AJX</name></domain><domain entityVersion=\"3\" creationTime=\"1741522783401\" custId=\"0\" id=\"1340468801\" lastModified=\"1746623122976\" ownerId=\"500151\" xmlId=\"Domain$GlobalMoneyExchange\"><collectors><collector>EventCollector$8FFE4D56-BDAC-3A72-9BA6-264218D0BF1E</collector><collector>EventCollector$5C504D56-1186-AE0D-E0B3-2258639497BB</collector></collectors><custProperties/><disabled>false</disabled><domainId>2034</domainId><initialized>true</initialized><name>GlobalMoneyExchange</name></domain><domain entityVersion=\"4\" creationTime=\"1708579704884\" custId=\"0\" id=\"927736551\" lastModified=\"1708702275699\" ownerId=\"500151\" xmlId=\"Domain$PhoenixPower\"><collectors><collector>EventCollector$0A828831-CDF6-472B-8344-54630598122C</collector><collector>EventCollector$329E4D56-C6C7-3BD1-41A7-843B1FB601EE</collector></collectors><custProperties/><disabled>false</disabled><domainId>2029</domainId><initialized>true</initialized><name>PhoenixPower</name></domain><domain entityVersion=\"6\" creationTime=\"1647086881305\" custId=\"0\" id=\"327515153\" lastModified=\"1709469758219\" ownerId=\"500151\" xmlId=\"Domain$MOG\"><collectors><collector>EventCollector$680B4D56-C53D-2B7E-C598-916395D26F56</collector></collectors><custProperties/><disabled>false</disabled><domainId>2015</domainId><excludeRange>10.10.130.0-10.10.130.255,192.168.160.1-192.168.160.255</excludeRange><initialized>true</initialized><name>MOG</name></domain><domain entityVersion=\"2\" creationTime=\"1724834825943\" custId=\"0\" id=\"1128516501\" lastModified=\"1724834872245\" ownerId=\"500151\" xmlId=\"Domain$MIPP\"><collectors><collector>EventCollector$BAEA4D56-AE72-FC34-D4A9-558803F22C75</collector></collectors><custProperties/><disabled>false</disabled><domainId>2032</domainId><initialized>true</initialized><name>MIPP</name></domain><domain entityVersion=\"2\" creationTime=\"1738829955468\" custId=\"0\" id=\"1128516502\" lastModified=\"1738830005123\" ownerId=\"500151\" xmlId=\"Domain$UNIMONI\"><collectors><collector>EventCollector$4C522342-43B0-126F-3A30-67C9EC78EADF</collector></collectors><custProperties/><disabled>false</disabled><domainId>2033</domainId><initialized>true</initialized><name>UNIMONI</name></domain><domain entityVersion=\"3\" creationTime=\"1747728412103\" custId=\"0\" id=\"1428988801\" lastModified=\"1748951613640\" ownerId=\"500151\" xmlId=\"Domain$GulfOverseasExchange\"><collectors><collector>EventCollector$1DAD35A0-9312-4E44-A2D5-63903B8115D2</collector></collectors><custProperties/><disabled>false</disabled><domainId>2036</domainId><initialized>true</initialized><name>GulfOverseasExchange</name></domain><domain entityVersion=\"3\" creationTime=\"1756293805346\" custId=\"0\" id=\"1505425602\" lastModified=\"1760881028338\" ownerId=\"500151\" xmlId=\"Domain$Lakhoos\"><collectors><collector>EventCollector$4F9982F2-D767-0547-AFC1-7795E3B81B1F</collector></collectors><custProperties/><disabled>false</disabled><domainId>2038</domainId><initialized>true</initialized><name>Lakhoos</name></domain><domain entityVersion=\"6\" creationTime=\"1773819800057\" custId=\"0\" id=\"2504459751\" lastModified=\"1774867916308\" ownerId=\"500151\" xmlId=\"Domain$EDOMAN\"><collectors><collector>EventCollector$Not Settable</collector></collectors><custProperties/><disabled>false</disabled><domainId>2039</domainId><initialized>true</initialized><name>EDOMAN</name></domain></domains></result></response>",
+        "timestamp": "05:37:26 UTC"
+      }
+    ],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__organization_list_v2__trigger",
+      "fortisiem.maximum__admin_probe3__organization_list_v2__fetch",
+      "fortisiem.maximum__admin_probe3__organization_list_v2__log"
+    ]
+  },
+  {
+    "key": "agent_status_v3",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/agentStatus/v3/all?start=0&size=1",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__agent_status_v3__trigger",
+      "fortisiem.maximum__admin_probe3__agent_status_v3__fetch",
+      "fortisiem.maximum__admin_probe3__agent_status_v3__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_schema_USER",
+    "method": "GET",
+    "url": "#{SOURCE_API_BASE}/query/cmdb/schema?target=USER",
+    "log_bulletins": [
+      {
+        "level": "WARNING",
+        "message": "LogAttribute[id=376cc420-01a0-1000-3a94-8a59ef709c1b] logging for FlowFile StandardFlowFileRecord[uuid=13301296-4bf2-4eda-97a7-4849dcae3f17,claim=StandardContentClaim [resourceClaim=StandardResourceClaim[id=1787636050033-367817, container=default, section=201], offset=7757, length=1006],offset=0,name=c79a2a16-9564-4718-a36f-985ab46b6fdf,size=1006]\n--------------------------------------------------\nFlowFile Properties\nKey: 'entryDate'\n\tValue: 'Tue Aug 25 05:37:51 UTC 2026'\nKey: 'lineageStartDate'\n\tValue: 'Tue Aug 25 05:37:51 UTC 2026'\nKey: 'fileSize'\n\tValue: '1006'\nFlowFile Attribute Map Content\nKey: 'Connection'\n\tValue: 'keep-alive'\nKey: 'Content-Length'\n\tValue: '1006'\nKey: 'Content-Security-Policy'\n\tValue: 'default-src 'self' https://*.duosecurity.com https://*.googleapis.com https://*.gstatic.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; style-src 'self' 'unsafe-inline' https://*.googleapis.com;'\nKey: 'Content-Type'\n\tValue: 'text/plain; charset=UTF-8'\nKey: 'Date'\n\tValue: 'Tue, 25 Aug 2026 05:37:51 GMT'\nKey: 'Referrer-Policy'\n\tValue: 'no-referrer-when-downgrade'\nKey: 'Server'\n\tValue: 'APISIX/3.14.1'\nKey: 'Set-Cookie'\n\tValue: 'JSESSIONID=76cca7bc6fcba4f845bd6e6706f1; Path=/phoenix; HttpOnly;Secure;SameSite=Strict, s=XHR2IoFFgB4ZmZIV1bJIskSieD7cCI9wUlCg1Zom; Path=/phoenix;Secure;SameSite=Strict'\nKey: 'Strict-Transport-Security'\n\tValue: 'max-age=31536000; includeSubDomains'\nKey: 'X-Content-Type-Options'\n\tValue: 'nosniff'\nKey: 'X-XSS-Protection'\n\tValue: '1; mode=block'\nKey: 'filename'\n\tValue: 'c79a2a16-9564-4718-a36f-985ab46b6fdf'\nKey: 'invokehttp.request.duration'\n\tValue: '40'\nKey: 'invokehttp.request.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/query/cmdb/schema?target=USER'\nKey: 'invokehttp.response.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/query/cmdb/schema?target=USER'\nKey: 'invokehttp.status.code'\n\tValue: '200'\nKey: 'invokehttp.status.message'\n\tValue: 'OK'\nKey: 'invokehttp.tx.id'\n\tValue: '1c68922b-e0ef-4e31-af2d-fca299f7ae6b'\nKey: 'mime.type'\n\tValue: 'text/plain; charset=UTF-8'\nKey: 'path'\n\tValue: './'\nKey: 'uuid'\n\tValue: '13301296-4bf2-4eda-97a7-4849dcae3f17'\nKey: 'x-Frame-Options'\n\tValue: 'SAMEORIGIN'\n--------------------------------------------------\n[{\"table\":\"USER\",\"fields\":[{\"name\":\"User_Login_Time\",\"type\":\"DATE\"},{\"name\":\"Customer_ID\",\"type\":\"LONG\"},{\"name\":\"User_Description\",\"type\":\"STRING\"},{\"name\":\"User_Domain\",\"type\":\"STRING\"},{\"name\":\"User_Notes\",\"type\":\"STRING\"},{\"name\":\"LDAP_Last_Login\",\"type\":\"DATE\"},{\"name\":\"User_Company\",\"type\":\"STRING\"},{\"name\":\"Collector_Name\",\"type\":\"STRING\"},{\"name\":\"User_Alias\",\"type\":\"STRING\"},{\"name\":\"User_Job_Title\",\"type\":\"STRING\"},{\"name\":\"User_Account_Control\",\"type\":\"STRING\"},{\"name\":\"User_Password_Last_Set\",\"type\":\"DATE\"},{\"name\":\"User_Employee_ID\",\"type\":\"LONG\"},{\"name\":\"Collector_ID\",\"type\":\"LONG\"},{\"name\":\"User_Name\",\"type\":\"STRING\"},{\"name\":\"User_DN\",\"type\":\"STRING\"},{\"name\":\"User_Password_Age_(Days)\",\"type\":\"INTEGER\"},{\"name\":\"User_Local_Authentication_Flag\",\"type\":\"BOOLEAN\"},{\"name\":\"Customer_Name\",\"type\":\"STRING\"},{\"name\":\"User_Full_Name\",\"type\":\"STRING\"},{\"name\":\"User_Privileged_Flag\",\"type\":\"BOOLEAN\"},{\"name\":\"RBAC_Profile_Name\",\"type\":\"STRING\"},{\"name\":\"Group_Name\",\"type\":\"STRING\"}]}]",
+        "timestamp": "05:37:51 UTC"
+      }
+    ],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_schema_USER__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_schema_USER__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_schema_USER__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_USER",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_USER__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_USER__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_USER__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_AUDIT",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_AUDIT__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_AUDIT__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_AUDIT__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_RULE",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_RULE__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_RULE__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_RULE__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_REPORT",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_REPORT__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_REPORT__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_REPORT__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_TASK",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_TASK__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_TASK__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_TASK__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_MONITOR",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_MONITOR__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_MONITOR__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_MONITOR__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_IDENTITY",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_IDENTITY__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_IDENTITY__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_IDENTITY__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_EVENT_PULLING",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_EVENT_PULLING__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_EVENT_PULLING__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_EVENT_PULLING__log"
+    ]
+  },
+  {
+    "key": "query_cmdb_CASE",
+    "method": "POST",
+    "url": "#{SOURCE_API_BASE}/query/cmdb?size=1&start=0",
+    "log_bulletins": [],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__query_cmdb_CASE__trigger",
+      "fortisiem.maximum__admin_probe3__query_cmdb_CASE__fetch",
+      "fortisiem.maximum__admin_probe3__query_cmdb_CASE__log"
+    ]
+  },
+  {
+    "key": "watchlist_all",
+    "method": "GET",
+    "url": "#{SOURCE_API_BASE}/watchlist/all",
+    "log_bulletins": [
+      {
+        "level": "WARNING",
+        "message": "LogAttribute[id=376e9798-01a0-1000-d34a-53cfaa7b5391] logging for FlowFile StandardFlowFileRecord[uuid=3fc1dcf3-7f7c-4ed2-b6bd-0e5bcd9b1a5e,claim=StandardContentClaim [resourceClaim=StandardResourceClaim[id=1787636050033-367817, container=default, section=201], offset=8964, length=8342382],offset=0,name=67cfd35a-3171-4b4b-91e0-afeeedff999a,size=8342382]\n--------------------------------------------------\nFlowFile Properties\nKey: 'entryDate'\n\tValue: 'Tue Aug 25 05:39:54 UTC 2026'\nKey: 'lineageStartDate'\n\tValue: 'Tue Aug 25 05:39:51 UTC 2026'\nKey: 'fileSize'\n\tValue: '8342382'\nFlowFile Attribute Map Content\nKey: 'Connection'\n\tValue: 'keep-alive'\nKey: 'Content-Security-Policy'\n\tValue: 'default-src 'self' https://*.duosecurity.com https://*.googleapis.com https://*.gstatic.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; style-src 'self' 'unsafe-inline' https://*.googleapis.com;'\nKey: 'Content-Type'\n\tValue: 'application/json'\nKey: 'Date'\n\tValue: 'Tue, 25 Aug 2026 05:39:51 GMT'\nKey: 'Referrer-Policy'\n\tValue: 'no-referrer-when-downgrade'\nKey: 'Server'\n\tValue: 'APISIX/3.14.1'\nKey: 'Set-Cookie'\n\tValue: 'JSESSIONID=76e9eda28029567e119d311205df; Path=/phoenix; HttpOnly;Secure;SameSite=Strict, s=qZW2u6oZ7zvqAsNxu8gIB0kE0ZDajVW1WXWNhBmM; Path=/phoenix;Secure;SameSite=Strict'\nKey: 'Strict-Transport-Security'\n\tValue: 'max-age=31536000; includeSubDomains'\nKey: 'Transfer-Encoding'\n\tValue: 'chunked'\nKey: 'X-Content-Type-Options'\n\tValue: 'nosniff'\nKey: 'X-XSS-Protection'\n\tValue: '1; mode=block'\nKey: 'filename'\n\tValue: '67cfd35a-3171-4b4b-91e0-afeeedff999a'\nKey: 'invokehttp.request.duration'\n\tValue: '3249'\nKey: 'invokehttp.request.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/watchlist/all'\nKey: 'invokehttp.response.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/watchlist/all'\nKey: 'invokehttp.status.code'\n\tValue: '200'\nKey: 'invokehttp.status.message'\n\tValue: 'OK'\nKey: 'invokehttp.tx.id'\n\tValue: 'b0e24466-1d2f-41a7-8a36-baee6ed6ca00'\nKey: 'mime.type'\n\tValue: 'application/json'\nKey: 'path'\n\tValue: './'\nKey: 'uuid'\n\tValue: '3fc1dcf3-7f7c-4ed2-b6bd-0e5bcd9b1a5e'\nKey: 'x-Frame-Options'\n\tValue: 'SAMEORIGIN'\n--------------------------------------------------\n\n Not including payload since it is larger than one mb.",
+        "timestamp": "05:39:55 UTC"
+      }
+    ],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__watchlist_all__trigger",
+      "fortisiem.maximum__admin_probe3__watchlist_all__fetch",
+      "fortisiem.maximum__admin_probe3__watchlist_all__log"
+    ]
+  },
+  {
+    "key": "lookup_table",
+    "method": "GET",
+    "url": "#{SOURCE_API_BASE}/pub/lookupTable?size=1",
+    "log_bulletins": [
+      {
+        "level": "WARNING",
+        "message": "LogAttribute[id=376ec4c0-01a0-1000-fae3-f63e8e5716b6] logging for FlowFile StandardFlowFileRecord[uuid=8da32a0a-eb54-464a-b519-2cba89753d38,claim=StandardContentClaim [resourceClaim=StandardResourceClaim[id=1787636403205-367818, container=default, section=202], offset=19, length=360],offset=0,name=7ff0a73c-d4fe-4be3-94e4-36b920aa6a2c,size=360]\n--------------------------------------------------\nFlowFile Properties\nKey: 'entryDate'\n\tValue: 'Tue Aug 25 05:40:03 UTC 2026'\nKey: 'lineageStartDate'\n\tValue: 'Tue Aug 25 05:40:03 UTC 2026'\nKey: 'fileSize'\n\tValue: '360'\nFlowFile Attribute Map Content\nKey: 'Connection'\n\tValue: 'keep-alive'\nKey: 'Content-Length'\n\tValue: '360'\nKey: 'Content-Security-Policy'\n\tValue: 'default-src 'self' https://*.duosecurity.com https://*.googleapis.com https://*.gstatic.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.fortisoar.forticloud.com/ wss://*.fortisoar.forticloud.com; style-src 'self' 'unsafe-inline' https://*.googleapis.com;'\nKey: 'Content-Type'\n\tValue: 'application/json'\nKey: 'Date'\n\tValue: 'Tue, 25 Aug 2026 05:40:03 GMT'\nKey: 'Referrer-Policy'\n\tValue: 'no-referrer-when-downgrade'\nKey: 'Server'\n\tValue: 'APISIX/3.14.1'\nKey: 'Set-Cookie'\n\tValue: 'JSESSIONID=76ecc2d51bae97c0e9b35c0fa5b9; Path=/phoenix; HttpOnly;Secure;SameSite=Strict, s=cAiTuaMPo4X6XPRR8ABertAqEqnavpbchM2o4QZ7; Path=/phoenix;Secure;SameSite=Strict'\nKey: 'Strict-Transport-Security'\n\tValue: 'max-age=31536000; includeSubDomains'\nKey: 'X-Content-Type-Options'\n\tValue: 'nosniff'\nKey: 'X-XSS-Protection'\n\tValue: '1; mode=block'\nKey: 'filename'\n\tValue: '7ff0a73c-d4fe-4be3-94e4-36b920aa6a2c'\nKey: 'invokehttp.request.duration'\n\tValue: '44'\nKey: 'invokehttp.request.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/pub/lookupTable?size=1'\nKey: 'invokehttp.response.url'\n\tValue: 'http://apisix:9080/fortisiem/phoenix/rest/pub/lookupTable?size=1'\nKey: 'invokehttp.status.code'\n\tValue: '200'\nKey: 'invokehttp.status.message'\n\tValue: 'OK'\nKey: 'invokehttp.tx.id'\n\tValue: '5a775eb3-2816-45b2-b478-4f2dd4d07b33'\nKey: 'mime.type'\n\tValue: 'application/json'\nKey: 'path'\n\tValue: './'\nKey: 'uuid'\n\tValue: '8da32a0a-eb54-464a-b519-2cba89753d38'\nKey: 'x-Frame-Options'\n\tValue: 'SAMEORIGIN'\n--------------------------------------------------\n{\"data\":[{\"columnList\":[{\"key\":true,\"name\":\"custId\",\"type\":\"LONG\"},{\"key\":true,\"name\":\"user\",\"type\":\"STRING\"},{\"key\":true,\"name\":\"country\",\"type\":\"STRING\"}],\"description\":\"Source countries for successful Azure Portal login\",\"id\":672677952,\"lastUpdated\":1684791947928,\"name\":\"AzurePortalLoginCountry\",\"organizationName\":\"Global\"}],\"size\":1,\"start\":0,\"total\":30}",
+        "timestamp": "05:40:03 UTC"
+      }
+    ],
+    "_names": [
+      "fortisiem.maximum__admin_probe3__lookup_table__trigger",
+      "fortisiem.maximum__admin_probe3__lookup_table__fetch",
+      "fortisiem.maximum__admin_probe3__lookup_table__log"
+    ]
+  }
+]

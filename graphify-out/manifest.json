@@ -1,0 +1,2378 @@
+{
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\cleanup_orphan_sources.py": {
+    "mtime": 1784011349.5714822,
+    "seen": 1787722919.7458177,
+    "ast_hash": "bd902824304d518b955bc597fb9a03f9",
+    "semantic_hash": "bd902824304d518b955bc597fb9a03f9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\db.py": {
+    "mtime": 1778960949.371104,
+    "seen": 1787722919.7458282,
+    "ast_hash": "29ce8c93d1cdef2dd0ef1cdcf566283b",
+    "semantic_hash": "29ce8c93d1cdef2dd0ef1cdcf566283b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\migrations\\__init__.py": {
+    "mtime": 1784218188.5552058,
+    "seen": 1787722919.7458322,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\migrations\\backfill_connection_provenance.py": {
+    "mtime": 1784286222.2399857,
+    "seen": 1787722919.7458346,
+    "ast_hash": "3926c84c1ce412f4c4aad4fb9084dd4d",
+    "semantic_hash": "3926c84c1ce412f4c4aad4fb9084dd4d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\__init__.py": {
+    "mtime": 1778960949.3715775,
+    "seen": 1787722919.7458367,
+    "ast_hash": "b6e562a51ae089407758709fbccabb29",
+    "semantic_hash": "b6e562a51ae089407758709fbccabb29"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\__init__.py": {
+    "mtime": 1786576191.993111,
+    "seen": 1787722919.7458386,
+    "ast_hash": "2cfe81cda16697d082e2aa8d4662ac56",
+    "semantic_hash": "2cfe81cda16697d082e2aa8d4662ac56"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\_secrets.py": {
+    "mtime": 1786794173.78882,
+    "seen": 1787722919.7458408,
+    "ast_hash": "8a9315f8aa383bc2754553817fbaf767",
+    "semantic_hash": "8a9315f8aa383bc2754553817fbaf767"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\audit.py": {
+    "mtime": 1786576175.574589,
+    "seen": 1787722919.7458427,
+    "ast_hash": "8298c94f9db56efcd1fb5b3b09d6735d",
+    "semantic_hash": "8298c94f9db56efcd1fb5b3b09d6735d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\connection.py": {
+    "mtime": 1786576118.899254,
+    "seen": 1787722919.7458444,
+    "ast_hash": "9cfc093084e0970aa6fc44ec2ed45ce6",
+    "semantic_hash": "9cfc093084e0970aa6fc44ec2ed45ce6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\dashboard.py": {
+    "mtime": 1786576180.914005,
+    "seen": 1787722919.745846,
+    "ast_hash": "041d1da0ad32fae4312acae3e93c6d6d",
+    "semantic_hash": "041d1da0ad32fae4312acae3e93c6d6d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\flow.py": {
+    "mtime": 1786576110.5336947,
+    "seen": 1787722919.7458475,
+    "ast_hash": "4c01d631f27ce1a558349c048ce84a42",
+    "semantic_hash": "4c01d631f27ce1a558349c048ce84a42"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\gateway.py": {
+    "mtime": 1786576140.490589,
+    "seen": 1787722919.74585,
+    "ast_hash": "86f12e0017d53512c6c3dd11fa7fcab1",
+    "semantic_hash": "86f12e0017d53512c6c3dd11fa7fcab1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\runtime.py": {
+    "mtime": 1786576170.1931715,
+    "seen": 1787722919.745852,
+    "ast_hash": "694e8838555240bef7b15455aac93237",
+    "semantic_hash": "694e8838555240bef7b15455aac93237"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\schema.py": {
+    "mtime": 1786576149.499939,
+    "seen": 1787722919.7458534,
+    "ast_hash": "5d7545f5eb53e9fea8a8e571b428edf2",
+    "semantic_hash": "5d7545f5eb53e9fea8a8e571b428edf2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\service.py": {
+    "mtime": 1786576129.0097978,
+    "seen": 1787722919.745855,
+    "ast_hash": "8664dd4fa1cb6337f37ba7aef741a7bb",
+    "semantic_hash": "8664dd4fa1cb6337f37ba7aef741a7bb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\application_service.py": {
+    "mtime": 1779695487.8765519,
+    "seen": 1787722919.7458565,
+    "ast_hash": "241c2a128d577b1d348c1e7acedaeb15",
+    "semantic_hash": "241c2a128d577b1d348c1e7acedaeb15"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\audit.py": {
+    "mtime": 1778960949.3715775,
+    "seen": 1787722919.745858,
+    "ast_hash": "58f7ad1de5bf27c9ceaac60aaee5ea00",
+    "semantic_hash": "58f7ad1de5bf27c9ceaac60aaee5ea00"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\connection.py": {
+    "mtime": 1784582661.8274252,
+    "seen": 1787722919.7458599,
+    "ast_hash": "4a56b93c626feeb5000d74194b000d3d",
+    "semantic_hash": "4a56b93c626feeb5000d74194b000d3d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\connection_lifecycle_job.py": {
+    "mtime": 1784222885.760752,
+    "seen": 1787722919.745862,
+    "ast_hash": "ee2fa6a1f0fc00d8ecf4d4431ba3cb93",
+    "semantic_hash": "ee2fa6a1f0fc00d8ecf4d4431ba3cb93"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\flow.py": {
+    "mtime": 1784217404.8190796,
+    "seen": 1787722919.7458642,
+    "ast_hash": "6a27fbbf6c095e0201f51da4342ace63",
+    "semantic_hash": "6a27fbbf6c095e0201f51da4342ace63"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\iceberg_sink.py": {
+    "mtime": 1784635045.8636742,
+    "seen": 1787722919.7458658,
+    "ast_hash": "46c98fc0bade9bbef5a548ec370a7698",
+    "semantic_hash": "46c98fc0bade9bbef5a548ec370a7698"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\nifi_global_service.py": {
+    "mtime": 1784224665.2646673,
+    "seen": 1787722919.7458673,
+    "ast_hash": "75fc30fd84e597727396df5c7ad6d064",
+    "semantic_hash": "75fc30fd84e597727396df5c7ad6d064"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\orphaned_artifact.py": {
+    "mtime": 1784223737.6550505,
+    "seen": 1787722919.7458696,
+    "ast_hash": "ff3dbd4703a99a114c5ab332e99d1e25",
+    "semantic_hash": "ff3dbd4703a99a114c5ab332e99d1e25"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\schema_artifact.py": {
+    "mtime": 1784217412.94152,
+    "seen": 1787722919.7458713,
+    "ast_hash": "2c5db553c236a02558844293ae107d86",
+    "semantic_hash": "2c5db553c236a02558844293ae107d86"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\schema_inference.py": {
+    "mtime": 1784217418.772491,
+    "seen": 1787722919.7458732,
+    "ast_hash": "df3f2fd247c4376709199458bae1322c",
+    "semantic_hash": "df3f2fd247c4376709199458bae1322c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\settings.py": {
+    "mtime": 1778960949.3785741,
+    "seen": 1787722919.7458746,
+    "ast_hash": "9a51b42d90dd367f332ac6f44a36b907",
+    "semantic_hash": "9a51b42d90dd367f332ac6f44a36b907"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\source.py": {
+    "mtime": 1784635005.5650585,
+    "seen": 1787722919.7458763,
+    "ast_hash": "215e4c9c0a0939ead57c68b1ec39cfa0",
+    "semantic_hash": "215e4c9c0a0939ead57c68b1ec39cfa0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\__init__.py": {
+    "mtime": 1778960949.3785741,
+    "seen": 1787722919.745878,
+    "ast_hash": "9ba2494ab8bd9232c42fc06c21d9812d",
+    "semantic_hash": "9ba2494ab8bd9232c42fc06c21d9812d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\application_services.py": {
+    "mtime": 1779695554.5709565,
+    "seen": 1787722919.74588,
+    "ast_hash": "7df17b19ea4a1e28236c3cef7c434f9a",
+    "semantic_hash": "7df17b19ea4a1e28236c3cef7c434f9a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\audit.py": {
+    "mtime": 1778960949.3785741,
+    "seen": 1787722919.7458813,
+    "ast_hash": "6e2ad592e8d5a28c25e57afce5a8306e",
+    "semantic_hash": "6e2ad592e8d5a28c25e57afce5a8306e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\connections.py": {
+    "mtime": 1784576557.1130881,
+    "seen": 1787722919.7458825,
+    "ast_hash": "4288bf3878977fd61ae7b55febbd7f54",
+    "semantic_hash": "4288bf3878977fd61ae7b55febbd7f54"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\content_store.py": {
+    "mtime": 1781395294.3907387,
+    "seen": 1787722919.7458842,
+    "ast_hash": "2a133c1dc02474d2ec66e58556fe018d",
+    "semantic_hash": "2a133c1dc02474d2ec66e58556fe018d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\dashboard.py": {
+    "mtime": 1782391944.1480825,
+    "seen": 1787722919.7458856,
+    "ast_hash": "bb83d88deb079056eb15419444b920cb",
+    "semantic_hash": "bb83d88deb079056eb15419444b920cb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\flow_import.py": {
+    "mtime": 1781557423.8195658,
+    "seen": 1787722919.7458875,
+    "ast_hash": "7bc9466ef83296d6de35e4e6a4f55605",
+    "semantic_hash": "7bc9466ef83296d6de35e4e6a4f55605"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\flows.py": {
+    "mtime": 1784577109.928485,
+    "seen": 1787722919.7458892,
+    "ast_hash": "4ad06d6b6ed4e85e259fa92cf0eb00ce",
+    "semantic_hash": "4ad06d6b6ed4e85e259fa92cf0eb00ce"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\iceberg_sinks.py": {
+    "mtime": 1784635713.1937602,
+    "seen": 1787722919.745891,
+    "ast_hash": "e578125ba5ddf7bc6e0d72674cd688a8",
+    "semantic_hash": "e578125ba5ddf7bc6e0d72674cd688a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\kafka_connect.py": {
+    "mtime": 1784577106.9792347,
+    "seen": 1787722919.7458925,
+    "ast_hash": "d28a8ec40b9c5813b9c4df5b9e63e2d6",
+    "semantic_hash": "d28a8ec40b9c5813b9c4df5b9e63e2d6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\nifi_services.py": {
+    "mtime": 1779540305.7213259,
+    "seen": 1787722919.7458944,
+    "ast_hash": "036a24c53d50526003ccc6cf42684148",
+    "semantic_hash": "036a24c53d50526003ccc6cf42684148"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\openapi_specs.py": {
+    "mtime": 1781395376.6180418,
+    "seen": 1787722919.7458959,
+    "ast_hash": "f70aae4fa0c83ce8837cc251826ef499",
+    "semantic_hash": "f70aae4fa0c83ce8837cc251826ef499"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\schema_inference.py": {
+    "mtime": 1784217909.6119852,
+    "seen": 1787722919.7458975,
+    "ast_hash": "1587a140ace85ab930b9b521e7c73909",
+    "semantic_hash": "1587a140ace85ab930b9b521e7c73909"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\schemas.py": {
+    "mtime": 1784218216.0260885,
+    "seen": 1787722919.745899,
+    "ast_hash": "76bfcf885d07e06f8590072ded8b5a54",
+    "semantic_hash": "76bfcf885d07e06f8590072ded8b5a54"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\settings.py": {
+    "mtime": 1778960949.3854022,
+    "seen": 1787722919.7459009,
+    "ast_hash": "215b7b2a7c47c4ba34df46f55a8c88b1",
+    "semantic_hash": "215b7b2a7c47c4ba34df46f55a8c88b1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\sources.py": {
+    "mtime": 1784117140.320633,
+    "seen": 1787722919.7459028,
+    "ast_hash": "c854f0f071382537820fc57ec9bdaa0f",
+    "semantic_hash": "c854f0f071382537820fc57ec9bdaa0f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\__init__.py": {
+    "mtime": 1786576384.9225905,
+    "seen": 1787722919.7459073,
+    "ast_hash": "6d5bdeaf3a039cd15923751b90bf49f4",
+    "semantic_hash": "6d5bdeaf3a039cd15923751b90bf49f4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\audit.py": {
+    "mtime": 1786578013.4081607,
+    "seen": 1787722919.745909,
+    "ast_hash": "1261e29226cc92d9698658cfc56b8a84",
+    "semantic_hash": "1261e29226cc92d9698658cfc56b8a84"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\connections.py": {
+    "mtime": 1786581573.4212756,
+    "seen": 1787722919.745911,
+    "ast_hash": "37e2b42d0677832d15e1a49fd3ea1154",
+    "semantic_hash": "37e2b42d0677832d15e1a49fd3ea1154"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\dashboard.py": {
+    "mtime": 1786578005.6453655,
+    "seen": 1787722919.7459126,
+    "ast_hash": "9992f52357a1ec6668e265f55e3a3a91",
+    "semantic_hash": "9992f52357a1ec6668e265f55e3a3a91"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\flows.py": {
+    "mtime": 1786619058.298943,
+    "seen": 1787722919.7459142,
+    "ast_hash": "083f8f92e05b33ace944078e00a77e2a",
+    "semantic_hash": "083f8f92e05b33ace944078e00a77e2a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\gateway.py": {
+    "mtime": 1786600171.1737833,
+    "seen": 1787722919.745916,
+    "ast_hash": "1468c365eb869c4e18d80d0aad291177",
+    "semantic_hash": "1468c365eb869c4e18d80d0aad291177"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\openapi.py": {
+    "mtime": 1786582523.9838762,
+    "seen": 1787722919.7459178,
+    "ast_hash": "682ec864472a1517a07a6fe799aa3f51",
+    "semantic_hash": "682ec864472a1517a07a6fe799aa3f51"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\schemas.py": {
+    "mtime": 1786619127.585538,
+    "seen": 1787722919.7459192,
+    "ast_hash": "8f0c6cf400656bf8ea486ca1d7acdc83",
+    "semantic_hash": "8f0c6cf400656bf8ea486ca1d7acdc83"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\v2\\services.py": {
+    "mtime": 1786577961.8966224,
+    "seen": 1787722919.7459211,
+    "ast_hash": "1c9c15c04dc754db2758a55806d89cf9",
+    "semantic_hash": "1c9c15c04dc754db2758a55806d89cf9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\routers\\webhooks.py": {
+    "mtime": 1784217930.1733937,
+    "seen": 1787722919.7459226,
+    "ast_hash": "0115caf1accf1be7d04aaa2feb52bd7c",
+    "semantic_hash": "0115caf1accf1be7d04aaa2feb52bd7c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\server.py": {
+    "mtime": 1786578772.033372,
+    "seen": 1787722919.745924,
+    "ast_hash": "59a797ac5f8f37f5bef58f77af0788ae",
+    "semantic_hash": "59a797ac5f8f37f5bef58f77af0788ae"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\__init__.py": {
+    "mtime": 1778960949.3922763,
+    "seen": 1787722919.7459261,
+    "ast_hash": "8c2d3d99c80102933a20b8d613170f53",
+    "semantic_hash": "8c2d3d99c80102933a20b8d613170f53"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\__init__.py": {
+    "mtime": 1786576972.435748,
+    "seen": 1787722919.7459283,
+    "ast_hash": "1a92a644c9f5787d0634c3df52fbcff9",
+    "semantic_hash": "1a92a644c9f5787d0634c3df52fbcff9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\common.py": {
+    "mtime": 1786576989.3286233,
+    "seen": 1787722919.74593,
+    "ast_hash": "9c0a2592454702639c4bcff0f326f09b",
+    "semantic_hash": "9c0a2592454702639c4bcff0f326f09b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\__init__.py": {
+    "mtime": 1786579018.3972638,
+    "seen": 1787722919.7459319,
+    "ast_hash": "b76d0f26c6517c86f0a8c90b1437c552",
+    "semantic_hash": "b76d0f26c6517c86f0a8c90b1437c552"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_http.py": {
+    "mtime": 1786612252.2646728,
+    "seen": 1787722919.7459335,
+    "ast_hash": "7290f24a6f23d2b463512363f28550d1",
+    "semantic_hash": "7290f24a6f23d2b463512363f28550d1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_jdbc.py": {
+    "mtime": 1786793422.9071593,
+    "seen": 1787722919.7459354,
+    "ast_hash": "deeab94d26c54075a53ebd325e40e53d",
+    "semantic_hash": "deeab94d26c54075a53ebd325e40e53d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_kafka.py": {
+    "mtime": 1786601372.8710313,
+    "seen": 1787722919.7459369,
+    "ast_hash": "c48da2a39f84ea8c597fb5fb2e2e430e",
+    "semantic_hash": "c48da2a39f84ea8c597fb5fb2e2e430e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_kafka_kc.py": {
+    "mtime": 1786578955.3724518,
+    "seen": 1787722919.7459388,
+    "ast_hash": "6568f6ef44070b7015604f636d1a5106",
+    "semantic_hash": "6568f6ef44070b7015604f636d1a5106"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\compile_flow.py": {
+    "mtime": 1786583613.56608,
+    "seen": 1787722919.7459402,
+    "ast_hash": "0be0358486cda60da2b771dd7dc0236a",
+    "semantic_hash": "0be0358486cda60da2b771dd7dc0236a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\connectors.py": {
+    "mtime": 1786600810.070573,
+    "seen": 1787722919.745942,
+    "ast_hash": "4f1599d7f51f93db4544c39c09d6744e",
+    "semantic_hash": "4f1599d7f51f93db4544c39c09d6744e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\dlq.py": {
+    "mtime": 1786578445.829744,
+    "seen": 1787722919.745944,
+    "ast_hash": "118a0daf6ace9808d4f829d6013baa19",
+    "semantic_hash": "118a0daf6ace9808d4f829d6013baa19"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\ir.py": {
+    "mtime": 1786600597.706055,
+    "seen": 1787722919.745946,
+    "ast_hash": "6200101ff003b53f69f610a9d01fdadc",
+    "semantic_hash": "6200101ff003b53f69f610a9d01fdadc"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\routing.py": {
+    "mtime": 1786600641.6966953,
+    "seen": 1787722919.7459474,
+    "ast_hash": "abd39f1003e142c30fbd7b989ad70886",
+    "semantic_hash": "abd39f1003e142c30fbd7b989ad70886"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\transforms.py": {
+    "mtime": 1786600558.3683817,
+    "seen": 1787722919.7459493,
+    "ast_hash": "24b357462e5e9347b103de4a186dded8",
+    "semantic_hash": "24b357462e5e9347b103de4a186dded8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\deployer\\__init__.py": {
+    "mtime": 1786580254.5026867,
+    "seen": 1787722919.745951,
+    "ast_hash": "87c94838362cff9c9078ac8820eab1d6",
+    "semantic_hash": "87c94838362cff9c9078ac8820eab1d6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\deployer\\connect_apply.py": {
+    "mtime": 1786580531.9602087,
+    "seen": 1787722919.7459526,
+    "ast_hash": "c6aa38499fd561120f0bbea90fc0e505",
+    "semantic_hash": "c6aa38499fd561120f0bbea90fc0e505"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\deployer\\lifecycle.py": {
+    "mtime": 1786611399.11644,
+    "seen": 1787722919.7459543,
+    "ast_hash": "e01250c7396c7f8057b472ae10c915c9",
+    "semantic_hash": "e01250c7396c7f8057b472ae10c915c9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\deployer\\nifi_apply.py": {
+    "mtime": 1786603984.1959817,
+    "seen": 1787722919.745956,
+    "ast_hash": "d1b15269c43525aa5c84712ad2600ba0",
+    "semantic_hash": "d1b15269c43525aa5c84712ad2600ba0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\deployer\\topics.py": {
+    "mtime": 1786600304.1257367,
+    "seen": 1787722919.7459579,
+    "ast_hash": "7e08a72521ed677bdf2a80cfe0aaf298",
+    "semantic_hash": "7e08a72521ed677bdf2a80cfe0aaf298"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\legality.py": {
+    "mtime": 1786794144.2133262,
+    "seen": 1787722919.7459598,
+    "ast_hash": "2a7ba2f4d0c328e012c3b6a9b78d4709",
+    "semantic_hash": "2a7ba2f4d0c328e012c3b6a9b78d4709"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\naming.py": {
+    "mtime": 1786577022.6092865,
+    "seen": 1787722919.7459614,
+    "ast_hash": "35640a420101d33d8a207433c9adc252",
+    "semantic_hash": "35640a420101d33d8a207433c9adc252"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\runtime.py": {
+    "mtime": 1786619049.5108395,
+    "seen": 1787722919.7459633,
+    "ast_hash": "ae993c5a9616d3bbb76dfc76eaec6817",
+    "semantic_hash": "ae993c5a9616d3bbb76dfc76eaec6817"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\seed.py": {
+    "mtime": 1786579328.9868863,
+    "seen": 1787722919.7459648,
+    "ast_hash": "b216a99255039443cc705fed01165e50",
+    "semantic_hash": "b216a99255039443cc705fed01165e50"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\validation.py": {
+    "mtime": 1786611701.035969,
+    "seen": 1787722919.7459667,
+    "ast_hash": "80f3a49726abb3693cafb57701cd1fe9",
+    "semantic_hash": "80f3a49726abb3693cafb57701cd1fe9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\apicurio_client.py": {
+    "mtime": 1786600191.815195,
+    "seen": 1787722919.7459683,
+    "ast_hash": "509a216f8d9f31477f63babdbcedfa12",
+    "semantic_hash": "509a216f8d9f31477f63babdbcedfa12"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\apisix_client.py": {
+    "mtime": 1786576357.9871235,
+    "seen": 1787722919.74597,
+    "ast_hash": "abf77e2c6de2936906f4f90605806171",
+    "semantic_hash": "abf77e2c6de2936906f4f90605806171"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\application_services.py": {
+    "mtime": 1784224715.1854224,
+    "seen": 1787722919.7459717,
+    "ast_hash": "459f54eeca9c378679a46e0bf2f6977e",
+    "semantic_hash": "459f54eeca9c378679a46e0bf2f6977e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\audit.py": {
+    "mtime": 1784217434.6161845,
+    "seen": 1787722919.7459736,
+    "ast_hash": "da58043249402514555ba265285a932e",
+    "semantic_hash": "da58043249402514555ba265285a932e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\connection_fingerprint.py": {
+    "mtime": 1786578885.7533312,
+    "seen": 1787722919.745975,
+    "ast_hash": "e4bbc1f9b2b984e7377273d7902f6836",
+    "semantic_hash": "e4bbc1f9b2b984e7377273d7902f6836"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\connection_impact.py": {
+    "mtime": 1784576834.356035,
+    "seen": 1787722919.745977,
+    "ast_hash": "1fbdc43393f79c6574237847156d0741",
+    "semantic_hash": "1fbdc43393f79c6574237847156d0741"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\connection_lifecycle_runner.py": {
+    "mtime": 1784577232.4297283,
+    "seen": 1787722919.7459786,
+    "ast_hash": "bbbbf16704a31fc9d10a2ea257f5975d",
+    "semantic_hash": "bbbbf16704a31fc9d10a2ea257f5975d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\connection_resolver.py": {
+    "mtime": 1786799407.5028892,
+    "seen": 1787722919.7459803,
+    "ast_hash": "f5e624d9f9b399b88dac94b05a0324ed",
+    "semantic_hash": "f5e624d9f9b399b88dac94b05a0324ed"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\content_store.py": {
+    "mtime": 1784289320.7152073,
+    "seen": 1787722919.745984,
+    "ast_hash": "ffec8ff9d29be349284186b1e312fd47",
+    "semantic_hash": "ffec8ff9d29be349284186b1e312fd47"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\content_store_reconcile.py": {
+    "mtime": 1784223758.4786263,
+    "seen": 1787722919.7459857,
+    "ast_hash": "6c20cc1f7ec5f58cc62ec0977504e4ee",
+    "semantic_hash": "6c20cc1f7ec5f58cc62ec0977504e4ee"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_export.py": {
+    "mtime": 1783580075.7242436,
+    "seen": 1787722919.7459877,
+    "ast_hash": "b20bd3a170dc8b793297cd7ddbf4364a",
+    "semantic_hash": "b20bd3a170dc8b793297cd7ddbf4364a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_file_compactor.py": {
+    "mtime": 1784063059.7432654,
+    "seen": 1787722919.7459893,
+    "ast_hash": "9167a4256cc43ebc0ec951c80b03b7bb",
+    "semantic_hash": "9167a4256cc43ebc0ec951c80b03b7bb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_import_credentials.py": {
+    "mtime": 1781551674.3850837,
+    "seen": 1787722919.7459912,
+    "ast_hash": "89849e7b1ad5e1692fa825a977c853e3",
+    "semantic_hash": "89849e7b1ad5e1692fa825a977c853e3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_import_finalize.py": {
+    "mtime": 1784063066.310876,
+    "seen": 1787722919.7459927,
+    "ast_hash": "6e3e7853bece44da6103f57245f25ae0",
+    "semantic_hash": "6e3e7853bece44da6103f57245f25ae0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_import_preview.py": {
+    "mtime": 1783580090.1613033,
+    "seen": 1787722919.7459943,
+    "ast_hash": "99262f2d6e1f700176f8787a3d4451cb",
+    "semantic_hash": "99262f2d6e1f700176f8787a3d4451cb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_operation_claims.py": {
+    "mtime": 1782293445.2276218,
+    "seen": 1787722919.745996,
+    "ast_hash": "0585e1dc0aa299dd350443a83564ef43",
+    "semantic_hash": "0585e1dc0aa299dd350443a83564ef43"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_runtime_errors.py": {
+    "mtime": 1784063033.5552185,
+    "seen": 1787722919.745998,
+    "ast_hash": "d1a94a48f36db52053879d571d5b12fb",
+    "semantic_hash": "d1a94a48f36db52053879d571d5b12fb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\flow_secret_refs.py": {
+    "mtime": 1782388217.6269405,
+    "seen": 1787722919.7459993,
+    "ast_hash": "2da20edfc19f52fa59b33db14fd4b454",
+    "semantic_hash": "2da20edfc19f52fa59b33db14fd4b454"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\http_tls.py": {
+    "mtime": 1778960949.3988726,
+    "seen": 1787722919.7460012,
+    "ast_hash": "9bc4497d264c4a28a7a4fda2c5d0e728",
+    "semantic_hash": "9bc4497d264c4a28a7a4fda2c5d0e728"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\iceberg_catalog_client.py": {
+    "mtime": 1784576301.470956,
+    "seen": 1787722919.7460027,
+    "ast_hash": "269046c57187a2864ab77cc09a7e85ad",
+    "semantic_hash": "269046c57187a2864ab77cc09a7e85ad"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\iceberg_sink_config.py": {
+    "mtime": 1784635351.9443197,
+    "seen": 1787722919.7460046,
+    "ast_hash": "b8eaddb34a8973ab602b4d88a2031770",
+    "semantic_hash": "b8eaddb34a8973ab602b4d88a2031770"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\iceberg_sinks.py": {
+    "mtime": 1784635704.4409847,
+    "seen": 1787722919.746006,
+    "ast_hash": "4b1de94abbdcd6d868e4b08eb9b19992",
+    "semantic_hash": "4b1de94abbdcd6d868e4b08eb9b19992"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\kafka_client.py": {
+    "mtime": 1786584498.87558,
+    "seen": 1787722919.746008,
+    "ast_hash": "6a73c3d4eb9220b4e7f6048f12f69641",
+    "semantic_hash": "6a73c3d4eb9220b4e7f6048f12f69641"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\kafka_connect_client.py": {
+    "mtime": 1784582652.0190642,
+    "seen": 1787722919.7460096,
+    "ast_hash": "348f3a0af92c7133de643c9a369df14d",
+    "semantic_hash": "348f3a0af92c7133de643c9a369df14d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\kafka_schema_consumer.py": {
+    "mtime": 1779092112.431527,
+    "seen": 1787722919.746011,
+    "ast_hash": "557a418470cf14c719b35234b968a966",
+    "semantic_hash": "557a418470cf14c719b35234b968a966"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\lifecycle_locks.py": {
+    "mtime": 1784576840.02451,
+    "seen": 1787722919.746013,
+    "ast_hash": "00791d7369b76b4b2510742205d04626",
+    "semantic_hash": "00791d7369b76b4b2510742205d04626"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\nifi_client.py": {
+    "mtime": 1784289254.2208762,
+    "seen": 1787722919.7460148,
+    "ast_hash": "d10deae4fa4a550b969cc2073107e8b3",
+    "semantic_hash": "d10deae4fa4a550b969cc2073107e8b3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\nifi_flow_generator.py": {
+    "mtime": 1784202688.634589,
+    "seen": 1787722919.7460165,
+    "ast_hash": "aa414a49af8e4f77a088d310b116e376",
+    "semantic_hash": "aa414a49af8e4f77a088d310b116e376"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\nifi_flow_manager.py": {
+    "mtime": 1779623158.5297897,
+    "seen": 1787722919.7460184,
+    "ast_hash": "efb05b11d75adc9a6dfb46d81beddaae",
+    "semantic_hash": "efb05b11d75adc9a6dfb46d81beddaae"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\nifi_global_services.py": {
+    "mtime": 1784616596.066898,
+    "seen": 1787722919.7460198,
+    "ast_hash": "a0518610dbdb532abf60c6a0b3afa303",
+    "semantic_hash": "a0518610dbdb532abf60c6a0b3afa303"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\openapi_parser.py": {
+    "mtime": 1778960949.4062715,
+    "seen": 1787722919.7460217,
+    "ast_hash": "4be6e1297c8b96762280fea120538604",
+    "semantic_hash": "4be6e1297c8b96762280fea120538604"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\orphan_registry.py": {
+    "mtime": 1784223746.5423136,
+    "seen": 1787722919.7460234,
+    "ast_hash": "d77460e00b82caf8c2affe1d8d8df571",
+    "semantic_hash": "d77460e00b82caf8c2affe1d8d8df571"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\rest_stream_behavior.py": {
+    "mtime": 1783406571.0245795,
+    "seen": 1787722919.7460253,
+    "ast_hash": "07b844b325a67e24f7087cbf2dd1836d",
+    "semantic_hash": "07b844b325a67e24f7087cbf2dd1836d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\rest_stream_branch_validation.py": {
+    "mtime": 1783425480.3189862,
+    "seen": 1787722919.7460268,
+    "ast_hash": "9e3671c8d39ceffcdc4d6242c342c117",
+    "semantic_hash": "9e3671c8d39ceffcdc4d6242c342c117"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\rest_stream_pagination_validation.py": {
+    "mtime": 1784202684.241782,
+    "seen": 1787722919.7460287,
+    "ast_hash": "6c9e12215e15a6434e591caa41a0295d",
+    "semantic_hash": "6c9e12215e15a6434e591caa41a0295d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\rest_stream_polling_validation.py": {
+    "mtime": 1784062891.6849751,
+    "seen": 1787722919.74603,
+    "ast_hash": "cf32e987885bd4ae7f44b0b873f89775",
+    "semantic_hash": "cf32e987885bd4ae7f44b0b873f89775"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\rest_stream_request_resolver.py": {
+    "mtime": 1783414779.8397565,
+    "seen": 1787722919.7460318,
+    "ast_hash": "702f1aaf4317fba38acd3038b5f444fe",
+    "semantic_hash": "702f1aaf4317fba38acd3038b5f444fe"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\rest_stream_value_mapping.py": {
+    "mtime": 1783414764.955862,
+    "seen": 1787722919.7460334,
+    "ast_hash": "e250808139cbd9d61120f94961edf231",
+    "semantic_hash": "e250808139cbd9d61120f94961edf231"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\runtime_connections.py": {
+    "mtime": 1784217970.3216205,
+    "seen": 1787722919.746035,
+    "ast_hash": "e28984fd0a18bdc8c2c0772b8b6a5089",
+    "semantic_hash": "e28984fd0a18bdc8c2c0772b8b6a5089"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\runtime_recovery.py": {
+    "mtime": 1784286239.7561538,
+    "seen": 1787722919.7460368,
+    "ast_hash": "769cf4161e096a713873a61fea91b620",
+    "semantic_hash": "769cf4161e096a713873a61fea91b620"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\schema_inference_runner.py": {
+    "mtime": 1784057311.8938222,
+    "seen": 1787722919.7460384,
+    "ast_hash": "83357b96e9a16f178f2aaea63c615ff6",
+    "semantic_hash": "83357b96e9a16f178f2aaea63c615ff6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\schema_inferencer.py": {
+    "mtime": 1780322854.9092636,
+    "seen": 1787722919.74604,
+    "ast_hash": "0155c8b9538df6d7f1b6934d55fd9088",
+    "semantic_hash": "0155c8b9538df6d7f1b6934d55fd9088"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\stream_migration.py": {
+    "mtime": 1783584092.3665926,
+    "seen": 1787722919.7460418,
+    "ast_hash": "5191bf11db37cb12f0d0d3019ad312c5",
+    "semantic_hash": "5191bf11db37cb12f0d0d3019ad312c5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\fixtures\\compiler\\golden_flow.json": {
+    "mtime": 1786603883.6658344,
+    "seen": 1787722919.7460437,
+    "ast_hash": "c9d57bc4695a0d35f7dcb0341a134659",
+    "semantic_hash": "c9d57bc4695a0d35f7dcb0341a134659"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\fixtures\\iceberg_connector_bronze.fileshare.asset__history.json": {
+    "mtime": 1784634085.1533008,
+    "seen": 1787722919.7460454,
+    "ast_hash": "cd35e40d00685f0f624c093fce7c9646",
+    "semantic_hash": "cd35e40d00685f0f624c093fce7c9646"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\fixtures\\iceberg_connector_bronze.sentinelone.agent__history.json": {
+    "mtime": 1784634085.1517918,
+    "seen": 1787722919.746047,
+    "ast_hash": "d74692cb58b37af1fe9e9cb1ac859c57",
+    "semantic_hash": "d74692cb58b37af1fe9e9cb1ac859c57"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\live\\__init__.py": {
+    "mtime": 1786581056.6533167,
+    "seen": 1787722919.7460485,
+    "ast_hash": "242e731db0ef5ff5a948cea4a486e984",
+    "semantic_hash": "242e731db0ef5ff5a948cea4a486e984"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\live\\test_nifi_apply_live.py": {
+    "mtime": 1786581129.4655793,
+    "seen": 1787722919.7460504,
+    "ast_hash": "6556e733e3c5a8b5e17ee80d4e8a226b",
+    "semantic_hash": "6556e733e3c5a8b5e17ee80d4e8a226b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\__init__.py": {
+    "mtime": 1782293445.232622,
+    "seen": 1787722919.746052,
+    "ast_hash": "b7bab625639ea06d3a0a04f7e1ec52d9",
+    "semantic_hash": "b7bab625639ea06d3a0a04f7e1ec52d9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\conftest.py": {
+    "mtime": 1784223309.8092115,
+    "seen": 1787722919.746054,
+    "ast_hash": "7b4124c96803b8b2665a9d3175129117",
+    "semantic_hash": "7b4124c96803b8b2665a9d3175129117"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_deploy_recovery.py": {
+    "mtime": 1782293445.2356222,
+    "seen": 1787722919.7460554,
+    "ast_hash": "38cc72eb26dec54df164904eee734f56",
+    "semantic_hash": "38cc72eb26dec54df164904eee734f56"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_export_snapshot.py": {
+    "mtime": 1782293445.2376213,
+    "seen": 1787722919.7460573,
+    "ast_hash": "64ce675d3203704c0af6271caf386f7a",
+    "semantic_hash": "64ce675d3203704c0af6271caf386f7a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_fault_fixtures.py": {
+    "mtime": 1782293445.2386222,
+    "seen": 1787722919.7460587,
+    "ast_hash": "3464937607ff5f31e8cc09a513624148",
+    "semantic_hash": "3464937607ff5f31e8cc09a513624148"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_import_atomicity.py": {
+    "mtime": 1782293445.240625,
+    "seen": 1787722919.7460606,
+    "ast_hash": "bdd8aca0f13bf270df20737ee442d4d3",
+    "semantic_hash": "bdd8aca0f13bf270df20737ee442d4d3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_inference_recovery.py": {
+    "mtime": 1784058562.0896747,
+    "seen": 1787722919.7460623,
+    "ast_hash": "177ba177d4a81415f7c4e522a4f0728a",
+    "semantic_hash": "177ba177d4a81415f7c4e522a4f0728a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_runtime_concurrency.py": {
+    "mtime": 1782293445.2426226,
+    "seen": 1787722919.746064,
+    "ast_hash": "5abb230148f99cd21255c61023b85fe0",
+    "semantic_hash": "5abb230148f99cd21255c61023b85fe0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\resilience\\test_schema_service_concurrency.py": {
+    "mtime": 1782293445.2446215,
+    "seen": 1787722919.7460656,
+    "ast_hash": "a1d6dc439aa17adb4525b31d8d85f01a",
+    "semantic_hash": "a1d6dc439aa17adb4525b31d8d85f01a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_adapter_models.py": {
+    "mtime": 1786794233.4448383,
+    "seen": 1787722919.7460675,
+    "ast_hash": "65e95dcd80343fc2607c7974f4fa3b52",
+    "semantic_hash": "65e95dcd80343fc2607c7974f4fa3b52"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_adapter_rules.py": {
+    "mtime": 1786794150.0436385,
+    "seen": 1787722919.746069,
+    "ast_hash": "f0d2c41159f35a2b3b331157e70b9dcc",
+    "semantic_hash": "f0d2c41159f35a2b3b331157e70b9dcc"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_apicurio_client.py": {
+    "mtime": 1786600554.4295843,
+    "seen": 1787722919.7460709,
+    "ast_hash": "00d573a5150ff7633fbcb960a9495b3b",
+    "semantic_hash": "00d573a5150ff7633fbcb960a9495b3b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_apisix_client.py": {
+    "mtime": 1786576385.3798532,
+    "seen": 1787722919.7460723,
+    "ast_hash": "811f35b54532e188d1767184950eea5a",
+    "semantic_hash": "811f35b54532e188d1767184950eea5a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_compiler.py": {
+    "mtime": 1786794172.3130622,
+    "seen": 1787722919.7460742,
+    "ast_hash": "eb7c2e560699abda6bbdc69516c73119",
+    "semantic_hash": "eb7c2e560699abda6bbdc69516c73119"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_connection_fingerprint.py": {
+    "mtime": 1786578915.9253218,
+    "seen": 1787722919.7460759,
+    "ast_hash": "dfec129acec2fbe9b4ebffbcfec17825",
+    "semantic_hash": "dfec129acec2fbe9b4ebffbcfec17825"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_connection_multi.py": {
+    "mtime": 1784287015.2688394,
+    "seen": 1787722919.7460778,
+    "ast_hash": "6598368ad051493bfc288f2d2b954210",
+    "semantic_hash": "6598368ad051493bfc288f2d2b954210"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_connection_resolver.py": {
+    "mtime": 1786799441.11865,
+    "seen": 1787722919.7460794,
+    "ast_hash": "eb330813b34462127b5701057f23bb45",
+    "semantic_hash": "eb330813b34462127b5701057f23bb45"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_content_store.py": {
+    "mtime": 1784289329.0323837,
+    "seen": 1787722919.746081,
+    "ast_hash": "8db8198cd591d1588234b7cd2f200e2c",
+    "semantic_hash": "8db8198cd591d1588234b7cd2f200e2c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_dashboard.py": {
+    "mtime": 1782391901.2052078,
+    "seen": 1787722919.7460828,
+    "ast_hash": "0be132477b93bae34736c6270c80a0c5",
+    "semantic_hash": "0be132477b93bae34736c6270c80a0c5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_deployer.py": {
+    "mtime": 1786611719.404819,
+    "seen": 1787722919.7460847,
+    "ast_hash": "12d23115c7dc67f9de7903593c5bcc91",
+    "semantic_hash": "12d23115c7dc67f9de7903593c5bcc91"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_delete_source_cleanup.py": {
+    "mtime": 1784011256.2322786,
+    "seen": 1787722919.7460866,
+    "ast_hash": "8748c269be12e8ac65950f125917ebcc",
+    "semantic_hash": "8748c269be12e8ac65950f125917ebcc"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_entity_destinations_runtime.py": {
+    "mtime": 1783522912.4869351,
+    "seen": 1787722919.7460883,
+    "ast_hash": "ad905ebd27e6fa2f7cec7853eeba860c",
+    "semantic_hash": "ad905ebd27e6fa2f7cec7853eeba860c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_export.py": {
+    "mtime": 1782388149.5737467,
+    "seen": 1787722919.74609,
+    "ast_hash": "2d4fc2cfd06b204e6c7f3c590e652ef3",
+    "semantic_hash": "2d4fc2cfd06b204e6c7f3c590e652ef3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_file_compactor.py": {
+    "mtime": 1784063084.3595586,
+    "seen": 1787722919.7460918,
+    "ast_hash": "d656c4a1ab869f954c0adc13511f5175",
+    "semantic_hash": "d656c4a1ab869f954c0adc13511f5175"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_import_credentials.py": {
+    "mtime": 1782207452.2283814,
+    "seen": 1787722919.7460933,
+    "ast_hash": "cb9a7978354e28acd2a4bef9fe10fa41",
+    "semantic_hash": "cb9a7978354e28acd2a4bef9fe10fa41"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_import_finalize.py": {
+    "mtime": 1783584845.7373874,
+    "seen": 1787722919.7460952,
+    "ast_hash": "f12da401d5ccc7d15f82a951ccfd6524",
+    "semantic_hash": "f12da401d5ccc7d15f82a951ccfd6524"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_import_preview.py": {
+    "mtime": 1783580114.1234038,
+    "seen": 1787722919.7460968,
+    "ast_hash": "cc92e79f7bc5de03cdbba19071a5c57f",
+    "semantic_hash": "cc92e79f7bc5de03cdbba19071a5c57f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_run_metrics.py": {
+    "mtime": 1782282103.1187315,
+    "seen": 1787722919.7460988,
+    "ast_hash": "3f6938e58367eaf59a9cab6a1271085c",
+    "semantic_hash": "3f6938e58367eaf59a9cab6a1271085c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_runtime_errors.py": {
+    "mtime": 1783510111.463466,
+    "seen": 1787722919.7461004,
+    "ast_hash": "c854bbfc170b148ef4fcb014af1a997f",
+    "semantic_hash": "c854bbfc170b148ef4fcb014af1a997f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_flow_trino_schema_optional.py": {
+    "mtime": 1782889077.1608992,
+    "seen": 1787722919.7461028,
+    "ast_hash": "32be3c948de3b34b1641b92ed16fc1a9",
+    "semantic_hash": "32be3c948de3b34b1641b92ed16fc1a9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_iceberg_sink_config.py": {
+    "mtime": 1784635653.61259,
+    "seen": 1787722919.7461042,
+    "ast_hash": "4d03db892ac262941e8d333f3cf9cf03",
+    "semantic_hash": "4d03db892ac262941e8d333f3cf9cf03"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_iceberg_sinks_lifecycle.py": {
+    "mtime": 1784582828.210513,
+    "seen": 1787722919.7461066,
+    "ast_hash": "936837d0ad4d96cab334767773e04054",
+    "semantic_hash": "936837d0ad4d96cab334767773e04054"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_iceberg_sinks_sync.py": {
+    "mtime": 1784635661.6835399,
+    "seen": 1787722919.7461085,
+    "ast_hash": "87bb0cf8bafd74b6d6ef03a7f3c91f24",
+    "semantic_hash": "87bb0cf8bafd74b6d6ef03a7f3c91f24"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_kafka_topic_ensure.py": {
+    "mtime": 1784624394.0867336,
+    "seen": 1787722919.7461102,
+    "ast_hash": "f0d7adeb7bb079e1f35aa4303d76639f",
+    "semantic_hash": "f0d7adeb7bb079e1f35aa4303d76639f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_local_env_loading.py": {
+    "mtime": 1782885759.273158,
+    "seen": 1787722919.7461116,
+    "ast_hash": "60daf6be2d1629e21efd468221f507c6",
+    "semantic_hash": "60daf6be2d1629e21efd468221f507c6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_nifi_apply.py": {
+    "mtime": 1786604030.4049406,
+    "seen": 1787722919.7461135,
+    "ast_hash": "836610ed16174cf0cbd34000dcfec916",
+    "semantic_hash": "836610ed16174cf0cbd34000dcfec916"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_nifi_client.py": {
+    "mtime": 1784289304.131882,
+    "seen": 1787722919.7461154,
+    "ast_hash": "f8be9fc9eb846f2c38c25e802f9f8514",
+    "semantic_hash": "f8be9fc9eb846f2c38c25e802f9f8514"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_nifi_flow_generator_inference.py": {
+    "mtime": 1780905538.4343548,
+    "seen": 1787722919.746117,
+    "ast_hash": "de1cbca2325477044370172697c1ba58",
+    "semantic_hash": "de1cbca2325477044370172697c1ba58"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_nifi_flow_generator_per_stream_pg.py": {
+    "mtime": 1784063168.9365144,
+    "seen": 1787722919.7461185,
+    "ast_hash": "e3a993b82229a47aac32a38e434302a2",
+    "semantic_hash": "e3a993b82229a47aac32a38e434302a2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_nifi_flow_generator_trino.py": {
+    "mtime": 1782978786.1267605,
+    "seen": 1787722919.7461205,
+    "ast_hash": "2dbbc290c258c9b6e4f53d104db88c35",
+    "semantic_hash": "2dbbc290c258c9b6e4f53d104db88c35"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_pagination_header_and_body.py": {
+    "mtime": 1784116709.6980758,
+    "seen": 1787722919.7461221,
+    "ast_hash": "6eff4fdf15ea435c655c28d92b58865f",
+    "semantic_hash": "6eff4fdf15ea435c655c28d92b58865f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_pagination_loop_wiring.py": {
+    "mtime": 1784115213.7657943,
+    "seen": 1787722919.7461238,
+    "ast_hash": "1ef404f180f7a4dfff549d189017a4c1",
+    "semantic_hash": "1ef404f180f7a4dfff549d189017a4c1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_pagination_optional_maxpages.py": {
+    "mtime": 1784202989.2460976,
+    "seen": 1787722919.7461255,
+    "ast_hash": "06f8190bd891a8d19557712a181448c0",
+    "semantic_hash": "06f8190bd891a8d19557712a181448c0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_pagination_stop_rules.py": {
+    "mtime": 1784136849.1152427,
+    "seen": 1787722919.7461271,
+    "ast_hash": "9e984763d46bf93b5049ab1a1cba8c8d",
+    "semantic_hash": "9e984763d46bf93b5049ab1a1cba8c8d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_rest_stream_behavior.py": {
+    "mtime": 1783406487.9932663,
+    "seen": 1787722919.7461288,
+    "ast_hash": "79f03c86ab22a7b966b6a21480796730",
+    "semantic_hash": "79f03c86ab22a7b966b6a21480796730"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_rest_stream_branch_validation.py": {
+    "mtime": 1783894725.2412066,
+    "seen": 1787722919.7461336,
+    "ast_hash": "605b2cdf61fa1377a03fd6a4f6f6276a",
+    "semantic_hash": "605b2cdf61fa1377a03fd6a4f6f6276a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_rest_stream_pagination_validation.py": {
+    "mtime": 1784115297.3052511,
+    "seen": 1787722919.7461352,
+    "ast_hash": "8d8fa6e49206f3804beb99c6ccad2aa9",
+    "semantic_hash": "8d8fa6e49206f3804beb99c6ccad2aa9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_rest_stream_polling_validation.py": {
+    "mtime": 1784063100.6011899,
+    "seen": 1787722919.746137,
+    "ast_hash": "db9738c329d5ae4d16a8f1c79d188623",
+    "semantic_hash": "db9738c329d5ae4d16a8f1c79d188623"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_rest_stream_request_resolver.py": {
+    "mtime": 1783414697.062224,
+    "seen": 1787722919.7461386,
+    "ast_hash": "d35f734471348cf6c0d3d4ca0e03302a",
+    "semantic_hash": "d35f734471348cf6c0d3d4ca0e03302a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_schema_inference_rest_method_rules.py": {
+    "mtime": 1783932999.194032,
+    "seen": 1787722919.7461402,
+    "ast_hash": "b5483a3f0d143ad884677d4e8cdf16e1",
+    "semantic_hash": "b5483a3f0d143ad884677d4e8cdf16e1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_schema_inference_runner_runtime_mapping.py": {
+    "mtime": 1783516200.6961162,
+    "seen": 1787722919.7461417,
+    "ast_hash": "f569a8b27b8ed24fa814f76217ac53d2",
+    "semantic_hash": "f569a8b27b8ed24fa814f76217ac53d2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_schema_inference_validation.py": {
+    "mtime": 1786624148.6374028,
+    "seen": 1787722919.7461436,
+    "ast_hash": "f0762f7ff137bfb40618af816de4959a",
+    "semantic_hash": "f0762f7ff137bfb40618af816de4959a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_source_stream_body_format.py": {
+    "mtime": 1783323032.1855333,
+    "seen": 1787722919.7461455,
+    "ast_hash": "25cdf7903ce1c627e9038b933a43c7e4",
+    "semantic_hash": "25cdf7903ce1c627e9038b933a43c7e4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_source_trino.py": {
+    "mtime": 1782905395.7711232,
+    "seen": 1787722919.7461472,
+    "ast_hash": "614ed3fea3fc05f66ffc93faf95ae339",
+    "semantic_hash": "614ed3fea3fc05f66ffc93faf95ae339"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_sources_test_stream_rest_methods.py": {
+    "mtime": 1783330585.416896,
+    "seen": 1787722919.7461488,
+    "ast_hash": "268cbf82d1ec4d9a3202e3ccdb1383bf",
+    "semantic_hash": "268cbf82d1ec4d9a3202e3ccdb1383bf"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_stream_migration.py": {
+    "mtime": 1783584130.703221,
+    "seen": 1787722919.7461505,
+    "ast_hash": "a32f3062bf8d9e32ed38cd2a635c3069",
+    "semantic_hash": "a32f3062bf8d9e32ed38cd2a635c3069"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_connections.py": {
+    "mtime": 1786579391.1819556,
+    "seen": 1787722919.7461522,
+    "ast_hash": "249bf421480074e15345b065a5be1a5c",
+    "semantic_hash": "249bf421480074e15345b065a5be1a5c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_flows.py": {
+    "mtime": 1786619080.031543,
+    "seen": 1787722919.746154,
+    "ast_hash": "81af277fff2c5fef5bacce75f9195e1d",
+    "semantic_hash": "81af277fff2c5fef5bacce75f9195e1d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_gateway.py": {
+    "mtime": 1786600489.0963855,
+    "seen": 1787722919.7461555,
+    "ast_hash": "30b2f3ab436e7dd47a21d147c3a0c727",
+    "semantic_hash": "30b2f3ab436e7dd47a21d147c3a0c727"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_openapi.py": {
+    "mtime": 1786582551.4211998,
+    "seen": 1787722919.7461574,
+    "ast_hash": "302c62ce5b9be91878f8bc6698c9fc53",
+    "semantic_hash": "302c62ce5b9be91878f8bc6698c9fc53"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_runtime.py": {
+    "mtime": 1786600522.0258157,
+    "seen": 1787722919.746159,
+    "ast_hash": "65cce81d8629075c7e43dc4cca3ed09f",
+    "semantic_hash": "65cce81d8629075c7e43dc4cca3ed09f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_schemas.py": {
+    "mtime": 1786619150.9863698,
+    "seen": 1787722919.7461607,
+    "ast_hash": "41b21405d94b626f70528715837bf6f7",
+    "semantic_hash": "41b21405d94b626f70528715837bf6f7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_services.py": {
+    "mtime": 1786794226.955534,
+    "seen": 1787722919.7461622,
+    "ast_hash": "b01fc82206bf36f027d5eef8e93a4935",
+    "semantic_hash": "b01fc82206bf36f027d5eef8e93a4935"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\App.tsx": {
+    "mtime": 1786474506.4876013,
+    "seen": 1787722919.746164,
+    "ast_hash": "47ee64f6bbb5ee471b449580deae4054",
+    "semantic_hash": "47ee64f6bbb5ee471b449580deae4054"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\AdapterChip.tsx": {
+    "mtime": 1786476499.1291988,
+    "seen": 1787722919.7461658,
+    "ast_hash": "69989914892fe0defc597b22031db179",
+    "semantic_hash": "69989914892fe0defc597b22031db179"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\AppLayout.tsx": {
+    "mtime": 1780864380.887436,
+    "seen": 1787722919.7461672,
+    "ast_hash": "21724058450d381a1f6faed0bd100064",
+    "semantic_hash": "21724058450d381a1f6faed0bd100064"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\AppSidebar.tsx": {
+    "mtime": 1786619189.77845,
+    "seen": 1787722919.746169,
+    "ast_hash": "fc3e27808803ecdf95e44f25a1322fc3",
+    "semantic_hash": "fc3e27808803ecdf95e44f25a1322fc3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\NavLink.tsx": {
+    "mtime": 1778960949.4623485,
+    "seen": 1787722919.7461705,
+    "ast_hash": "889a81fd2eb948eb406c9ccabe175918",
+    "semantic_hash": "889a81fd2eb948eb406c9ccabe175918"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\StatusBadge.tsx": {
+    "mtime": 1786446332.822292,
+    "seen": 1787722919.7461724,
+    "ast_hash": "f0bbcb11335735f60800c4abe68d4d58",
+    "semantic_hash": "f0bbcb11335735f60800c4abe68d4d58"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\AddBlockMenu.tsx": {
+    "mtime": 1786535648.7091656,
+    "seen": 1787722919.7461739,
+    "ast_hash": "3ae1d40173bc5c29fdd26452bddc94e3",
+    "semantic_hash": "3ae1d40173bc5c29fdd26452bddc94e3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\BlockForm.tsx": {
+    "mtime": 1786793222.7795143,
+    "seen": 1787722919.7461755,
+    "ast_hash": "071f16b350556216b7bb3700d2db78e9",
+    "semantic_hash": "071f16b350556216b7bb3700d2db78e9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\BranchesCard.tsx": {
+    "mtime": 1786538931.4240456,
+    "seen": 1787722919.7461772,
+    "ast_hash": "9cb94b473ce17593aa3f8bbd2f83e871",
+    "semantic_hash": "9cb94b473ce17593aa3f8bbd2f83e871"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\CeremonyDialog.tsx": {
+    "mtime": 1786577184.0725522,
+    "seen": 1787722919.746179,
+    "ast_hash": "8e8676caf4adf8fa5fb8712a2bc258ad",
+    "semantic_hash": "8e8676caf4adf8fa5fb8712a2bc258ad"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\DestinationsPanel.tsx": {
+    "mtime": 1786476498.8519843,
+    "seen": 1787722919.7461805,
+    "ast_hash": "aee1e047130eec39e557112073306ae0",
+    "semantic_hash": "aee1e047130eec39e557112073306ae0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\FlowMapView.tsx": {
+    "mtime": 1786538960.6029766,
+    "seen": 1787722919.7461824,
+    "ast_hash": "b2d62765da7b701c123458bef25d45d5",
+    "semantic_hash": "b2d62765da7b701c123458bef25d45d5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\FlowSettingsForm.tsx": {
+    "mtime": 1786528042.6545076,
+    "seen": 1787722919.7461996,
+    "ast_hash": "c942247422741633332974aac676879c",
+    "semantic_hash": "c942247422741633332974aac676879c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\KvRows.tsx": {
+    "mtime": 1786476498.9471388,
+    "seen": 1787722919.7462022,
+    "ast_hash": "dcbcc94475430fca1aedb2528a0ff46c",
+    "semantic_hash": "dcbcc94475430fca1aedb2528a0ff46c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\OpenApiPanel.tsx": {
+    "mtime": 1786582011.683392,
+    "seen": 1787722919.746204,
+    "ast_hash": "34139a7a17fd5ad406f5394e10f81ff5",
+    "semantic_hash": "34139a7a17fd5ad406f5394e10f81ff5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\OpenApiPathCombobox.tsx": {
+    "mtime": 1786582161.2274623,
+    "seen": 1787722919.7462058,
+    "ast_hash": "f6bd1a49a3c1af8a1a13ccf0b52aeab3",
+    "semantic_hash": "f6bd1a49a3c1af8a1a13ccf0b52aeab3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\PaginationFields.tsx": {
+    "mtime": 1786528339.6247797,
+    "seen": 1787722919.7462075,
+    "ast_hash": "fb8698c7190d8077206190a85c2b4973",
+    "semantic_hash": "fb8698c7190d8077206190a85c2b4973"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\PreflightDialog.tsx": {
+    "mtime": 1786476499.0120046,
+    "seen": 1787722919.7462099,
+    "ast_hash": "e066d140fe710cebe05fbd09340bf94f",
+    "semantic_hash": "e066d140fe710cebe05fbd09340bf94f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\SinkConfigEditor.tsx": {
+    "mtime": 1786529585.8314779,
+    "seen": 1787722919.7462113,
+    "ast_hash": "2dd0a5be6b50a7b3f643706cfab2062d",
+    "semantic_hash": "2dd0a5be6b50a7b3f643706cfab2062d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\TestPanel.tsx": {
+    "mtime": 1786611385.457675,
+    "seen": 1787722919.7462132,
+    "ast_hash": "c75ad1f9ef759052220514f940437274",
+    "semantic_hash": "c75ad1f9ef759052220514f940437274"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\TransformsEditor.tsx": {
+    "mtime": 1786619781.9743907,
+    "seen": 1787722919.7462149,
+    "ast_hash": "586972b35e40852519e53fbe96b35d9a",
+    "semantic_hash": "586972b35e40852519e53fbe96b35d9a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\graph.ts": {
+    "mtime": 1786539185.0857272,
+    "seen": 1787722919.7462168,
+    "ast_hash": "4bf831a330fc28b48c57a68434db8271",
+    "semantic_hash": "4bf831a330fc28b48c57a68434db8271"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-map\\StreamFlowMap.test.tsx": {
+    "mtime": 1783975472.286742,
+    "seen": 1787722919.7462182,
+    "ast_hash": "d02855ba84f5a511267eea8141f6155f",
+    "semantic_hash": "d02855ba84f5a511267eea8141f6155f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-map\\StreamFlowMap.tsx": {
+    "mtime": 1783975483.004212,
+    "seen": 1787722919.74622,
+    "ast_hash": "d450415b55a4001b66d5493e9ee749b4",
+    "semantic_hash": "d450415b55a4001b66d5493e9ee749b4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-map\\StreamFlowNode.test.tsx": {
+    "mtime": 1783975266.7171197,
+    "seen": 1787722919.7462218,
+    "ast_hash": "442f658d4ee849e7a1ee4d5005a4568f",
+    "semantic_hash": "442f658d4ee849e7a1ee4d5005a4568f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-map\\StreamFlowNode.tsx": {
+    "mtime": 1783975299.2222703,
+    "seen": 1787722919.7462237,
+    "ast_hash": "fd681b82120f9ccdc6cfd504654a3ba1",
+    "semantic_hash": "fd681b82120f9ccdc6cfd504654a3ba1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\AvroEditorTabs.tsx": {
+    "mtime": 1786576179.8668563,
+    "seen": 1787722919.7462254,
+    "ast_hash": "0637c538a6bc5209f42f84f6ca7345cf",
+    "semantic_hash": "0637c538a6bc5209f42f84f6ca7345cf"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\SampleInferencePanel.tsx": {
+    "mtime": 1786577055.4288416,
+    "seen": 1787722919.7462273,
+    "ast_hash": "091cd3dd04ea1f5b7b081d0e6577954e",
+    "semantic_hash": "091cd3dd04ea1f5b7b081d0e6577954e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\SchemaFieldList.tsx": {
+    "mtime": 1786576167.1872976,
+    "seen": 1787722919.746229,
+    "ast_hash": "b02a7a0a4c9bbf82ec5d77e0427ddc65",
+    "semantic_hash": "b02a7a0a4c9bbf82ec5d77e0427ddc65"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\SchemaTypeSelect.tsx": {
+    "mtime": 1786474194.9459856,
+    "seen": 1787722919.7462308,
+    "ast_hash": "b58796ea274f5638a944fdbf03d578aa",
+    "semantic_hash": "b58796ea274f5638a944fdbf03d578aa"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\avroDisplayFields.ts": {
+    "mtime": 1786474265.5586276,
+    "seen": 1787722919.7462323,
+    "ast_hash": "1a9f9ca2858a81422b1163600d81c0c8",
+    "semantic_hash": "1a9f9ca2858a81422b1163600d81c0c8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\index.ts": {
+    "mtime": 1786577059.2180681,
+    "seen": 1787722919.7462342,
+    "ast_hash": "1c4876050b37048e37601bf874518be8",
+    "semantic_hash": "1c4876050b37048e37601bf874518be8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\schemaTypes.ts": {
+    "mtime": 1786474186.3521433,
+    "seen": 1787722919.7462358,
+    "ast_hash": "3cc622e33b8b5359af5497fae585b7f3",
+    "semantic_hash": "3cc622e33b8b5359af5497fae585b7f3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\schema-editor\\useAvroBuffer.ts": {
+    "mtime": 1786474368.9031923,
+    "seen": 1787722919.7462378,
+    "ast_hash": "44e286ca84653a16182c222bc5ca80c3",
+    "semantic_hash": "44e286ca84653a16182c222bc5ca80c3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\service-form\\ServiceFormFields.test.ts": {
+    "mtime": 1786794305.2387743,
+    "seen": 1787722919.7462394,
+    "ast_hash": "ce69ea4794d1e53f3ea446bb552bd7ed",
+    "semantic_hash": "ce69ea4794d1e53f3ea446bb552bd7ed"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\service-form\\ServiceFormFields.tsx": {
+    "mtime": 1786794154.6581464,
+    "seen": 1787722919.746241,
+    "ast_hash": "36689768ea1a1ecbcd1f0e2c16a25b0e",
+    "semantic_hash": "36689768ea1a1ecbcd1f0e2c16a25b0e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\accordion.tsx": {
+    "mtime": 1778960949.464347,
+    "seen": 1787722919.7462606,
+    "ast_hash": "ff8f54b79a7a2bc4fed8c092dd7a1f4b",
+    "semantic_hash": "ff8f54b79a7a2bc4fed8c092dd7a1f4b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\alert-dialog.tsx": {
+    "mtime": 1786476425.2319634,
+    "seen": 1787722919.7462628,
+    "ast_hash": "8b60690e3188cd5b5b1e1ea02e625207",
+    "semantic_hash": "8b60690e3188cd5b5b1e1ea02e625207"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\alert.tsx": {
+    "mtime": 1778960949.4669962,
+    "seen": 1787722919.7462642,
+    "ast_hash": "eba34d3096d7c23bcdf5dfb1e725ecff",
+    "semantic_hash": "eba34d3096d7c23bcdf5dfb1e725ecff"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\aspect-ratio.tsx": {
+    "mtime": 1778960949.4669962,
+    "seen": 1787722919.7462661,
+    "ast_hash": "14c12661aad8c80328c86a18b506c088",
+    "semantic_hash": "14c12661aad8c80328c86a18b506c088"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\avatar.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.7462678,
+    "ast_hash": "7b447f617f7d654c70050259fbf6dbc0",
+    "semantic_hash": "7b447f617f7d654c70050259fbf6dbc0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\badge.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.7462697,
+    "ast_hash": "09261d891c581ebf021af2989fe75d60",
+    "semantic_hash": "09261d891c581ebf021af2989fe75d60"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\breadcrumb.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.7462711,
+    "ast_hash": "c277fb2bb0886444a6c8a00296ad924e",
+    "semantic_hash": "c277fb2bb0886444a6c8a00296ad924e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\button.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.746273,
+    "ast_hash": "854ce263491269d5b7db6d0828a63f9a",
+    "semantic_hash": "854ce263491269d5b7db6d0828a63f9a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\calendar.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.7462747,
+    "ast_hash": "1a2e76319e667991b06dc99e74b9b631",
+    "semantic_hash": "1a2e76319e667991b06dc99e74b9b631"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\card.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.7462766,
+    "ast_hash": "0e2d94c650cf4fae76b4c5e0f14dd858",
+    "semantic_hash": "0e2d94c650cf4fae76b4c5e0f14dd858"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\carousel.tsx": {
+    "mtime": 1778960949.4686942,
+    "seen": 1787722919.746278,
+    "ast_hash": "7d3e5a6ed21d4690d498e8a60b52868a",
+    "semantic_hash": "7d3e5a6ed21d4690d498e8a60b52868a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\chart.tsx": {
+    "mtime": 1778960949.475616,
+    "seen": 1787722919.7462802,
+    "ast_hash": "4360d46060e32c8aafbc140a482a03fa",
+    "semantic_hash": "4360d46060e32c8aafbc140a482a03fa"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\checkbox.tsx": {
+    "mtime": 1778960949.475616,
+    "seen": 1787722919.746282,
+    "ast_hash": "76ca6b8de39bdac0ff7620b301077963",
+    "semantic_hash": "76ca6b8de39bdac0ff7620b301077963"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\collapsible.tsx": {
+    "mtime": 1778960949.475616,
+    "seen": 1787722919.746284,
+    "ast_hash": "72fafa9d8b58f83ec9b7c8f141bfdd42",
+    "semantic_hash": "72fafa9d8b58f83ec9b7c8f141bfdd42"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\command.tsx": {
+    "mtime": 1780264642.5612326,
+    "seen": 1787722919.746286,
+    "ast_hash": "999fd6fcdd60cefb112e6ad522d67996",
+    "semantic_hash": "999fd6fcdd60cefb112e6ad522d67996"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\context-menu.tsx": {
+    "mtime": 1778960949.475616,
+    "seen": 1787722919.7462873,
+    "ast_hash": "bf02a92d910af3af76b1e417a76cbd6a",
+    "semantic_hash": "bf02a92d910af3af76b1e417a76cbd6a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\dialog.tsx": {
+    "mtime": 1786476425.1194234,
+    "seen": 1787722919.7462893,
+    "ast_hash": "8f99ca7635bbb8c4ff351886fa29946d",
+    "semantic_hash": "8f99ca7635bbb8c4ff351886fa29946d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\drawer.tsx": {
+    "mtime": 1778960949.475616,
+    "seen": 1787722919.746291,
+    "ast_hash": "a73521d8fbccde731eae7f2f81f5875b",
+    "semantic_hash": "a73521d8fbccde731eae7f2f81f5875b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\dropdown-menu.tsx": {
+    "mtime": 1786476425.7840614,
+    "seen": 1787722919.7462926,
+    "ast_hash": "f229ac808653312d0e46bd7220a7d24f",
+    "semantic_hash": "f229ac808653312d0e46bd7220a7d24f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\form.tsx": {
+    "mtime": 1778960949.4825606,
+    "seen": 1787722919.7462943,
+    "ast_hash": "4d27bc8211e0505103bbd930275570c6",
+    "semantic_hash": "4d27bc8211e0505103bbd930275570c6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\hover-card.tsx": {
+    "mtime": 1778960949.4825606,
+    "seen": 1787722919.7462957,
+    "ast_hash": "a7927cc49ef796b0c725ecd0869c9f95",
+    "semantic_hash": "a7927cc49ef796b0c725ecd0869c9f95"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\input-otp.tsx": {
+    "mtime": 1778960949.4825606,
+    "seen": 1787722919.7462976,
+    "ast_hash": "7217a7c6bceca8030298e2252204ae40",
+    "semantic_hash": "7217a7c6bceca8030298e2252204ae40"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\input.tsx": {
+    "mtime": 1778960949.4825606,
+    "seen": 1787722919.7462995,
+    "ast_hash": "c9e808ff72f69a97513b516a31d5705a",
+    "semantic_hash": "c9e808ff72f69a97513b516a31d5705a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\label.tsx": {
+    "mtime": 1778960949.4825606,
+    "seen": 1787722919.7463012,
+    "ast_hash": "a8c075269b5971c2ab072603b5166cc2",
+    "semantic_hash": "a8c075269b5971c2ab072603b5166cc2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\menubar.tsx": {
+    "mtime": 1778960949.4825606,
+    "seen": 1787722919.7463026,
+    "ast_hash": "8d6dd42e35e9410e97a725c64c02f0a6",
+    "semantic_hash": "8d6dd42e35e9410e97a725c64c02f0a6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\navigation-menu.tsx": {
+    "mtime": 1778960949.48949,
+    "seen": 1787722919.7463045,
+    "ast_hash": "2d91ffeee8627f37b4733949b3373a23",
+    "semantic_hash": "2d91ffeee8627f37b4733949b3373a23"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\pagination.tsx": {
+    "mtime": 1778960949.4910016,
+    "seen": 1787722919.746306,
+    "ast_hash": "4d09c500f83dd4b754b74d03b79527ba",
+    "semantic_hash": "4d09c500f83dd4b754b74d03b79527ba"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\popover.tsx": {
+    "mtime": 1786476425.8979075,
+    "seen": 1787722919.7463078,
+    "ast_hash": "29ca47f39466c2becefd428d5d3ed014",
+    "semantic_hash": "29ca47f39466c2becefd428d5d3ed014"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\progress.tsx": {
+    "mtime": 1778960949.4910016,
+    "seen": 1787722919.7463093,
+    "ast_hash": "b0d4b1791f1da120f5eed107f235edce",
+    "semantic_hash": "b0d4b1791f1da120f5eed107f235edce"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\radio-group.tsx": {
+    "mtime": 1778960949.4910016,
+    "seen": 1787722919.7463112,
+    "ast_hash": "6c2a4c39fb3f889fe94b854b7198b5ed",
+    "semantic_hash": "6c2a4c39fb3f889fe94b854b7198b5ed"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\resizable.tsx": {
+    "mtime": 1778960949.4910016,
+    "seen": 1787722919.7463126,
+    "ast_hash": "ed49053e380e461e2ca75f7a3fe67236",
+    "semantic_hash": "ed49053e380e461e2ca75f7a3fe67236"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\scroll-area.tsx": {
+    "mtime": 1778960949.4970582,
+    "seen": 1787722919.7463145,
+    "ast_hash": "f86e3f716ed7c692309c1a48d85ce2c9",
+    "semantic_hash": "f86e3f716ed7c692309c1a48d85ce2c9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\select.tsx": {
+    "mtime": 1786476426.0176797,
+    "seen": 1787722919.746316,
+    "ast_hash": "d8c35c1e36625eacecca55c9ecd8d670",
+    "semantic_hash": "d8c35c1e36625eacecca55c9ecd8d670"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\separator.tsx": {
+    "mtime": 1778960949.4970582,
+    "seen": 1787722919.7463179,
+    "ast_hash": "1810b24a008c00cd43c0b5ad9f3e4c6b",
+    "semantic_hash": "1810b24a008c00cd43c0b5ad9f3e4c6b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\sheet.tsx": {
+    "mtime": 1786476425.562006,
+    "seen": 1787722919.7463193,
+    "ast_hash": "9c5a734a10a827fcc50ccd86873887a2",
+    "semantic_hash": "9c5a734a10a827fcc50ccd86873887a2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\sidebar.tsx": {
+    "mtime": 1780864055.9549527,
+    "seen": 1787722919.7463212,
+    "ast_hash": "0d2ffc350a10a548270fa8e504b80446",
+    "semantic_hash": "0d2ffc350a10a548270fa8e504b80446"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\skeleton.tsx": {
+    "mtime": 1778960949.4970582,
+    "seen": 1787722919.7463226,
+    "ast_hash": "6433d7c535e132083b2c1bcb57373fff",
+    "semantic_hash": "6433d7c535e132083b2c1bcb57373fff"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\slider.tsx": {
+    "mtime": 1778960949.4970582,
+    "seen": 1787722919.7463245,
+    "ast_hash": "977286428ad957ed73e428525450f9cb",
+    "semantic_hash": "977286428ad957ed73e428525450f9cb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\sonner.tsx": {
+    "mtime": 1786476425.4567535,
+    "seen": 1787722919.746326,
+    "ast_hash": "c4a246892cca112971903f515fb8a5a9",
+    "semantic_hash": "c4a246892cca112971903f515fb8a5a9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\switch.tsx": {
+    "mtime": 1786476426.2392771,
+    "seen": 1787722919.7463279,
+    "ast_hash": "bba1aa8944ab395cc81c9ed51c00cf5f",
+    "semantic_hash": "bba1aa8944ab395cc81c9ed51c00cf5f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\table.tsx": {
+    "mtime": 1778960949.5064206,
+    "seen": 1787722919.7463293,
+    "ast_hash": "d73905fa73678181cb9f8baa91b3f222",
+    "semantic_hash": "d73905fa73678181cb9f8baa91b3f222"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\tabs.tsx": {
+    "mtime": 1778960949.5065086,
+    "seen": 1787722919.7463312,
+    "ast_hash": "33c494eaa3811114e89a89fbbb0a1a02",
+    "semantic_hash": "33c494eaa3811114e89a89fbbb0a1a02"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\textarea.tsx": {
+    "mtime": 1780264642.564126,
+    "seen": 1787722919.746333,
+    "ast_hash": "b172b24c6273b5ea1c9450c4c3bd35e4",
+    "semantic_hash": "b172b24c6273b5ea1c9450c4c3bd35e4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\toast.tsx": {
+    "mtime": 1786476425.3425004,
+    "seen": 1787722919.7463346,
+    "ast_hash": "706f4d2d26549bb07418adf460ce19b1",
+    "semantic_hash": "706f4d2d26549bb07418adf460ce19b1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\toaster.tsx": {
+    "mtime": 1778960949.5100048,
+    "seen": 1787722919.746336,
+    "ast_hash": "0f5d0fdbcc2d4611e59994af4393e27e",
+    "semantic_hash": "0f5d0fdbcc2d4611e59994af4393e27e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\toggle-group.tsx": {
+    "mtime": 1778960949.5104096,
+    "seen": 1787722919.746338,
+    "ast_hash": "fc5bff5bf4bb6714e6eaf85dcdeb65b9",
+    "semantic_hash": "fc5bff5bf4bb6714e6eaf85dcdeb65b9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\toggle.tsx": {
+    "mtime": 1778960949.5104096,
+    "seen": 1787722919.7463393,
+    "ast_hash": "2342cfa40b5b31148997f87d1642359e",
+    "semantic_hash": "2342cfa40b5b31148997f87d1642359e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\tooltip.tsx": {
+    "mtime": 1786476426.1275349,
+    "seen": 1787722919.7463412,
+    "ast_hash": "95ca5215c22e7afbfcc7b0c335c72a10",
+    "semantic_hash": "95ca5215c22e7afbfcc7b0c335c72a10"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\use-toast.ts": {
+    "mtime": 1778960949.5134284,
+    "seen": 1787722919.7463427,
+    "ast_hash": "5bff9ea3904b15a9e1908b128c88e75f",
+    "semantic_hash": "5bff9ea3904b15a9e1908b128c88e75f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\hooks\\use-mobile.tsx": {
+    "mtime": 1778960949.5134284,
+    "seen": 1787722919.7463453,
+    "ast_hash": "1bb3ebac7752b497a78d34e341975bbd",
+    "semantic_hash": "1bb3ebac7752b497a78d34e341975bbd"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\hooks\\use-toast.ts": {
+    "mtime": 1778960949.5134284,
+    "seen": 1787722919.7463484,
+    "ast_hash": "895be3e18021c7c5cd4fac68ea522dd4",
+    "semantic_hash": "895be3e18021c7c5cd4fac68ea522dd4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\api.ts": {
+    "mtime": 1786449554.7024162,
+    "seen": 1787722919.7463512,
+    "ast_hash": "00e7c23a5e05e794996f4328ed920c88",
+    "semantic_hash": "00e7c23a5e05e794996f4328ed920c88"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\applicationServicesApi.ts": {
+    "mtime": 1779695710.7322774,
+    "seen": 1787722919.746354,
+    "ast_hash": "66a3a6e779d2cc69a101b2c06f4f2228",
+    "semantic_hash": "66a3a6e779d2cc69a101b2c06f4f2228"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\defaultRouteAction.test.ts": {
+    "mtime": 1784052353.191751,
+    "seen": 1787722919.7463572,
+    "ast_hash": "b2eee0ae703d0f9f7836f4809be44af6",
+    "semantic_hash": "b2eee0ae703d0f9f7836f4809be44af6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\defaultRouteAction.ts": {
+    "mtime": 1784052380.2120018,
+    "seen": 1787722919.7463598,
+    "ast_hash": "e6bb796852c30185b1384b4fd398a4c7",
+    "semantic_hash": "e6bb796852c30185b1384b4fd398a4c7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowApi.ts": {
+    "mtime": 1784062853.169841,
+    "seen": 1787722919.746363,
+    "ast_hash": "a73a6639a79739d9d46380aecd5bef4e",
+    "semantic_hash": "a73a6639a79739d9d46380aecd5bef4e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowApiExport.test.ts": {
+    "mtime": 1781452631.8731856,
+    "seen": 1787722919.7463658,
+    "ast_hash": "0f23386e555384fcd12f74e5a023ceef",
+    "semantic_hash": "0f23386e555384fcd12f74e5a023ceef"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowBulkSelection.test.ts": {
+    "mtime": 1780862674.1389277,
+    "seen": 1787722919.7463684,
+    "ast_hash": "6e745899dd38e2818ad2bf06fd1f8538",
+    "semantic_hash": "6e745899dd38e2818ad2bf06fd1f8538"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowBulkSelection.ts": {
+    "mtime": 1780862720.7839344,
+    "seen": 1787722919.746371,
+    "ast_hash": "86ed9549fc71324f7122ea134e5e53e9",
+    "semantic_hash": "86ed9549fc71324f7122ea134e5e53e9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowDesignerConnectionState.test.ts": {
+    "mtime": 1782040823.4216459,
+    "seen": 1787722919.746374,
+    "ast_hash": "415451c96d200aefeb64b420410478d7",
+    "semantic_hash": "415451c96d200aefeb64b420410478d7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowDesignerConnectionState.ts": {
+    "mtime": 1782821991.3532903,
+    "seen": 1787722919.7463768,
+    "ast_hash": "34ad594728fd8a20f6b47a2371223f00",
+    "semantic_hash": "34ad594728fd8a20f6b47a2371223f00"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowDesignerSchemaRequirement.test.ts": {
+    "mtime": 1782889401.470306,
+    "seen": 1787722919.7463796,
+    "ast_hash": "33e9a991a4add8fea812992f328eeb83",
+    "semantic_hash": "33e9a991a4add8fea812992f328eeb83"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowDesignerSchemaRequirement.ts": {
+    "mtime": 1782889421.5129745,
+    "seen": 1787722919.7463825,
+    "ast_hash": "48abe07f34b3917421e8eac5dfc60646",
+    "semantic_hash": "48abe07f34b3917421e8eac5dfc60646"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowImportCache.ts": {
+    "mtime": 1782391944.1496832,
+    "seen": 1787722919.7463853,
+    "ast_hash": "b5d7f99a20ec258e3f7dc4588db3dd31",
+    "semantic_hash": "b5d7f99a20ec258e3f7dc4588db3dd31"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowImportCredentials.test.ts": {
+    "mtime": 1782207871.3059888,
+    "seen": 1787722919.7463882,
+    "ast_hash": "febd18a5ecc17785597c8c8b4f7cf908",
+    "semantic_hash": "febd18a5ecc17785597c8c8b4f7cf908"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowImportFinalize.test.ts": {
+    "mtime": 1782391901.2072103,
+    "seen": 1787722919.746391,
+    "ast_hash": "46cbaeb1565d3a637c675610d5dad4f5",
+    "semantic_hash": "46cbaeb1565d3a637c675610d5dad4f5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowImportPreview.test.ts": {
+    "mtime": 1781549917.8148937,
+    "seen": 1787722919.7463942,
+    "ast_hash": "2d42ebcbb5e3345b16a2bd5acda69909",
+    "semantic_hash": "2d42ebcbb5e3345b16a2bd5acda69909"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowTableSummary.test.ts": {
+    "mtime": 1780861295.1195638,
+    "seen": 1787722919.746397,
+    "ast_hash": "613d030a3d1cb131cd2eb6aa0007faed",
+    "semantic_hash": "613d030a3d1cb131cd2eb6aa0007faed"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\flowTableSummary.ts": {
+    "mtime": 1780861356.433459,
+    "seen": 1787722919.7464,
+    "ast_hash": "e4f8852bbb601aa118951e082b568d80",
+    "semantic_hash": "e4f8852bbb601aa118951e082b568d80"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\icebergSinksApi.ts": {
+    "mtime": 1784635273.6753302,
+    "seen": 1787722919.7464023,
+    "ast_hash": "e8fa3bc6e98965a2439b7bff5aca103b",
+    "semantic_hash": "e8fa3bc6e98965a2439b7bff5aca103b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\inferenceApi.ts": {
+    "mtime": 1783933659.9359329,
+    "seen": 1787722919.7464042,
+    "ast_hash": "6697c9af9e6b5d1472570432df317324",
+    "semantic_hash": "6697c9af9e6b5d1472570432df317324"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\inferencePreflight.test.ts": {
+    "mtime": 1780902105.2458136,
+    "seen": 1787722919.7464056,
+    "ast_hash": "59a7aa8a4dff83af3a9b45dcf29b9636",
+    "semantic_hash": "59a7aa8a4dff83af3a9b45dcf29b9636"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\inferencePreflight.ts": {
+    "mtime": 1783975722.815693,
+    "seen": 1787722919.7464077,
+    "ast_hash": "b75cbd0a9671537c2d95f66ad543cd34",
+    "semantic_hash": "b75cbd0a9671537c2d95f66ad543cd34"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\mockData.ts": {
+    "mtime": 1782821996.7388444,
+    "seen": 1787722919.7464094,
+    "ast_hash": "4be104fbd41d86937b231dc46eee469e",
+    "semantic_hash": "4be104fbd41d86937b231dc46eee469e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\nifiServicesApi.ts": {
+    "mtime": 1779564566.4953005,
+    "seen": 1787722919.7464113,
+    "ast_hash": "9a0ff9decabafd8a8af3e2ee16cf10d5",
+    "semantic_hash": "9a0ff9decabafd8a8af3e2ee16cf10d5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\openapiApi.ts": {
+    "mtime": 1778960949.517915,
+    "seen": 1787722919.7464128,
+    "ast_hash": "4cc2500eb7a450e578dfda6b8fca1283",
+    "semantic_hash": "4cc2500eb7a450e578dfda6b8fca1283"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\pageSearch.test.ts": {
+    "mtime": 1782027416.4445677,
+    "seen": 1787722919.7464147,
+    "ast_hash": "f995d99d17c75342b3e9195c693b657b",
+    "semantic_hash": "f995d99d17c75342b3e9195c693b657b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\pageSearch.ts": {
+    "mtime": 1782027408.2870739,
+    "seen": 1787722919.746416,
+    "ast_hash": "eb2ed68e2d977c90a7a2a0b276839a54",
+    "semantic_hash": "eb2ed68e2d977c90a7a2a0b276839a54"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaApi.ts": {
+    "mtime": 1778960949.524296,
+    "seen": 1787722919.746418,
+    "ast_hash": "fbba1aea6dd9c526d979891e5990a9ce",
+    "semantic_hash": "fbba1aea6dd9c526d979891e5990a9ce"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaCreate.test.ts": {
+    "mtime": 1780548141.4425032,
+    "seen": 1787722919.7464197,
+    "ast_hash": "78da058850ac3152d09b74e24440f3c9",
+    "semantic_hash": "78da058850ac3152d09b74e24440f3c9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaCreate.ts": {
+    "mtime": 1780548120.6781101,
+    "seen": 1787722919.7464216,
+    "ast_hash": "0753afaa597caede9f9461e171920da2",
+    "semantic_hash": "0753afaa597caede9f9461e171920da2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaEditor.test.ts": {
+    "mtime": 1780525309.0145938,
+    "seen": 1787722919.746423,
+    "ast_hash": "5cbd83f1518cdf85ca6429988dd36f6c",
+    "semantic_hash": "5cbd83f1518cdf85ca6429988dd36f6c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaEditor.ts": {
+    "mtime": 1780525419.068404,
+    "seen": 1787722919.746425,
+    "ast_hash": "80c4511d079a0bf880be036cc2ce8c9e",
+    "semantic_hash": "80c4511d079a0bf880be036cc2ce8c9e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaLayout.test.ts": {
+    "mtime": 1784289333.9784083,
+    "seen": 1787722919.7464263,
+    "ast_hash": "ff4e30205b84a436dbb668fd606a5fad",
+    "semantic_hash": "ff4e30205b84a436dbb668fd606a5fad"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\schemaLayout.ts": {
+    "mtime": 1780812051.9470825,
+    "seen": 1787722919.7464283,
+    "ast_hash": "167943ba70e81270215e4a7e3bea0e49",
+    "semantic_hash": "167943ba70e81270215e4a7e3bea0e49"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\serviceManagerOptions.test.ts": {
+    "mtime": 1780318334.3493724,
+    "seen": 1787722919.7464297,
+    "ast_hash": "bf70ddd5046c65a9c54807b67eb7ba6d",
+    "semantic_hash": "bf70ddd5046c65a9c54807b67eb7ba6d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\serviceManagerOptions.ts": {
+    "mtime": 1780318364.6934183,
+    "seen": 1787722919.7464316,
+    "ast_hash": "4f04abf42632c8515512ee9965021ddb",
+    "semantic_hash": "4f04abf42632c8515512ee9965021ddb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\smbPathNormalization.ts": {
+    "mtime": 1778960949.524296,
+    "seen": 1787722919.746433,
+    "ast_hash": "50df73fa9f6ebd266c43880ea30cf02f",
+    "semantic_hash": "50df73fa9f6ebd266c43880ea30cf02f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\streamFlowMap.test.ts": {
+    "mtime": 1783975126.4293997,
+    "seen": 1787722919.746435,
+    "ast_hash": "2d63bf5e1535d921cbb6baaad590a896",
+    "semantic_hash": "2d63bf5e1535d921cbb6baaad590a896"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\streamFlowMap.ts": {
+    "mtime": 1783975141.9674015,
+    "seen": 1787722919.7464364,
+    "ast_hash": "17b1e44ab4e853d389fc792b5387cca3",
+    "semantic_hash": "17b1e44ab4e853d389fc792b5387cca3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\streamGraph.test.ts": {
+    "mtime": 1783975096.0789008,
+    "seen": 1787722919.746438,
+    "ast_hash": "99c7bffbf3d5d51a434c6be78423e846",
+    "semantic_hash": "99c7bffbf3d5d51a434c6be78423e846"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\streamGraph.ts": {
+    "mtime": 1783975096.0834775,
+    "seen": 1787722919.7464397,
+    "ast_hash": "aeec9c07b370a32303abf047edc8aa89",
+    "semantic_hash": "aeec9c07b370a32303abf047edc8aa89"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\useDebouncedValue.test.ts": {
+    "mtime": 1780549564.404328,
+    "seen": 1787722919.7464414,
+    "ast_hash": "67e5ad54ffc82926c13092478000c2a9",
+    "semantic_hash": "67e5ad54ffc82926c13092478000c2a9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\useDebouncedValue.ts": {
+    "mtime": 1780549544.0691168,
+    "seen": 1787722919.746443,
+    "ast_hash": "a7bf983b876e20de3d7342f0b2cb3646",
+    "semantic_hash": "a7bf983b876e20de3d7342f0b2cb3646"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\lib\\utils.ts": {
+    "mtime": 1778960949.524296,
+    "seen": 1787722919.7464447,
+    "ast_hash": "e3f848f1b39f863e6164cf58b5a8e752",
+    "semantic_hash": "e3f848f1b39f863e6164cf58b5a8e752"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\main.tsx": {
+    "mtime": 1778960949.524296,
+    "seen": 1787722919.7464464,
+    "ast_hash": "3ad492668e71c9fb3069381cb93760ed",
+    "semantic_hash": "3ad492668e71c9fb3069381cb93760ed"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Apisix.test.tsx": {
+    "mtime": 1786794218.7068439,
+    "seen": 1787722919.746448,
+    "ast_hash": "4854f683fd4e984e12a41a5d6e9f7fc3",
+    "semantic_hash": "4854f683fd4e984e12a41a5d6e9f7fc3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Apisix.tsx": {
+    "mtime": 1786793110.0366435,
+    "seen": 1787722919.7464507,
+    "ast_hash": "e815cde339b687480e28b440b0f8cfff",
+    "semantic_hash": "e815cde339b687480e28b440b0f8cfff"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\AppServices.tsx": {
+    "mtime": 1786528561.3404326,
+    "seen": 1787722919.7464523,
+    "ast_hash": "0e953363c7e515d98b0e48b4c55f78f1",
+    "semantic_hash": "0e953363c7e515d98b0e48b4c55f78f1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\ApplicationServices.tsx": {
+    "mtime": 1779699689.1992977,
+    "seen": 1787722919.746454,
+    "ast_hash": "fc35639f7c01575798cb94e9acc28f96",
+    "semantic_hash": "fc35639f7c01575798cb94e9acc28f96"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Audit.tsx": {
+    "mtime": 1786476499.2924674,
+    "seen": 1787722919.7464552,
+    "ast_hash": "fa3dfff3b43e170946d954f7eae9158e",
+    "semantic_hash": "fa3dfff3b43e170946d954f7eae9158e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Connections.tsx": {
+    "mtime": 1786794137.4395225,
+    "seen": 1787722919.746457,
+    "ast_hash": "6ed444b39ae4c56aa5b9ceda25955d22",
+    "semantic_hash": "6ed444b39ae4c56aa5b9ceda25955d22"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Dashboard.tsx": {
+    "mtime": 1786575806.6532273,
+    "seen": 1787722919.7464585,
+    "ast_hash": "c7633fdeea5b0fd089bc79305d5d5620",
+    "semantic_hash": "c7633fdeea5b0fd089bc79305d5d5620"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\FlowBuilder.tsx": {
+    "mtime": 1786611402.2565978,
+    "seen": 1787722919.7464602,
+    "ast_hash": "b73cc53f35aeec78c5bf4a4885f27c60",
+    "semantic_hash": "b73cc53f35aeec78c5bf4a4885f27c60"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\FlowDesigner.tsx": {
+    "mtime": 1784635389.8568604,
+    "seen": 1787722919.7464616,
+    "ast_hash": "7d866dd0e1cb9d9c8820619ec74a9723",
+    "semantic_hash": "7d866dd0e1cb9d9c8820619ec74a9723"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Flows.test.tsx": {
+    "mtime": 1786793608.2879806,
+    "seen": 1787722919.7464635,
+    "ast_hash": "1d241dad42965aceed9991690b080fb2",
+    "semantic_hash": "1d241dad42965aceed9991690b080fb2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Flows.tsx": {
+    "mtime": 1786793533.9459,
+    "seen": 1787722919.746465,
+    "ast_hash": "481570623f4c8f735ad81a686a40d2c8",
+    "semantic_hash": "481570623f4c8f735ad81a686a40d2c8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\NifiServices.tsx": {
+    "mtime": 1780549913.1849425,
+    "seen": 1787722919.7464669,
+    "ast_hash": "50697ff9bf3444c2481ba251d15f01c1",
+    "semantic_hash": "50697ff9bf3444c2481ba251d15f01c1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\NotFound.tsx": {
+    "mtime": 1778960949.5381224,
+    "seen": 1787722919.7464683,
+    "ast_hash": "56c0e8759328865e67fc2c480b916804",
+    "semantic_hash": "56c0e8759328865e67fc2c480b916804"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Schemas.test.tsx": {
+    "mtime": 1786794812.611733,
+    "seen": 1787722919.74647,
+    "ast_hash": "49ff47af75869b3eda9fb0254b409ef6",
+    "semantic_hash": "49ff47af75869b3eda9fb0254b409ef6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Schemas.tsx": {
+    "mtime": 1786794395.9555235,
+    "seen": 1787722919.7464714,
+    "ast_hash": "5ad8367998ccd0abb6e80b3b54089df2",
+    "semantic_hash": "5ad8367998ccd0abb6e80b3b54089df2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Settings.tsx": {
+    "mtime": 1782979097.2960901,
+    "seen": 1787722919.7464733,
+    "ast_hash": "3b88df818be2a3c7f9249fb3e4208771",
+    "semantic_hash": "3b88df818be2a3c7f9249fb3e4208771"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\api.ts": {
+    "mtime": 1786619288.4901686,
+    "seen": 1787722919.7464747,
+    "ast_hash": "8e8bb506731f0682638cc1f9f72156db",
+    "semantic_hash": "8e8bb506731f0682638cc1f9f72156db"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\branches.ts": {
+    "mtime": 1786538838.5807793,
+    "seen": 1787722919.7464767,
+    "ast_hash": "a35812edc1b2a6acabe04b29d1300282",
+    "semantic_hash": "a35812edc1b2a6acabe04b29d1300282"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\dedupWindow.test.ts": {
+    "mtime": 1786578026.9833844,
+    "seen": 1787722919.746478,
+    "ast_hash": "8eb8ad1c404e8793fcd6cce7056d2e0c",
+    "semantic_hash": "8eb8ad1c404e8793fcd6cce7056d2e0c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\httpPath.test.ts": {
+    "mtime": 1786611312.746049,
+    "seen": 1787722919.74648,
+    "ast_hash": "61ae795dd29c9b0bfe4ffb96c85a5e37",
+    "semantic_hash": "61ae795dd29c9b0bfe4ffb96c85a5e37"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\inference.test.ts": {
+    "mtime": 1786624056.779735,
+    "seen": 1787722919.7464814,
+    "ast_hash": "794f8f4655a7553db51bf807d5640c27",
+    "semantic_hash": "794f8f4655a7553db51bf807d5640c27"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\inference.ts": {
+    "mtime": 1786624000.5117917,
+    "seen": 1787722919.7465005,
+    "ast_hash": "ad60770492e0f4881b6adc1063ee9c8f",
+    "semantic_hash": "ad60770492e0f4881b6adc1063ee9c8f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\legality.test.ts": {
+    "mtime": 1786793228.8725739,
+    "seen": 1787722919.7465024,
+    "ast_hash": "45547601f6510c24c8302e43b11c4efa",
+    "semantic_hash": "45547601f6510c24c8302e43b11c4efa"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\legality.ts": {
+    "mtime": 1786793190.545632,
+    "seen": 1787722919.7465043,
+    "ast_hash": "48ebadba4835d02098dfcaf27b2e58d2",
+    "semantic_hash": "48ebadba4835d02098dfcaf27b2e58d2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\migrate.test.ts": {
+    "mtime": 1786539260.8206625,
+    "seen": 1787722919.7465057,
+    "ast_hash": "e39f437b3b704882a3ad535ea38ee5ff",
+    "semantic_hash": "e39f437b3b704882a3ad535ea38ee5ff"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\migrate.ts": {
+    "mtime": 1786538856.9909356,
+    "seen": 1787722919.7465074,
+    "ast_hash": "7e6de219b0c75c92a27ca12725059afb",
+    "semantic_hash": "7e6de219b0c75c92a27ca12725059afb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\mutations.test.ts": {
+    "mtime": 1786539320.6576278,
+    "seen": 1787722919.7465093,
+    "ast_hash": "5d283ba9c151461e8ac43d32a186caa4",
+    "semantic_hash": "5d283ba9c151461e8ac43d32a186caa4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\mutations.ts": {
+    "mtime": 1786538960.5198998,
+    "seen": 1787722919.7465112,
+    "ast_hash": "57a9a1c395cf52f37e87899d93c4531e",
+    "semantic_hash": "57a9a1c395cf52f37e87899d93c4531e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\naming.test.ts": {
+    "mtime": 1786535880.9883046,
+    "seen": 1787722919.7465127,
+    "ast_hash": "e820600d85a2269d9bfd7c1b6e2e5541",
+    "semantic_hash": "e820600d85a2269d9bfd7c1b6e2e5541"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\naming.ts": {
+    "mtime": 1786473122.0531244,
+    "seen": 1787722919.746514,
+    "ast_hash": "45000e4e7000f4bd1310ba052ce12bd3",
+    "semantic_hash": "45000e4e7000f4bd1310ba052ce12bd3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\openapiClient.ts": {
+    "mtime": 1786581991.2879007,
+    "seen": 1787722919.7465158,
+    "ast_hash": "84293753196fbe75ae0a9d667a9746f4",
+    "semantic_hash": "84293753196fbe75ae0a9d667a9746f4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\seeds.ts": {
+    "mtime": 1786539052.109762,
+    "seen": 1787722919.7465174,
+    "ast_hash": "9af800a19ec166c3871b660e3b106f4a",
+    "semantic_hash": "9af800a19ec166c3871b660e3b106f4a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\store.ts": {
+    "mtime": 1786534540.684758,
+    "seen": 1787722919.7465193,
+    "ast_hash": "688f47ea67738a71f6a9bc7747903bb2",
+    "semantic_hash": "688f47ea67738a71f6a9bc7747903bb2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\types.ts": {
+    "mtime": 1786613194.540583,
+    "seen": 1787722919.7465208,
+    "ast_hash": "6d90deaa9c3450db147c418bf2c5e1fe",
+    "semantic_hash": "6d90deaa9c3450db147c418bf2c5e1fe"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\validation.test.ts": {
+    "mtime": 1786794163.7350564,
+    "seen": 1787722919.7465227,
+    "ast_hash": "7ae4c68a1cee8cc9e757f19f41adde3f",
+    "semantic_hash": "7ae4c68a1cee8cc9e757f19f41adde3f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\validation.ts": {
+    "mtime": 1786794158.18972,
+    "seen": 1787722919.746524,
+    "ast_hash": "ac0e81ec5c8833dfa59d064ac5149e16",
+    "semantic_hash": "ac0e81ec5c8833dfa59d064ac5149e16"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\test\\example.test.ts": {
+    "mtime": 1778960949.5381224,
+    "seen": 1787722919.746526,
+    "ast_hash": "e9e7bb15aba58b53a65f23498219603e",
+    "semantic_hash": "e9e7bb15aba58b53a65f23498219603e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\test\\setup.ts": {
+    "mtime": 1783975722.8293066,
+    "seen": 1787722919.7465274,
+    "ast_hash": "487d93cec35b97ea98e2c189493f2f83",
+    "semantic_hash": "487d93cec35b97ea98e2c189493f2f83"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\test\\smbPathNormalization.test.ts": {
+    "mtime": 1778960949.5381224,
+    "seen": 1787722919.7465293,
+    "ast_hash": "056ff32cbb62be1f3479eec8ba6b5a10",
+    "semantic_hash": "056ff32cbb62be1f3479eec8ba6b5a10"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\vite-env.d.ts": {
+    "mtime": 1778960949.5447357,
+    "seen": 1787722919.7465308,
+    "ast_hash": "8f68c27c3fc38817b2726b20e2d4f1ee",
+    "semantic_hash": "8f68c27c3fc38817b2726b20e2d4f1ee"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\requirements.local.txt": {
+    "mtime": 1780265065.3279762,
+    "seen": 1787722919.7465324,
+    "ast_hash": "957c7847df52186d71ec0c5c121423c5",
+    "semantic_hash": "957c7847df52186d71ec0c5c121423c5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\requirements.txt": {
+    "mtime": 1780265065.3259747,
+    "seen": 1787722919.746534,
+    "ast_hash": "4daec72b749d9892bc6428e115b8bd33",
+    "semantic_hash": "4daec72b749d9892bc6428e115b8bd33"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\HANDOFF.md": {
+    "mtime": 1786623466.3786247,
+    "seen": 1787722919.7465358,
+    "ast_hash": "ce8c52b2d370d7c243f3012c72a3f924",
+    "semantic_hash": "ce8c52b2d370d7c243f3012c72a3f924"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\alpha-backend.md": {
+    "mtime": 1786575175.0368023,
+    "seen": 1787722919.7465374,
+    "ast_hash": "a0de209e0fbc508c2b10b6ecb5b4a546",
+    "semantic_hash": "a0de209e0fbc508c2b10b6ecb5b4a546"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\alpha-frontend.md": {
+    "mtime": 1786575177.7773428,
+    "seen": 1787722919.746539,
+    "ast_hash": "dd9aff14df97767f563cd90d587053af",
+    "semantic_hash": "dd9aff14df97767f563cd90d587053af"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\architecture-mvp.md": {
+    "mtime": 1786574804.3437693,
+    "seen": 1787722919.7465408,
+    "ast_hash": "d302fcd805344893b117a51fe065de79",
+    "semantic_hash": "d302fcd805344893b117a51fe065de79"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\dedup-reference-flow.md": {
+    "mtime": 1786575274.843046,
+    "seen": 1787722919.7465427,
+    "ast_hash": "32a2464dbab84935856480b8a037162f",
+    "semantic_hash": "32a2464dbab84935856480b8a037162f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\nifi-reference-flows.md": {
+    "mtime": 1786575069.0904975,
+    "seen": 1787722919.7465441,
+    "ast_hash": "5fc04184f3c3ec794888ed9263ae609a",
+    "semantic_hash": "5fc04184f3c3ec794888ed9263ae609a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\product-requirements.md": {
+    "mtime": 1786574886.6153588,
+    "seen": 1787722919.7465456,
+    "ast_hash": "995e820dee3aa23818d77c4c8b3b30ac",
+    "semantic_hash": "995e820dee3aa23818d77c4c8b3b30ac"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\prototype-ui.md": {
+    "mtime": 1786575334.1937773,
+    "seen": 1787722919.7465475,
+    "ast_hash": "77faca86159aee90b753b6321aa64544",
+    "semantic_hash": "77faca86159aee90b753b6321aa64544"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\analysis\\user-reference-flows-2.md": {
+    "mtime": 1786619529.814574,
+    "seen": 1787722919.746549,
+    "ast_hash": "89e505a84eeb4093400c45c8cdcee23b",
+    "semantic_hash": "89e505a84eeb4093400c45c8cdcee23b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\compiler-spec.md": {
+    "mtime": 1786576147.9127183,
+    "seen": 1787722919.7465508,
+    "ast_hash": "cd1861f47d5d44f049d3ab2035620cd7",
+    "semantic_hash": "cd1861f47d5d44f049d3ab2035620cd7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\decisions.md": {
+    "mtime": 1786575544.9218044,
+    "seen": 1787722919.7465525,
+    "ast_hash": "161862f7ba93b736e8703661500352cf",
+    "semantic_hash": "161862f7ba93b736e8703661500352cf"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\browser-ui-pass.md": {
+    "mtime": 1786584715.2507925,
+    "seen": 1787722919.7465544,
+    "ast_hash": "02cfd2ee9cfb31aea6f28ae47b0e1cf6",
+    "semantic_hash": "02cfd2ee9cfb31aea6f28ae47b0e1cf6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\datatypes-journey.md": {
+    "mtime": 1786799065.4916892,
+    "seen": 1787722919.746556,
+    "ast_hash": "73c2b74f5c5b8201ef16095689a020f7",
+    "semantic_hash": "73c2b74f5c5b8201ef16095689a020f7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\diag-invokehttp.md": {
+    "mtime": 1786612143.4842186,
+    "seen": 1787722919.746558,
+    "ast_hash": "11073166182b9c65b66fb948ee63f35c",
+    "semantic_hash": "11073166182b9c65b66fb948ee63f35c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\fortisiem-connectivity.md": {
+    "mtime": 1786873547.8904943,
+    "seen": 1787722919.7465594,
+    "ast_hash": "f45acb6bb374037ff6a4b13d6a24e713",
+    "semantic_hash": "f45acb6bb374037ff6a4b13d6a24e713"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\gateway-iceberg-continuation.md": {
+    "mtime": 1786796989.0760088,
+    "seen": 1787722919.7465613,
+    "ast_hash": "9338a7aa9d3445503b43d388ffd67bda",
+    "semantic_hash": "9338a7aa9d3445503b43d388ffd67bda"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\gateway-iceberg-journey.md": {
+    "mtime": 1786623344.9919124,
+    "seen": 1787722919.7465627,
+    "ast_hash": "9e89566a26484e059677413390edf860",
+    "semantic_hash": "9e89566a26484e059677413390edf860"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\jdbc-continuation.md": {
+    "mtime": 1786799054.5588667,
+    "seen": 1787722919.7465644,
+    "ast_hash": "5d6e21d853808bb79597f1b3642dee50",
+    "semantic_hash": "5d6e21d853808bb79597f1b3642dee50"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\journey-a-e.md": {
+    "mtime": 1786585758.8665192,
+    "seen": 1787722919.7465658,
+    "ast_hash": "609fbdc8337487b570b35a4f650b0f93",
+    "semantic_hash": "609fbdc8337487b570b35a4f650b0f93"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\journey-b.md": {
+    "mtime": 1786597808.8195455,
+    "seen": 1787722919.7465675,
+    "ast_hash": "50c77fd31a9c156c8e2eff73123070e0",
+    "semantic_hash": "50c77fd31a9c156c8e2eff73123070e0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\journey-c-d.md": {
+    "mtime": 1786585553.6653962,
+    "seen": 1787722919.7465692,
+    "ast_hash": "c288996c23e73806f7ca03381512744f",
+    "semantic_hash": "c288996c23e73806f7ca03381512744f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\journey-r-reverify.md": {
+    "mtime": 1786608131.8395996,
+    "seen": 1787722919.746571,
+    "ast_hash": "e2a274793762349729c48937c161cb10",
+    "semantic_hash": "e2a274793762349729c48937c161cb10"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\rapid7-connectivity.md": {
+    "mtime": 1786870290.7526867,
+    "seen": 1787722919.7465725,
+    "ast_hash": "c842c738e468f0a8980892d361b15ebc",
+    "semantic_hash": "c842c738e468f0a8980892d361b15ebc"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\schema-registration-verify.md": {
+    "mtime": 1786615284.8343601,
+    "seen": 1787722919.7465742,
+    "ast_hash": "21817d513f594ae2152e1a61813a078c",
+    "semantic_hash": "21817d513f594ae2152e1a61813a078c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\schema-version-continuation.md": {
+    "mtime": 1786797579.8133068,
+    "seen": 1787722919.7465758,
+    "ast_hash": "e13fef0548ed8c07bd40f2867202a5d0",
+    "semantic_hash": "e13fef0548ed8c07bd40f2867202a5d0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\sentinelone-journey.md": {
+    "mtime": 1787121755.0938797,
+    "seen": 1787722919.7465775,
+    "ast_hash": "4dcdfb84ce5e5bf61db3c911462883d2",
+    "semantic_hash": "4dcdfb84ce5e5bf61db3c911462883d2"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\e2e\\ui-playwright-journey.md": {
+    "mtime": 1786616134.8249538,
+    "seen": 1787722919.7465792,
+    "ast_hash": "9988d2dd4e45cb193e132081223f2cdb",
+    "semantic_hash": "9988d2dd4e45cb193e132081223f2cdb"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\execution-plan.md": {
+    "mtime": 1786575628.3076856,
+    "seen": 1787722919.7465808,
+    "ast_hash": "419bd80f30efe0a7e7802a1544ac2646",
+    "semantic_hash": "419bd80f30efe0a7e7802a1544ac2646"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\final-audit.md": {
+    "mtime": 1786608132.514641,
+    "seen": 1787722919.7465825,
+    "ast_hash": "dacee36dca8d557798612025fc0f8afd",
+    "semantic_hash": "dacee36dca8d557798612025fc0f8afd"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\implementation-state.md": {
+    "mtime": 1786616134.9166749,
+    "seen": 1787722919.7465842,
+    "ast_hash": "0ffdaab481f78e824e80a191574ade41",
+    "semantic_hash": "0ffdaab481f78e824e80a191574ade41"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\rapid7-tier12-plan.md": {
+    "mtime": 1787118532.3628771,
+    "seen": 1787722919.7465858,
+    "ast_hash": "8c2fc8b90963a1167d167377f90791a4",
+    "semantic_hash": "8c2fc8b90963a1167d167377f90791a4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\reviews\\flow-engine-review.md": {
+    "mtime": 1786584958.2763574,
+    "seen": 1787722919.7465873,
+    "ast_hash": "046f135dab835481d7621a9552cd4ec3",
+    "semantic_hash": "046f135dab835481d7621a9552cd4ec3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\docs\\orchestration\\verification-state.md": {
+    "mtime": 1786585011.3661008,
+    "seen": 1787722919.746589,
+    "ast_hash": "ac13964120f69d1b2a2fd78c64ea6035",
+    "semantic_hash": "ac13964120f69d1b2a2fd78c64ea6035"
+  }
+}

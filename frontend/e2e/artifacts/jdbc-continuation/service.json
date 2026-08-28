@@ -1,0 +1,91 @@
+{
+  "id": "svc-01qyem",
+  "type": "database",
+  "name": "codex15aug26-jdbc-trino-service",
+  "revision": 3,
+  "retired": false,
+  "private": null,
+  "health": "Healthy",
+  "lastTestedAt": "2026-08-15T13:01:18.919Z",
+  "config": {
+    "dialect": "trino",
+    "host": "trino.datapasc.com",
+    "port": 80,
+    "database": "iceberg/bronze",
+    "username": "dmp",
+    "password": null,
+    "driverLocations": "https://repo1.maven.org/maven2/io/trino/trino-jdbc/480/trino-jdbc-480.jar",
+    "capabilities": [
+      "read"
+    ]
+  },
+  "hasSecret": true,
+  "createdAt": "2026-08-15T12:17:47.617Z",
+  "updatedAt": "2026-08-15T13:01:18.919Z",
+  "revisions": [
+    {
+      "revision": 1,
+      "config": {
+        "dialect": "trino",
+        "host": "trino",
+        "port": 8080,
+        "database": "iceberg/bronze",
+        "username": "dmp",
+        "driverLocations": "/opt/nifi/nifi-current/nar_extensions/trino-jdbc-480.jar",
+        "capabilities": [
+          "read"
+        ]
+      },
+      "name": "codex15aug26-jdbc-trino-service",
+      "type": "database",
+      "updatedAt": "2026-08-15T12:45:44.916Z",
+      "hasPassword": false,
+      "hasToken": false,
+      "hasClientSecret": false,
+      "hasKeyValue": false,
+      "hasSaslPassword": false,
+      "hasAdminKey": false,
+      "hasS3AccessKey": false,
+      "hasS3SecretKey": false,
+      "hasOauthClientSecret": false,
+      "hasKafbatPassword": false
+    },
+    {
+      "revision": 2,
+      "config": {
+        "dialect": "trino",
+        "host": "trino.datapasc.com",
+        "port": 80,
+        "database": "iceberg/bronze",
+        "username": "dmp",
+        "driverLocations": "/opt/nifi/nifi-current/nar_extensions/trino-jdbc-480.jar",
+        "capabilities": [
+          "read"
+        ]
+      },
+      "name": "codex15aug26-jdbc-trino-service",
+      "type": "database",
+      "updatedAt": "2026-08-15T12:46:48.995Z",
+      "hasPassword": false,
+      "hasToken": false,
+      "hasClientSecret": false,
+      "hasKeyValue": false,
+      "hasSaslPassword": false,
+      "hasAdminKey": false,
+      "hasS3AccessKey": false,
+      "hasS3SecretKey": false,
+      "hasOauthClientSecret": false,
+      "hasKafbatPassword": false
+    }
+  ],
+  "hasPassword": true,
+  "hasToken": false,
+  "hasClientSecret": false,
+  "hasKeyValue": false,
+  "hasSaslPassword": false,
+  "hasAdminKey": false,
+  "hasS3AccessKey": false,
+  "hasS3SecretKey": false,
+  "hasOauthClientSecret": false,
+  "hasKafbatPassword": false
+}

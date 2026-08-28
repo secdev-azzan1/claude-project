@@ -1,0 +1,24 @@
+{
+  "asset_raw": 42,
+  "total_raw": 716,
+  "per_entity": {
+    "asset__raw": 42,
+    "asset_service__raw": 39,
+    "asset_software__raw": 72,
+    "asset_vulnerability__raw": 42,
+    "asset_vulnerability_solution__raw": 55,
+    "exploit__raw": 46,
+    "malware_kit__raw": 47,
+    "operating_system__raw": 9,
+    "site__raw": 48,
+    "site_organization__raw": 49,
+    "software__raw": 14,
+    "solution__raw": 20,
+    "tag__raw": 27,
+    "tag_asset__raw": 77,
+    "tag_site__raw": 2,
+    "vulnerability__raw": 37,
+    "vulnerability_category__raw": 44,
+    "vulnerability_reference__raw": 46
+  }
+}

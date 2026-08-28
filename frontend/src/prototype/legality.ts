@@ -112,7 +112,6 @@ export function computeAddMenu(flow: Flow, afterBlockId: string): AddMenuEntry[]
     { key: "http-read", adapter: "http", mode: "read", label: "http · read", description: "Chained request per record", },
     { key: "http-lookup", adapter: "http", mode: "lookup", label: "http · lookup", description: "Enrich records from an API", },
     { key: "http-write", adapter: "http", mode: "write", label: "http · write", description: "POST records onward", },
-    { key: "jdbc-read", adapter: "jdbc", mode: "read", label: "jdbc · read", description: "Read a table per record", },
     { key: "jdbc-lookup", adapter: "jdbc", mode: "lookup", label: "jdbc · lookup", description: "Enrich records from a table", },
     { key: "jdbc-write", adapter: "jdbc", mode: "write", label: "jdbc · write", description: "Write records to a table", },
     {

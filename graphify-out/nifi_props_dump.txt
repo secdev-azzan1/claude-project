@@ -1,0 +1,346 @@
+=== rapid7_securado.site__filter  [RouteOnAttribute] ===
+  Routing Strategy: Route to Property name
+  blocked: ${site_name:equals(#{BLOCKED_SITES})}
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['blocked']]
+
+=== rapid7_securado.asset__next_page  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  page: ${page:toNumber():plus(1)}
+  [schedulingPeriod: 0 sec]
+
+=== rapid7_securado.site__next_page  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  page: ${page:toNumber():plus(1)}
+  [schedulingPeriod: 0 sec]
+
+=== rapid7_securado.asset__avro__publish  [PublishKafka] ===
+  compression.type: lz4
+  acks: all
+  Kafka Key Attribute Encoding: utf-8
+  Record Reader: ca873136-2fbd-3414-9071-ff7347d41f4f
+  Record Metadata Strategy: FROM_PROPERTIES
+  Header Encoding: UTF-8
+  max.request.size: 500 MB
+  Topic Name: bronze.rapid7_securado.asset__raw.avro
+  Kafka Key: ${source_object_id}
+  Kafka Connection Service: 2f3daa11-2710-57da-a9bf-2ebc3941085b
+  Publish Strategy: USE_VALUE
+  Failure Strategy: Route to Failure
+  partitioner.class: org.apache.kafka.clients.producer.internals.DefaultPartitioner
+  Record Writer: d3a6bdfe-daa7-3e82-afdb-4e3ac985b346
+  Transactions Enabled: false
+  FlowFile Attribute Header Pattern: ^(source_platform|customer_tenant_organization|source_object_type|source_object_id|extraction_timestamp|source_event_update_timestamp|api_endpoint_export_query_identity|cursor_window|payload_hash_fingerprint|ingestion_run_batch_identity|object_id|ingest_ts)$
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['success', 'failure']]
+
+=== rapid7_securado.asset__fetch  [InvokeHTTP] ===
+  Request Content-Encoding: DISABLED
+  Request Multipart Form-Data Filename Enabled: true
+  Request Chunked Transfer-Encoding Enabled: false
+  HTTP/2 Disabled: True
+  Connection Timeout: 5 secs
+  Response Cookie Strategy: DISABLED
+  Request Password: #{HTTP_PASSWORD}
+  Socket Read Timeout: 30 secs
+  Socket Idle Connections: 20
+  Request Body Enabled: false
+  OAuth2 Access Token Refresh Strategy: ON_TOKEN_EXPIRATION
+  HTTP URL: #{SOURCE_API_BASE}/sites/${site_id}/assets?page=${page}&size=#{PAGE_SIZE}
+  Socket Idle Timeout: 5 mins
+  Response Redirects Enabled: True
+  Socket Write Timeout: 15 secs
+  Response FlowFile Naming Strategy: RANDOM
+  Response Cache Enabled: false
+  Request Date Header Enabled: True
+  Request Failure Penalization Enabled: true
+  Response Body Attribute Size: 256
+  Response Generation Required: false
+  Response Header Request Attributes Enabled: false
+  HTTP Method: GET
+  Request Username: #{HTTP_USERNAME}
+  Request Content-Type: ${mime.type}
+  Request Digest Authentication Enabled: false
+  Response Cache Size: 10MB
+  Response Body Ignored: false
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['No Retry', 'Retry', 'Original', 'Failure']]
+
+=== rapid7_securado.site__fetch  [InvokeHTTP] ===
+  Request Content-Encoding: DISABLED
+  Request Multipart Form-Data Filename Enabled: true
+  Request Chunked Transfer-Encoding Enabled: false
+  HTTP/2 Disabled: True
+  Connection Timeout: 5 secs
+  Response Cookie Strategy: DISABLED
+  Request Password: #{HTTP_PASSWORD}
+  Socket Read Timeout: 30 secs
+  Socket Idle Connections: 20
+  Request Body Enabled: false
+  OAuth2 Access Token Refresh Strategy: ON_TOKEN_EXPIRATION
+  HTTP URL: #{SOURCE_API_BASE}/sites?page=${page}&size=#{PAGE_SIZE}
+  Socket Idle Timeout: 5 mins
+  Response Redirects Enabled: True
+  Socket Write Timeout: 15 secs
+  Response FlowFile Naming Strategy: RANDOM
+  Response Cache Enabled: false
+  Request Date Header Enabled: True
+  Request Failure Penalization Enabled: true
+  Response Body Attribute Size: 256
+  Response Generation Required: false
+  Response Header Request Attributes Enabled: false
+  HTTP Method: GET
+  Request Username: #{HTTP_USERNAME}
+  Request Content-Type: ${mime.type}
+  Request Digest Authentication Enabled: false
+  Response Cache Size: 10MB
+  Response Body Ignored: false
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['No Retry', 'Retry', 'Original', 'Failure']]
+
+=== rapid7_securado.site__has_more  [RouteOnAttribute] ===
+  Routing Strategy: Route to Property name
+  has_more: ${page:toNumber():lt(${total_pages:toNumber():minus(1)})}
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['unmatched']]
+
+=== rapid7_securado.asset__page_meta  [EvaluateJsonPath] ===
+  Destination: flowfile-attribute
+  Max String Length: 20 MB
+  Return Type: auto-detect
+  Null Value Representation: empty string
+  total_pages: $.page.totalPages
+  Path Not Found Behavior: ignore
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure']]
+
+=== rapid7_securado.site__extract  [EvaluateJsonPath] ===
+  site_name: $.name
+  Destination: flowfile-attribute
+  Max String Length: 20 MB
+  Return Type: auto-detect
+  site_id: $.id
+  Null Value Representation: empty string
+  Path Not Found Behavior: ignore
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure', 'unmatched']]
+
+=== rapid7_securado.maximum__trigger  [GenerateFlowFile] ===
+  File Size: 0B
+  Batch Size: 1
+  Unique FlowFiles: false
+  Custom Text: rapid7-asyad-run
+  Character Set: UTF-8
+  Data Format: Text
+  [schedulingPeriod: 6 hours]
+
+=== rapid7_securado.asset__rate_limit  [ControlRate] ===
+  Rate Exceeded Strategy: Hold FlowFile
+  Time Duration: 1 sec
+  Maximum Rate: 100000
+  Rate Control Criteria: flowfile count
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure']]
+
+=== rapid7_securado.asset__init_page  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  page: 0
+  entity: asset
+  [schedulingPeriod: 0 sec]
+
+=== rapid7_securado.site_organization__fetch  [InvokeHTTP] ===
+  Request Content-Encoding: DISABLED
+  Request Multipart Form-Data Filename Enabled: true
+  Request Chunked Transfer-Encoding Enabled: false
+  HTTP/2 Disabled: True
+  Connection Timeout: 5 secs
+  Response Cookie Strategy: DISABLED
+  Request Password: #{HTTP_PASSWORD}
+  Socket Read Timeout: 30 secs
+  Socket Idle Connections: 20
+  Request Body Enabled: true
+  OAuth2 Access Token Refresh Strategy: ON_TOKEN_EXPIRATION
+  HTTP URL: #{SOURCE_API_BASE}/sites/${site_id}/organization
+  Socket Idle Timeout: 5 mins
+  Response Redirects Enabled: True
+  Socket Write Timeout: 15 secs
+  Response FlowFile Naming Strategy: RANDOM
+  Response Cache Enabled: false
+  Request Date Header Enabled: True
+  Request Failure Penalization Enabled: false
+  Response Body Attribute Size: 256
+  Response Generation Required: false
+  Response Header Request Attributes Enabled: false
+  HTTP Method: GET
+  Request Username: #{HTTP_USERNAME}
+  Request Content-Type: ${mime.type}
+  Request Digest Authentication Enabled: false
+  Response Cache Size: 10MB
+  Response Body Ignored: false
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['No Retry', 'Retry', 'Original', 'Failure']]
+
+=== rapid7_securado.site__init_page  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  page: 0
+  entity: site
+  [schedulingPeriod: 0 sec]
+
+=== rapid7_securado.maximum__run_metadata  [UpdateAttribute] ===
+  ingestion_run_batch_identity: rapid7_securado-${now():toNumber()}-${uuid}
+  Store State: Do not store state
+  extraction_timestamp: ${now():format("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")}
+  Cache Value Lookup Cache Size: 100
+  [schedulingPeriod: 0 sec]
+
+=== rapid7_securado.asset__detail_fetch  [InvokeHTTP] ===
+  Request Content-Encoding: DISABLED
+  Request Multipart Form-Data Filename Enabled: true
+  Request Chunked Transfer-Encoding Enabled: false
+  HTTP/2 Disabled: True
+  Connection Timeout: 5 secs
+  Response Cookie Strategy: DISABLED
+  Request Password: #{HTTP_PASSWORD}
+  Socket Read Timeout: 30 secs
+  Socket Idle Connections: 20
+  Request Body Enabled: false
+  OAuth2 Access Token Refresh Strategy: ON_TOKEN_EXPIRATION
+  HTTP URL: #{SOURCE_API_BASE}/assets/${asset_id}
+  Socket Idle Timeout: 5 mins
+  Response Redirects Enabled: True
+  Socket Write Timeout: 15 secs
+  Response FlowFile Naming Strategy: RANDOM
+  Response Cache Enabled: false
+  Request Date Header Enabled: True
+  Request Failure Penalization Enabled: true
+  Response Body Attribute Size: 256
+  Response Generation Required: false
+  Response Header Request Attributes Enabled: false
+  HTTP Method: GET
+  Request Username: #{HTTP_USERNAME}
+  Request Content-Type: ${mime.type}
+  Request Digest Authentication Enabled: false
+  Response Cache Size: 10MB
+  Response Body Ignored: false
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['No Retry', 'Retry', 'Original', 'Failure']]
+
+=== rapid7_securado.asset__raw__publish  [PublishKafka] ===
+  compression.type: lz4
+  acks: all
+  Kafka Key Attribute Encoding: utf-8
+  Record Metadata Strategy: FROM_PROPERTIES
+  Header Encoding: UTF-8
+  max.request.size: 16 MB
+  Topic Name: bronze.rapid7_securado.asset__raw
+  Kafka Key: ${source_object_id}
+  Kafka Connection Service: 2f3daa11-2710-57da-a9bf-2ebc3941085b
+  Publish Strategy: USE_VALUE
+  Failure Strategy: Route to Failure
+  partitioner.class: org.apache.kafka.clients.producer.internals.DefaultPartitioner
+  Transactions Enabled: false
+  FlowFile Attribute Header Pattern: ^(source_platform|customer_tenant_organization|source_object_type|source_object_id|extraction_timestamp|source_event_update_timestamp|api_endpoint_export_query_identity|cursor_window|payload_hash_fingerprint|ingestion_run_batch_identity|object_id|ingest_ts)$
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['success', 'failure']]
+
+=== rapid7_securado.site__page_meta  [EvaluateJsonPath] ===
+  Destination: flowfile-attribute
+  Max String Length: 20 MB
+  Return Type: auto-detect
+  Null Value Representation: empty string
+  total_pages: $.page.totalPages
+  Path Not Found Behavior: ignore
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure']]
+
+=== rapid7_securado.asset__hash  [ExecuteGroovyScript] ===
+  EXCLUDE_FIELDS: ${literal('')}
+  Script Body: 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import org.apache.nifi.processor.io.InputStreamCallback
+
+def flowFile = session.get()
+if (!flowFile) return
+
+try {
+    def prop = { name ->
+        def p = context.getProperty(name)
+        return p == null ? null : p.evaluateAttributeExpressions(flowFile).getValue()
+    }
+
+    def textHolder = [value: '']
+    session.read(flowFile, { inputStream ->
+        textHolder.value = inputStream.getText('UTF...[truncated]
+  Failure Strategy: rollback
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure']]
+
+=== rapid7_securado.asset__dedupe  [DetectDuplicate] ===
+  Cache Entry Identifier: ${dedupe.key}
+  Cache The Entry Identifier: true
+  Age Off Duration: 24 hours
+  FlowFile Description: 
+  Distributed Cache Service: 6de6af93-3ce9-3502-a989-c8916bc1177f
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure', 'duplicate']]
+
+=== rapid7_securado.asset__has_more  [RouteOnAttribute] ===
+  Routing Strategy: Route to Property name
+  has_more: ${page:toNumber():lt(${total_pages:toNumber():minus(1)})}
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['unmatched']]
+
+=== rapid7_securado.site__detail_fetch  [InvokeHTTP] ===
+  Request Content-Encoding: DISABLED
+  Request Multipart Form-Data Filename Enabled: true
+  Request Chunked Transfer-Encoding Enabled: false
+  HTTP/2 Disabled: True
+  Connection Timeout: 5 secs
+  Response Cookie Strategy: DISABLED
+  Request Password: #{HTTP_PASSWORD}
+  Socket Read Timeout: 30 secs
+  Socket Idle Connections: 20
+  Request Body Enabled: false
+  OAuth2 Access Token Refresh Strategy: ON_TOKEN_EXPIRATION
+  HTTP URL: #{SOURCE_API_BASE}/sites/${site_id}
+  Socket Idle Timeout: 5 mins
+  Response Redirects Enabled: True
+  Socket Write Timeout: 15 secs
+  Response FlowFile Naming Strategy: RANDOM
+  Response Cache Enabled: false
+  Request Date Header Enabled: True
+  Request Failure Penalization Enabled: true
+  Response Body Attribute Size: 256
+  Response Generation Required: false
+  Response Header Request Attributes Enabled: false
+  HTTP Method: GET
+  Request Username: #{HTTP_USERNAME}
+  Request Content-Type: ${mime.type}
+  Request Digest Authentication Enabled: false
+  Response Cache Size: 10MB
+  Response Body Ignored: false
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['No Retry', 'Retry', 'Original', 'Failure']]
+
+=== rapid7_securado.asset__extract  [EvaluateJsonPath] ===
+  Destination: flowfile-attribute
+  Max String Length: 20 MB
+  Return Type: auto-detect
+  Null Value Representation: empty string
+  asset_id: $.id
+  Path Not Found Behavior: ignore
+  [schedulingPeriod: 0 sec]
+  [autoTerminated: ['failure', 'unmatched']]
+
+=== rapid7_securado.asset__dedupe_key  [UpdateAttribute] ===
+  Store State: Do not store state
+  Cache Value Lookup Cache Size: 100
+  dedupe.key: rapid7_securado:asset:${object_id}:${'content_SHA-256'}
+  object_id: ${object_id_composite}
+  [schedulingPeriod: 0 sec]

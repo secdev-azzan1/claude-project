@@ -1,0 +1,2997 @@
+{
+  "pg": "1508dfff-01a0-1000-861c-4cbb8f1c946c",
+  "controller": {
+    "maxTimerDrivenThreadCount": 10
+  },
+  "redis_pool": {
+    "Pool - Max Total": "8",
+    "Pool - Max Idle": "8",
+    "Pool - Min Idle": "0",
+    "Pool - Block When Exhausted": "true",
+    "Pool - Max Wait Time": "10 seconds",
+    "Pool - Min Evictable Idle Time": "60 seconds",
+    "Pool - Time Between Eviction Runs": "30 seconds",
+    "Pool - Num Tests Per Eviction Run": "-1",
+    "Pool - Test On Create": "false",
+    "Pool - Test On Borrow": "false",
+    "Pool - Test On Return": "false",
+    "Pool - Test While Idle": "true"
+  },
+  "redis_pool_name": "global__redis_pool",
+  "processors": {
+    "rapid7_securado.exploit__page_meta": {
+      "id": "1f312fd3-01a0-1000-af73-c4c9f9e22d34",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__split": {
+      "id": "1f31b0b3-01a0-1000-ffcf-7cfbadc542bc",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__dedupe_key": {
+      "id": "1f3176dd-01a0-1000-1077-3733bfd5fc0d",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__dedupe_key": {
+      "id": "1f33525c-01a0-1000-9868-38ed77c71282",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__set_public_headers": {
+      "id": "1f3113d1-01a0-1000-02df-f9bfdf4579e7",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__replay__consume": {
+      "id": "1f3311c2-01a0-1000-094f-30c502532fa4",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.tag_site__replay__consume": {
+      "id": "1f325cea-01a0-1000-5362-8d836e1fa51c",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.asset__set_ids": {
+      "id": "15095145-01a0-1000-b093-9434936cde53",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__raw__cast_ingest_ts": {
+      "id": "1f31585d-01a0-1000-03eb-232ce6369a28",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__fetch": {
+      "id": "1509dfca-01a0-1000-fada-8d8cadbeb961",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.tag_asset__dedupe_key": {
+      "id": "1f32395e-01a0-1000-7206-5e7d05a5b142",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__dedupe": {
+      "id": "1f317763-01a0-1000-5a31-116e1bea32c1",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__dedupe": {
+      "id": "1f31b73f-01a0-1000-615d-288c55d6f4ef",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__hash": {
+      "id": "1f334fd9-01a0-1000-e720-93ba57a1a54f",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__set_metadata": {
+      "id": "1f3238b2-01a0-1000-abdd-9ddb8b403843",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__dedupe_key": {
+      "id": "1f327b27-01a0-1000-8018-ddc3a898d44c",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__raw__publish": {
+      "id": "1f33540a-01a0-1000-8c7b-8dcac743ccb3",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.malware_kit__dedupe": {
+      "id": "1f3157f3-01a0-1000-023a-621bb7f76c25",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__hash": {
+      "id": "1b992110-01a0-1000-09b8-df323c6cfd1f",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__raw__cast_ingest_ts": {
+      "id": "1a5f82bf-01a0-1000-2157-b18da84efde2",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__extract": {
+      "id": "1f31b2a7-01a0-1000-f680-1f76dcd771e5",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__set_public_headers": {
+      "id": "1f330ed3-01a0-1000-173b-5a553c5e22e0",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__raw__cast_ingest_ts": {
+      "id": "1f3177f3-01a0-1000-ede9-0d36ccbf7fc3",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__set_public_headers": {
+      "id": "1f325969-01a0-1000-ec1f-a8a4e80bc540",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__avro__publish": {
+      "id": "1f32f293-01a0-1000-e170-12af507ccdc9",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_software__hash": {
+      "id": "1b995a4c-01a0-1000-5d5c-f19ac5f20047",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__raw__publish": {
+      "id": "150a0f0e-01a0-1000-ff12-bb9592eb3526",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.malware_kit__page_meta": {
+      "id": "1f3151b3-01a0-1000-ae87-2c1349807412",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability__set_public_headers": {
+      "id": "1f332fa5-01a0-1000-9102-79f2622d12d0",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__rate_limit": {
+      "id": "1f317331-01a0-1000-f0d7-e88df82fedbc",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.software__avro__publish": {
+      "id": "1f331239-01a0-1000-4bd5-ba2c9aa1a815",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability_reference__avro__publish": {
+      "id": "1f31b9ac-01a0-1000-0f12-772e0ca35f36",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_service__set_ids": {
+      "id": "1509c666-01a0-1000-df87-a626fba8fac7",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__fetch": {
+      "id": "1f310d48-01a0-1000-c04e-42772d91cb96",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.site__init_page": {
+      "id": "1509044d-01a0-1000-d2ef-7340c9b6326b",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__fetch": {
+      "id": "1f314f61-01a0-1000-c000-497f305da973",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset__split": {
+      "id": "15092f3b-01a0-1000-cad1-be106d687128",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability__dedupe": {
+      "id": "1f333150-01a0-1000-6e77-f52f1619a2f9",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__split": {
+      "id": "150905e5-01a0-1000-2755-f679c2ea1128",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__dedupe_key": {
+      "id": "1f31151d-01a0-1000-9e23-9849c7604b07",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__gate_filter": {
+      "id": "1f32eb22-01a0-1000-18af-7d45ce2160e1",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__dedupe_key": {
+      "id": "1f325a75-01a0-1000-e37a-d1bb7992f048",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__dedupe_key": {
+      "id": "15098782-01a0-1000-213a-27a2445ae5c9",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__replay__consume": {
+      "id": "15123565-01a0-1000-4020-6c0938eb5576",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.tag__set_ids": {
+      "id": "1f3112e8-01a0-1000-9eeb-528dfef97340",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__next_page": {
+      "id": "15090957-01a0-1000-039b-612ccfd86136",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__raw__publish": {
+      "id": "1f313737-01a0-1000-865d-5efbca00f7eb",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.tag_asset__next_page": {
+      "id": "1f3235ad-01a0-1000-d940-3bca75678546",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__set_public_headers": {
+      "id": "1a5f0c62-01a0-1000-5ffe-3e3c14c39a8a",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__hash": {
+      "id": "1f317441-01a0-1000-d784-497b96405623",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__raw__publish": {
+      "id": "1f3178a6-01a0-1000-6a09-ac44465ee91a",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability_category__fetch": {
+      "id": "1f317068-01a0-1000-49c6-1598f3b55235",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.software__gate_key": {
+      "id": "1f330b43-01a0-1000-b9f2-4d2e5f6fda1a",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__detail_fetch": {
+      "id": "1f313239-01a0-1000-a78e-1be6871d8437",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.vulnerability_reference__set_public_headers": {
+      "id": "1f31b603-01a0-1000-efef-388ef1e97842",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__set_ids": {
+      "id": "1f330e27-01a0-1000-1e38-ef2af7b5b2df",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__fetch": {
+      "id": "1f32541c-01a0-1000-4dd9-963535ace4b2",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.tag_site__dedupe": {
+      "id": "1f325b13-01a0-1000-9543-3c10d41ea88f",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__next_page": {
+      "id": "1f317249-01a0-1000-7b1e-e6837e1a1415",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__fetch": {
+      "id": "1f3277d1-01a0-1000-e4e2-348c0d607b26",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset__raw__cast_ingest_ts": {
+      "id": "1a5f6c5b-01a0-1000-a515-dd7559485ec7",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__set_ids": {
+      "id": "1f317521-01a0-1000-5588-dce40f046c3f",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__next_page": {
+      "id": "15096aff-01a0-1000-aa18-95ae827d6718",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__hash": {
+      "id": "1f3111d9-01a0-1000-1b5e-c286cb538498",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__page_meta": {
+      "id": "15096729-01a0-1000-103c-ea8ad8043218",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__detail_fetch": {
+      "id": "1509fe46-01a0-1000-003f-ad12147b6e98",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.site__set_ids": {
+      "id": "15091bb5-01a0-1000-f166-fba0f5407248",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__set_public_headers": {
+      "id": "1f323831-01a0-1000-7d48-1f08d8d599da",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__set_public_headers": {
+      "id": "1f313450-01a0-1000-9c74-07f74dc5ba70",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__dedupe": {
+      "id": "1f31159c-01a0-1000-1d2a-927eeaa0152d",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__page_meta": {
+      "id": "15090707-01a0-1000-2745-335f10c357e6",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__replay__consume": {
+      "id": "1f31b90b-01a0-1000-f21a-f5089796e2de",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.vulnerability_reference__raw__publish": {
+      "id": "1f31b855-01a0-1000-d085-7e3157fca24c",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.tag_site__avro__publish": {
+      "id": "1f325d63-01a0-1000-2ba2-ed5e2f7fd8dd",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability__detail_fetch": {
+      "id": "1f332a44-01a0-1000-9f32-dd4c947b083e",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset__page_meta": {
+      "id": "150930e3-01a0-1000-852e-71b5b8c8c612",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__detail_fetch": {
+      "id": "1f3173bf-01a0-1000-08e8-1a8104d414e5",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_vulnerability__dedupe": {
+      "id": "150a0c52-01a0-1000-13b2-2647d6623495",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__avro__publish": {
+      "id": "1511cf11-01a0-1000-215e-f841a56bd908",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_service__extract": {
+      "id": "1509ad65-01a0-1000-dba3-8866bef55883",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__split": {
+      "id": "1f317103-01a0-1000-75d7-3b6bbea91c1d",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__set_ids": {
+      "id": "1f32377f-01a0-1000-66db-a8f4631443e7",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__extract": {
+      "id": "15096cf3-01a0-1000-0082-87b7a12d86a5",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__raw__cast_ingest_ts": {
+      "id": "1a5f649e-01a0-1000-f782-039431a5778f",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__raw__publish": {
+      "id": "15095785-01a0-1000-05b1-afcb6a5475dc",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_vulnerability_solution__dedupe": {
+      "id": "1f327b97-01a0-1000-95cc-500ce38ec63a",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__replay__consume": {
+      "id": "1f327da3-01a0-1000-cc64-6081d670f155",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.vulnerability__gate_key": {
+      "id": "1f33290d-01a0-1000-215a-c25b416f776e",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__extract": {
+      "id": "1f32361d-01a0-1000-cc02-34d6bf412282",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__raw__publish": {
+      "id": "1f31170b-01a0-1000-5203-50aadbb06638",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.solution__dedupe": {
+      "id": "1f3352e9-01a0-1000-f179-c9d23a3a8d04",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__dedupe_key": {
+      "id": "15091e0a-01a0-1000-8044-e18b20f88766",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__dedupe": {
+      "id": "1f3239ee-01a0-1000-83fa-743a10b4a873",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__extract": {
+      "id": "1f311049-01a0-1000-b051-80be9a01e304",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__page_meta": {
+      "id": "1f325508-01a0-1000-b120-d22776fbc563",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__set_metadata": {
+      "id": "1f31149a-01a0-1000-2d98-acac6dd998ac",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__extract": {
+      "id": "1f3278a3-01a0-1000-dc1f-9ee97e0b6d65",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__split": {
+      "id": "1f3150bf-01a0-1000-4830-7d5f4d03f57d",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__set_public_headers": {
+      "id": "1f327a1d-01a0-1000-4979-1418575bc2fc",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__init_page": {
+      "id": "1f310cc5-01a0-1000-a7d8-5c8bc0cd2d40",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__init_page": {
+      "id": "15099d64-01a0-1000-3136-c13f451a2b45",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__rate_limit": {
+      "id": "1f3131af-01a0-1000-38f2-db08966f7c2e",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.exploit__dedupe": {
+      "id": "1f3135ed-01a0-1000-a92f-28af3d8536f5",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__avro__publish": {
+      "id": "1f3179d2-01a0-1000-ecc5-bd190a31a389",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.malware_kit__set_public_headers": {
+      "id": "1f3155f1-01a0-1000-dc4a-d24f0e309106",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__next_page": {
+      "id": "1f310fc3-01a0-1000-1d19-994afd2a611a",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__avro__publish": {
+      "id": "1f327e13-01a0-1000-a532-9fda96d5cc23",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.tag_site__init_page": {
+      "id": "1f3253b4-01a0-1000-b137-2d723b96fc6b",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site_organization__raw__cast_ingest_ts": {
+      "id": "1f31f6ad-01a0-1000-e0ca-d416b8187917",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__rate_limit": {
+      "id": "1f31b33b-01a0-1000-f73a-d561feb2f3bd",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.exploit__avro__publish": {
+      "id": "1f31383a-01a0-1000-9778-9e4e3d5f693b",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.site__has_more": {
+      "id": "1509083b-01a0-1000-6b66-a652cbbafeef",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__dedupe": {
+      "id": "1f331028-01a0-1000-4b1f-0ee7a7a7f177",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__set_ids": {
+      "id": "1f32ee1f-01a0-1000-a3e1-74df7d853716",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__dedupe_key": {
+      "id": "150a0999-01a0-1000-392c-5d0874fe44cc",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__next_page": {
+      "id": "1f3130b6-01a0-1000-91f2-587be4f85246",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__set_metadata": {
+      "id": "1f327a99-01a0-1000-b4d4-2f1cd6fd1fa6",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__next_page": {
+      "id": "1f31b238-01a0-1000-a7f3-17e6427550cb",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__set_metadata": {
+      "id": "1509852c-01a0-1000-b1d5-a31062b9d10a",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__hash": {
+      "id": "1f32ed70-01a0-1000-eac2-1cc338034f83",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__rate_limit": {
+      "id": "1f330c3e-01a0-1000-1731-9be7b8feb707",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.site_organization__replay__consume": {
+      "id": "1f31f7d7-01a0-1000-b4ea-e8ad89d9f2d7",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.asset_software__replay__consume": {
+      "id": "1512421c-01a0-1000-af74-89768b338868",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.solution__gate": {
+      "id": "1f334e4c-01a0-1000-5a92-fa30e54da4f1",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__dedupe_key": {
+      "id": "1f315761-01a0-1000-5623-aaf72ab1792a",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__set_metadata": {
+      "id": "1f31b665-01a0-1000-24f1-097ae54203a3",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__set_public_headers": {
+      "id": "1f32ee95-01a0-1000-f4c7-e0a16e4a9c15",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__hash": {
+      "id": "1f32790f-01a0-1000-0a7f-0c6be2c180cf",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__set_metadata": {
+      "id": "15091ce9-01a0-1000-bf1c-f58850714bcf",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site_organization__set_public_headers": {
+      "id": "1f31f481-01a0-1000-2a05-ab02ee900536",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__hash": {
+      "id": "1f3236af-01a0-1000-4da7-c17ed45c2626",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__has_more": {
+      "id": "1f315244-01a0-1000-9cbb-ec04372b7bbd",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__set_ids": {
+      "id": "1f3350ad-01a0-1000-6fe9-8ec347cab651",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__os_extract": {
+      "id": "1f32be0d-01a0-1000-0e3c-9420d3fc5fef",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__replay__consume": {
+      "id": "1f311786-01a0-1000-2af0-2e0c6784b221",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.malware_kit__avro__publish": {
+      "id": "1f3159d5-01a0-1000-cdea-bc16bb42ba86",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_vulnerability__hash": {
+      "id": "1b9973fb-01a0-1000-70b4-52f9dfe58e8a",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__split": {
+      "id": "1509e1c1-01a0-1000-01c1-9977bfd860c5",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability__replay__consume": {
+      "id": "1f333320-01a0-1000-24b2-fe59b3259ba6",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.tag__split": {
+      "id": "1f310de6-01a0-1000-939d-33ee650fc122",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__fetch": {
+      "id": "1f3233d9-01a0-1000-771d-2939459c9fb6",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_vulnerability__extract": {
+      "id": "1509e98f-01a0-1000-9d9f-c8534ac85a50",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__raw__publish": {
+      "id": "1f3158fc-01a0-1000-d44f-099895c565bb",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.site_organization__set_metadata": {
+      "id": "1f31f533-01a0-1000-4a20-fb3317f5b68d",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__raw__publish": {
+      "id": "1f331138-01a0-1000-12e7-45908ef92160",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.exploit__replay__consume": {
+      "id": "1f3137a4-01a0-1000-8b54-6bf21a575a44",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.asset_service__page_meta": {
+      "id": "1509a5a4-01a0-1000-d8ab-fdbb7c2429ee",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__rate_limit": {
+      "id": "1f3153b4-01a0-1000-c7b5-dd0787018bc6",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.vulnerability__avro__publish": {
+      "id": "1f33339c-01a0-1000-e348-db590dd6a075",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.malware_kit__extract": {
+      "id": "1f315342-01a0-1000-5b4f-74d1c386b1e9",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__rate_limit": {
+      "id": "1f32ec5f-01a0-1000-8213-1227ab612c4d",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.exploit__init_page": {
+      "id": "1f312e8d-01a0-1000-2b69-0f3b40274886",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__rate_limit": {
+      "id": "1509483c-01a0-1000-d42e-80a8465584ed",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "2",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.exploit__fetch": {
+      "id": "1f312ef5-01a0-1000-0328-210f1123f02f",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.operating_system__raw__cast_ingest_ts": {
+      "id": "1f32f105-01a0-1000-cb22-567082b2fc26",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__replay__consume": {
+      "id": "1f33549f-01a0-1000-2372-e0eae5f84f67",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.malware_kit__set_ids": {
+      "id": "1f315578-01a0-1000-040f-e0174554c4c8",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__extract": {
+      "id": "1509363e-01a0-1000-58f1-a3680c43d416",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__raw__cast_ingest_ts": {
+      "id": "1a5f7ad2-01a0-1000-7cdb-b6a8fc0e01a7",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__fetch": {
+      "id": "1509a01d-01a0-1000-c172-825fa07d71e7",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_software__has_more": {
+      "id": "15096908-01a0-1000-2f55-55537130baf9",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__gate_key": {
+      "id": "1f334dda-01a0-1000-b5e6-9eb80ad2d09f",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__set_public_headers": {
+      "id": "1a5f17e5-01a0-1000-23f0-f1ff43120d5a",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__set_metadata": {
+      "id": "1f330f48-01a0-1000-1db2-0f133a4b383d",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__raw__publish": {
+      "id": "1509cdd7-01a0-1000-e2fa-9445fcb95159",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.tag_site__raw__cast_ingest_ts": {
+      "id": "1f325b91-01a0-1000-8a20-3a71a8007d41",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__init_page": {
+      "id": "1509ddd7-01a0-1000-8eda-6507da9ded1b",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__dedupe": {
+      "id": "15098a41-01a0-1000-5e19-abfd325b7f70",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__replay__consume": {
+      "id": "1f31596b-01a0-1000-df77-c3b210e59ed3",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.site_organization__dedupe_key": {
+      "id": "1f31f5a0-01a0-1000-3597-2b4dac11af8f",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__detail_fetch": {
+      "id": "1f31542f-01a0-1000-0af8-8b42934d0347",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset__avro__publish": {
+      "id": "15117858-01a0-1000-d443-194cfd197b5d",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.site_organization__raw__publish": {
+      "id": "1f31f751-01a0-1000-6df4-df83fbeb3c68",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.software__hash": {
+      "id": "1f330d41-01a0-1000-77ac-58999e4d4da8",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__hash": {
+      "id": "1f31b4db-01a0-1000-3a59-3f7da61bb898",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__replay__consume": {
+      "id": "15125312-01a0-1000-81e6-2571af9dd8cc",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.site_organization__fetch": {
+      "id": "1f31f2d9-01a0-1000-c987-8f521084fb8f",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.tag_asset__raw__publish": {
+      "id": "1f323b34-01a0-1000-ec2a-4eaf398fc96d",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_service__dedupe_key": {
+      "id": "1509ca54-01a0-1000-6409-a76193656162",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__set_ids": {
+      "id": "1f31b580-01a0-1000-ee4c-30fcda9bfc9e",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__dedupe_key": {
+      "id": "1f313580-01a0-1000-0274-bd9f92eb7444",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__extract": {
+      "id": "1f3172b5-01a0-1000-293b-0b79a7098ef5",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__set_metadata": {
+      "id": "1f3156ab-01a0-1000-a5c7-18094266e70d",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__detail_fetch": {
+      "id": "1f31b3f9-01a0-1000-f926-182088b7f6dc",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_vulnerability__set_public_headers": {
+      "id": "1a5f2319-01a0-1000-dfc4-c9d3f9a9f55f",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__has_more": {
+      "id": "1509e558-01a0-1000-4237-944058f74c80",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__hash": {
+      "id": "1f3132f9-01a0-1000-733f-93d64714a196",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__rate_limit": {
+      "id": "1f3110c1-01a0-1000-438d-f7291390ce44",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.tag_site__wrap_id": {
+      "id": "1f3ae7aa-01a0-1000-b269-f26776c8eb44",
+      "type": "ReplaceText",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site_organization__hash": {
+      "id": "1f31f35e-01a0-1000-2589-98326d1e2cbb",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability__gate_filter": {
+      "id": "1f33289f-01a0-1000-ea9d-0e9f1231a7c4",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__init_page": {
+      "id": "1f32333d-01a0-1000-4c60-5355b9d7bb59",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__set_metadata": {
+      "id": "1509c82f-01a0-1000-6df6-0e30a230caab",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__next_page": {
+      "id": "1509ab10-01a0-1000-4310-c92f14c248ba",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__avro__publish": {
+      "id": "151194d7-01a0-1000-db2c-c7d4026dfa91",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_service__hash": {
+      "id": "1b994118-01a0-1000-df2b-cf5185d67b65",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__split": {
+      "id": "1509a276-01a0-1000-e988-ab73b2e85314",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__dedupe_key": {
+      "id": "150954b9-01a0-1000-6eb7-7e6e37bbe6ab",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__raw__publish": {
+      "id": "1f327d36-01a0-1000-2226-7e0af896939b",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_vulnerability_solution__set_ids": {
+      "id": "1f3279aa-01a0-1000-1ae2-63ebe433a189",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__extract": {
+      "id": "1f3256be-01a0-1000-b191-68dd28290c46",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__has_more": {
+      "id": "1f3171df-01a0-1000-426a-2818bdf2a9e5",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__raw__cast_ingest_ts": {
+      "id": "1f313658-01a0-1000-491b-d95aa6a039d9",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__avro__publish": {
+      "id": "1f335518-01a0-1000-7522-41e66f0f3bb5",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_software__set_ids": {
+      "id": "150982d5-01a0-1000-72f0-0b14259218a3",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__split": {
+      "id": "1f312f65-01a0-1000-2efc-c067939fa3a1",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.malware_kit__init_page": {
+      "id": "1f314ead-01a0-1000-4c87-4c151c6b31ab",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__replay__consume": {
+      "id": "15124a82-01a0-1000-813b-e55d5617ed4d",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.vulnerability__set_ids": {
+      "id": "1f332f3b-01a0-1000-516d-ab2dbc5bd9d2",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__split": {
+      "id": "15096590-01a0-1000-40f1-72c6e5a2d6eb",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__detail_fetch": {
+      "id": "1509c026-01a0-1000-d46e-57fe7b92e734",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.vulnerability__rate_limit": {
+      "id": "1f3329e0-01a0-1000-18c0-0115fe8deddb",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.asset__set_metadata": {
+      "id": "1509532f-01a0-1000-0b52-53a0359409a4",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__dedupe_key": {
+      "id": "1f31b6d2-01a0-1000-093c-6656d8cb24c4",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__page_meta": {
+      "id": "1f31716f-01a0-1000-7e7d-585e724166c0",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.maximum__trigger": {
+      "id": "150902ae-01a0-1000-2ccb-b4364035361f",
+      "type": "GenerateFlowFile",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "6 hours",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__fetch": {
+      "id": "15092d47-01a0-1000-e064-d08784103133",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.malware_kit__next_page": {
+      "id": "1f3152bc-01a0-1000-fdb8-5425cea5d3f2",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__split": {
+      "id": "1f325490-01a0-1000-22d5-4066ef345293",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability_solution__split": {
+      "id": "1f32783d-01a0-1000-ea7a-be1d70068214",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__gate_filter": {
+      "id": "1f330ac2-01a0-1000-9377-15114332bded",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__page_meta": {
+      "id": "1f3234d9-01a0-1000-b92a-27ca31e291d6",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__raw__publish": {
+      "id": "15098cfc-01a0-1000-866a-8fb640ca1e39",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.tag_asset__raw__cast_ingest_ts": {
+      "id": "1f323a70-01a0-1000-d891-844984535809",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__next_page": {
+      "id": "1f325603-01a0-1000-ffa7-e5af127e57c8",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__set_ids": {
+      "id": "1f3133da-01a0-1000-31b1-8613ac7623dd",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__gate": {
+      "id": "1f330bc9-01a0-1000-af5f-1f7307b2a32b",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__hash": {
+      "id": "1b951b43-01a0-1000-7146-e504d9663161",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__replay__consume": {
+      "id": "1f317926-01a0-1000-adbf-8c5ee7c30adb",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.vulnerability_reference__has_more": {
+      "id": "1f31b18c-01a0-1000-9ddb-745186bd331a",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.maximum__run_metadata": {
+      "id": "15090384-01a0-1000-6b06-e5136820b613",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__detail_fetch": {
+      "id": "1f311131-01a0-1000-8dd0-1d2689deb49d",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.vulnerability__dedupe_key": {
+      "id": "1f333094-01a0-1000-f4c8-9e286d4f7939",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__set_metadata": {
+      "id": "1f3259f3-01a0-1000-092f-25c938197367",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__gate": {
+      "id": "1f32ebeb-01a0-1000-5316-52006a31d48a",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_category__set_public_headers": {
+      "id": "1f3175dc-01a0-1000-34ab-3c1c08abc9a1",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__split": {
+      "id": "1f323452-01a0-1000-9271-c9376eb2e482",
+      "type": "SplitJson",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__set_public_headers": {
+      "id": "1a5ef3cf-01a0-1000-4f7a-b23873b2228c",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__extract": {
+      "id": "1f31314e-01a0-1000-f760-26ff26fd803c",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__dedupe_key": {
+      "id": "1f32eff9-01a0-1000-f2eb-20dd8f21bf4c",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__next_page": {
+      "id": "15093452-01a0-1000-0f1a-b2fe26193eb7",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__raw__publish": {
+      "id": "1f325c46-01a0-1000-598b-2fed18a00392",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability__set_metadata": {
+      "id": "1f333027-01a0-1000-2df0-88322713b510",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability__raw__publish": {
+      "id": "1f333289-01a0-1000-9728-913e621402c7",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.site_organization__dedupe": {
+      "id": "1f31f62d-01a0-1000-60c6-6a7956a11f0e",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__raw__publish": {
+      "id": "1f32f1a1-01a0-1000-d85c-d0369a7d9ce5",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.tag_site__has_more": {
+      "id": "1f325584-01a0-1000-6a96-d4173301075f",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__page_meta": {
+      "id": "1f310e83-01a0-1000-569c-ab855cb7a813",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__extract": {
+      "id": "15090a33-01a0-1000-b914-76d31e5cb5e8",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag__raw__cast_ingest_ts": {
+      "id": "1f311610-01a0-1000-2ed5-1daabc97e22f",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__dedupe": {
+      "id": "15095600-01a0-1000-1bd4-040e3cab3975",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__detail_fetch": {
+      "id": "1f32ecdd-01a0-1000-362e-8f0ad535eda0",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.tag__avro__publish": {
+      "id": "1f311827-01a0-1000-6310-be4fa7ec519c",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.asset_vulnerability__set_metadata": {
+      "id": "150a073f-01a0-1000-33de-669db0de75a8",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__init_page": {
+      "id": "1f31afdd-01a0-1000-2b25-c8e7560aa7a8",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__set_metadata": {
+      "id": "1f32ef53-01a0-1000-a7ac-1d1c9578fd27",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__raw__publish": {
+      "id": "1509212b-01a0-1000-7000-6e7265398744",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability_category__init_page": {
+      "id": "1f316ff3-01a0-1000-fcd9-b8a2d8f97f99",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__next_page": {
+      "id": "1509e754-01a0-1000-065e-a78776c40282",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__set_ids": {
+      "id": "1f3258d5-01a0-1000-bcd6-700bc9478224",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__page_meta": {
+      "id": "1509e3b2-01a0-1000-c4be-e896aa192440",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__detail_fetch": {
+      "id": "1f330cd0-01a0-1000-bf89-5c0d89f77df2",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset__init_page": {
+      "id": "15092b6e-01a0-1000-c389-cf292c6aa410",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site_organization__set_ids": {
+      "id": "1f31f413-01a0-1000-13ef-1af6c2d2d743",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__rate_limit": {
+      "id": "1f334eea-01a0-1000-c0e9-3c5d7217c0a0",
+      "type": "ControlRate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Maximum Rate": "3",
+        "Time Duration": "1 sec",
+        "Rate Control Criteria": "flowfile count"
+      }
+    },
+    "rapid7_securado.tag_asset__avro__publish": {
+      "id": "1f323c2f-01a0-1000-5b91-d3efd5bd06ba",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability_category__set_metadata": {
+      "id": "1f317666-01a0-1000-93c1-c0a0b70d856a",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__dedupe_key": {
+      "id": "1f330fb7-01a0-1000-cafd-0fe22f934151",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability__raw__cast_ingest_ts": {
+      "id": "1f3331d1-01a0-1000-72c7-22674486df6a",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__replay__consume": {
+      "id": "1f32f212-01a0-1000-d833-2603b2d30f74",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.site__fetch": {
+      "id": "1509051c-01a0-1000-6e2c-b987ca6b5198",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.malware_kit__hash": {
+      "id": "1f3154aa-01a0-1000-03fd-e70a283bfd20",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_site__hash": {
+      "id": "1f3257bf-01a0-1000-bd03-a0cea383458b",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__raw__cast_ingest_ts": {
+      "id": "1f31b7ad-01a0-1000-a9da-8d549f6f370c",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__set_metadata": {
+      "id": "1f3351cb-01a0-1000-635e-5525ffe999cd",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.exploit__set_metadata": {
+      "id": "1f313504-01a0-1000-56da-b89d4537e739",
+      "type": "UpdateRecord",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__filter": {
+      "id": "150911ff-01a0-1000-9483-2e977afeb045",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__gate_key": {
+      "id": "1f32eb8d-01a0-1000-9e6d-145f510ae3f9",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__raw__cast_ingest_ts": {
+      "id": "1a5f738c-01a0-1000-5796-623e142afe99",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__set_public_headers": {
+      "id": "1a5f011b-01a0-1000-4f00-784f57e81ef2",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_software__init_page": {
+      "id": "15096266-01a0-1000-4c60-1b15e0fec657",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__detail_fetch": {
+      "id": "150916bc-01a0-1000-6d4e-838872bad034",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.exploit__has_more": {
+      "id": "1f313045-01a0-1000-c88f-6569a2359843",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__has_more": {
+      "id": "1509a804-01a0-1000-c743-1db21b53fb8a",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__detail_fetch": {
+      "id": "15094bbe-01a0-1000-7e1f-975027e88d28",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_software__fetch": {
+      "id": "15096392-01a0-1000-6fc4-14fca6c756ad",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_service__dedupe": {
+      "id": "1509cba7-01a0-1000-65b1-c94a0a5edfb6",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__detail_fetch": {
+      "id": "1f334f64-01a0-1000-cc12-0f4e2e1aa948",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.tag__has_more": {
+      "id": "1f310f2b-01a0-1000-dca0-0c503697c95b",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.software__raw__cast_ingest_ts": {
+      "id": "1f331090-01a0-1000-1cf9-50343a97346e",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.vulnerability_reference__fetch": {
+      "id": "1f31b047-01a0-1000-4f10-1598353b36bc",
+      "type": "InvokeHTTP",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Socket Idle Connections": "5"
+      }
+    },
+    "rapid7_securado.asset_vulnerability_solution__raw__cast_ingest_ts": {
+      "id": "1f327c6d-01a0-1000-99ba-ddcf12cea9c2",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__has_more": {
+      "id": "1f32353f-01a0-1000-8a99-5548c3cd9f37",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset__replay__consume": {
+      "id": "15123c07-01a0-1000-d7a8-d6653b663187",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.vulnerability__hash": {
+      "id": "1f332ab1-01a0-1000-1661-81b924ffa027",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site_organization__avro__publish": {
+      "id": "1f31f85e-01a0-1000-f054-6ab930e8cb74",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.solution__raw__cast_ingest_ts": {
+      "id": "1f33535d-01a0-1000-ec84-24dde221c62d",
+      "type": "ExecuteGroovyScript",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__gate_filter": {
+      "id": "1f334d70-01a0-1000-6b31-1a73ff50087e",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__avro__publish": {
+      "id": "15115c41-01a0-1000-e520-fabdb9f44a6f",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability__gate": {
+      "id": "1f33296c-01a0-1000-1ff6-fb21d250a8ab",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_vulnerability__set_ids": {
+      "id": "150a04e8-01a0-1000-2642-6cf4af181b0f",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.solution__set_public_headers": {
+      "id": "1f335135-01a0-1000-d484-c4d778559850",
+      "type": "UpdateAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.site__dedupe": {
+      "id": "15091f99-01a0-1000-563c-a039866a4ec3",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.operating_system__dedupe": {
+      "id": "1f32f093-01a0-1000-aae2-0bd78450fe0b",
+      "type": "DetectDuplicate",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 25,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.tag_asset__replay__consume": {
+      "id": "1f323ba5-01a0-1000-8ad2-7e4da2a530e5",
+      "type": "ConsumeKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "Processing Strategy": "FLOW_FILE"
+      }
+    },
+    "rapid7_securado.asset__has_more": {
+      "id": "150932c2-01a0-1000-7523-8e2c08cc3f9c",
+      "type": "RouteOnAttribute",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    },
+    "rapid7_securado.asset_service__avro__publish": {
+      "id": "1511b0f8-01a0-1000-e6d6-5f19335b6edc",
+      "type": "PublishKafka",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {
+        "compression.type": "gzip"
+      }
+    },
+    "rapid7_securado.vulnerability_reference__page_meta": {
+      "id": "1f31b114-01a0-1000-d3e9-f882f7ee9dfd",
+      "type": "EvaluateJsonPath",
+      "concurrentlySchedulableTaskCount": 1,
+      "runDurationMillis": 0,
+      "schedulingPeriod": "0 sec",
+      "state": "STOPPED",
+      "props": {}
+    }
+  }
+}

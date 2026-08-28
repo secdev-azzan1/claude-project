@@ -236,7 +236,7 @@
             "properties": {
               "Schema Access Strategy": "inherit-record-schema",
               "Schema Write Strategy": "no-schema",
-              "Output Grouping": "output-array"
+              "Output Grouping": "output-oneline"
             }
           },
           {
@@ -495,7 +495,7 @@
             "properties": {
               "Schema Access Strategy": "inherit-record-schema",
               "Schema Write Strategy": "no-schema",
-              "Output Grouping": "output-array"
+              "Output Grouping": "output-oneline"
             }
           },
           {

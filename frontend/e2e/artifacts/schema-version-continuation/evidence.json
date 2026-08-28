@@ -1,0 +1,3150 @@
+{
+  "templateName": "codex15aug26 schema version continuation 20260815123811098",
+  "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+  "snapshots": [
+    {
+      "label": "template-opened",
+      "screenshot": "02-not-registered-filter.png"
+    },
+    {
+      "label": "verify-structural",
+      "verifyResponse": {
+        "ok": true,
+        "issues": [],
+        "compatibility": {
+          "checked": false,
+          "compatible": null,
+          "message": "No subject given — compatibility not checked."
+        }
+      },
+      "screenshot": "03-verifying-manual-template.png"
+    },
+    {
+      "label": "register-v1",
+      "registerResponse": {
+        "globalId": 29,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 1,
+        "registeredAt": "2026-08-15T12:38:22.468Z"
+      }
+    },
+    {
+      "label": "after-register-v1",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 29,
+        "registeredVersion": 1,
+        "registeredAt": "2026-08-15T12:38:22.468Z"
+      },
+      "versions": [
+        1
+      ],
+      "latestVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "screenshot": "04-registered-filter.png"
+    },
+    {
+      "label": "verify-compatible",
+      "verifyResponse": {
+        "ok": true,
+        "issues": [],
+        "compatibility": {
+          "checked": true,
+          "compatible": true,
+          "message": "Compatible with the latest registered version."
+        }
+      }
+    },
+    {
+      "label": "register-v2",
+      "registerResponse": {
+        "globalId": 30,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 2,
+        "registeredAt": "2026-08-15T12:38:24.162Z"
+      }
+    },
+    {
+      "label": "after-register-v2",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 30,
+        "registeredVersion": 2,
+        "registeredAt": "2026-08-15T12:38:24.162Z"
+      },
+      "versions": [
+        1,
+        2
+      ],
+      "latestVersion": {
+        "version": 2,
+        "globalId": 30,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v3",
+      "registerResponse": {
+        "globalId": 31,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 3,
+        "registeredAt": "2026-08-15T12:38:25.182Z"
+      }
+    },
+    {
+      "label": "backend-version-3",
+      "registerResponse": {
+        "globalId": 31,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 3,
+        "registeredAt": "2026-08-15T12:38:25.182Z"
+      }
+    },
+    {
+      "label": "after-register-v3",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 31,
+        "registeredVersion": 3,
+        "registeredAt": "2026-08-15T12:38:25.182Z"
+      },
+      "versions": [
+        1,
+        2,
+        3
+      ],
+      "latestVersion": {
+        "version": 3,
+        "globalId": 31,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v4",
+      "registerResponse": {
+        "globalId": 32,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 4,
+        "registeredAt": "2026-08-15T12:38:26.148Z"
+      }
+    },
+    {
+      "label": "backend-version-4",
+      "registerResponse": {
+        "globalId": 32,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 4,
+        "registeredAt": "2026-08-15T12:38:26.148Z"
+      }
+    },
+    {
+      "label": "after-register-v4",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 32,
+        "registeredVersion": 4,
+        "registeredAt": "2026-08-15T12:38:26.148Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "latestVersion": {
+        "version": 4,
+        "globalId": 32,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v5",
+      "registerResponse": {
+        "globalId": 33,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 5,
+        "registeredAt": "2026-08-15T12:38:27.122Z"
+      }
+    },
+    {
+      "label": "backend-version-5",
+      "registerResponse": {
+        "globalId": 33,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 5,
+        "registeredAt": "2026-08-15T12:38:27.122Z"
+      }
+    },
+    {
+      "label": "after-register-v5",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 33,
+        "registeredVersion": 5,
+        "registeredAt": "2026-08-15T12:38:27.122Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "latestVersion": {
+        "version": 5,
+        "globalId": 33,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v6",
+      "registerResponse": {
+        "globalId": 34,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 6,
+        "registeredAt": "2026-08-15T12:38:28.184Z"
+      }
+    },
+    {
+      "label": "backend-version-6",
+      "registerResponse": {
+        "globalId": 34,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 6,
+        "registeredAt": "2026-08-15T12:38:28.184Z"
+      }
+    },
+    {
+      "label": "after-register-v6",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 34,
+        "registeredVersion": 6,
+        "registeredAt": "2026-08-15T12:38:28.184Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "latestVersion": {
+        "version": 6,
+        "globalId": 34,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v7",
+      "registerResponse": {
+        "globalId": 35,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 7,
+        "registeredAt": "2026-08-15T12:38:29.112Z"
+      }
+    },
+    {
+      "label": "backend-version-7",
+      "registerResponse": {
+        "globalId": 35,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 7,
+        "registeredAt": "2026-08-15T12:38:29.112Z"
+      }
+    },
+    {
+      "label": "after-register-v7",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 35,
+        "registeredVersion": 7,
+        "registeredAt": "2026-08-15T12:38:29.112Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "latestVersion": {
+        "version": 7,
+        "globalId": 35,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v8",
+      "registerResponse": {
+        "globalId": 36,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 8,
+        "registeredAt": "2026-08-15T12:38:29.984Z"
+      }
+    },
+    {
+      "label": "backend-version-8",
+      "registerResponse": {
+        "globalId": 36,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 8,
+        "registeredAt": "2026-08-15T12:38:29.984Z"
+      }
+    },
+    {
+      "label": "after-register-v8",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 36,
+        "registeredVersion": 8,
+        "registeredAt": "2026-08-15T12:38:29.984Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "latestVersion": {
+        "version": 8,
+        "globalId": 36,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v9",
+      "registerResponse": {
+        "globalId": 37,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 9,
+        "registeredAt": "2026-08-15T12:38:30.934Z"
+      }
+    },
+    {
+      "label": "backend-version-9",
+      "registerResponse": {
+        "globalId": 37,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 9,
+        "registeredAt": "2026-08-15T12:38:30.934Z"
+      }
+    },
+    {
+      "label": "after-register-v9",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 37,
+        "registeredVersion": 9,
+        "registeredAt": "2026-08-15T12:38:30.934Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "latestVersion": {
+        "version": 9,
+        "globalId": 37,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v10",
+      "registerResponse": {
+        "globalId": 38,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 10,
+        "registeredAt": "2026-08-15T12:38:31.991Z"
+      }
+    },
+    {
+      "label": "backend-version-10",
+      "registerResponse": {
+        "globalId": 38,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 10,
+        "registeredAt": "2026-08-15T12:38:31.991Z"
+      }
+    },
+    {
+      "label": "after-register-v10",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 38,
+        "registeredVersion": 10,
+        "registeredAt": "2026-08-15T12:38:31.991Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "latestVersion": {
+        "version": 10,
+        "globalId": 38,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v11",
+      "registerResponse": {
+        "globalId": 39,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 11,
+        "registeredAt": "2026-08-15T12:38:32.928Z"
+      }
+    },
+    {
+      "label": "backend-version-11",
+      "registerResponse": {
+        "globalId": 39,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 11,
+        "registeredAt": "2026-08-15T12:38:32.928Z"
+      }
+    },
+    {
+      "label": "after-register-v11",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 39,
+        "registeredVersion": 11,
+        "registeredAt": "2026-08-15T12:38:32.928Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "latestVersion": {
+        "version": 11,
+        "globalId": 39,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v12",
+      "registerResponse": {
+        "globalId": 40,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 12,
+        "registeredAt": "2026-08-15T12:38:33.815Z"
+      }
+    },
+    {
+      "label": "backend-version-12",
+      "registerResponse": {
+        "globalId": 40,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 12,
+        "registeredAt": "2026-08-15T12:38:33.815Z"
+      }
+    },
+    {
+      "label": "after-register-v12",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 40,
+        "registeredVersion": 12,
+        "registeredAt": "2026-08-15T12:38:33.815Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "latestVersion": {
+        "version": 12,
+        "globalId": 40,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v13",
+      "registerResponse": {
+        "globalId": 41,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 13,
+        "registeredAt": "2026-08-15T12:38:34.701Z"
+      }
+    },
+    {
+      "label": "backend-version-13",
+      "registerResponse": {
+        "globalId": 41,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 13,
+        "registeredAt": "2026-08-15T12:38:34.701Z"
+      }
+    },
+    {
+      "label": "after-register-v13",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 41,
+        "registeredVersion": 13,
+        "registeredAt": "2026-08-15T12:38:34.701Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "latestVersion": {
+        "version": 13,
+        "globalId": 41,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v14",
+      "registerResponse": {
+        "globalId": 42,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 14,
+        "registeredAt": "2026-08-15T12:38:35.835Z"
+      }
+    },
+    {
+      "label": "backend-version-14",
+      "registerResponse": {
+        "globalId": 42,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 14,
+        "registeredAt": "2026-08-15T12:38:35.835Z"
+      }
+    },
+    {
+      "label": "after-register-v14",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 42,
+        "registeredVersion": 14,
+        "registeredAt": "2026-08-15T12:38:35.835Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "latestVersion": {
+        "version": 14,
+        "globalId": 42,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v15",
+      "registerResponse": {
+        "globalId": 43,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 15,
+        "registeredAt": "2026-08-15T12:38:36.962Z"
+      }
+    },
+    {
+      "label": "backend-version-15",
+      "registerResponse": {
+        "globalId": 43,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 15,
+        "registeredAt": "2026-08-15T12:38:36.962Z"
+      }
+    },
+    {
+      "label": "after-register-v15",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 43,
+        "registeredVersion": 15,
+        "registeredAt": "2026-08-15T12:38:36.962Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "latestVersion": {
+        "version": 15,
+        "globalId": 43,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v16",
+      "registerResponse": {
+        "globalId": 44,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 16,
+        "registeredAt": "2026-08-15T12:38:37.989Z"
+      }
+    },
+    {
+      "label": "backend-version-16",
+      "registerResponse": {
+        "globalId": 44,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 16,
+        "registeredAt": "2026-08-15T12:38:37.989Z"
+      }
+    },
+    {
+      "label": "after-register-v16",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 44,
+        "registeredVersion": 16,
+        "registeredAt": "2026-08-15T12:38:37.989Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "latestVersion": {
+        "version": 16,
+        "globalId": 44,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_16",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v17",
+      "registerResponse": {
+        "globalId": 45,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 17,
+        "registeredAt": "2026-08-15T12:38:39.240Z"
+      }
+    },
+    {
+      "label": "backend-version-17",
+      "registerResponse": {
+        "globalId": 45,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 17,
+        "registeredAt": "2026-08-15T12:38:39.240Z"
+      }
+    },
+    {
+      "label": "after-register-v17",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 45,
+        "registeredVersion": 17,
+        "registeredAt": "2026-08-15T12:38:39.240Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "latestVersion": {
+        "version": 17,
+        "globalId": 45,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_16",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_17",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v18",
+      "registerResponse": {
+        "globalId": 46,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 18,
+        "registeredAt": "2026-08-15T12:38:40.278Z"
+      }
+    },
+    {
+      "label": "backend-version-18",
+      "registerResponse": {
+        "globalId": 46,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 18,
+        "registeredAt": "2026-08-15T12:38:40.278Z"
+      }
+    },
+    {
+      "label": "after-register-v18",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 46,
+        "registeredVersion": 18,
+        "registeredAt": "2026-08-15T12:38:40.278Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18
+      ],
+      "latestVersion": {
+        "version": 18,
+        "globalId": 46,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_16",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_17",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_18",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "register-v19",
+      "registerResponse": {
+        "globalId": 47,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 19,
+        "registeredAt": "2026-08-15T12:38:41.384Z"
+      }
+    },
+    {
+      "label": "backend-version-19",
+      "registerResponse": {
+        "globalId": 47,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 19,
+        "registeredAt": "2026-08-15T12:38:41.384Z"
+      }
+    },
+    {
+      "label": "after-register-v19",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 47,
+        "registeredVersion": 19,
+        "registeredAt": "2026-08-15T12:38:41.384Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "latestVersion": {
+        "version": 19,
+        "globalId": 47,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_16",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_17",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_18",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_19",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "verify-compatible",
+      "verifyResponse": {
+        "ok": true,
+        "issues": [],
+        "compatibility": {
+          "checked": true,
+          "compatible": true,
+          "message": "Compatible with the latest registered version."
+        }
+      }
+    },
+    {
+      "label": "register-v20",
+      "registerResponse": {
+        "globalId": 48,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 20,
+        "registeredAt": "2026-08-15T12:38:42.882Z"
+      }
+    },
+    {
+      "label": "backend-version-20",
+      "registerResponse": {
+        "globalId": 48,
+        "subject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "version": 20,
+        "registeredAt": "2026-08-15T12:38:42.882Z"
+      }
+    },
+    {
+      "label": "after-register-v20",
+      "template": {
+        "id": "tpl-8u58hm",
+        "registeredSubject": "codex15aug26-schema-version-continuation-20260815123811098-value",
+        "registryGlobalId": 48,
+        "registeredVersion": 20,
+        "registeredAt": "2026-08-15T12:38:42.882Z"
+      },
+      "versions": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "latestVersion": {
+        "version": 20,
+        "globalId": 48,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_16",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_17",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_18",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_19",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_20",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "label": "version-menu-open",
+      "screenshot": "06-version-1-readonly.png"
+    },
+    {
+      "label": "registry-version-details",
+      "firstVersion": {
+        "version": 1,
+        "globalId": 29,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "latestVersion": {
+        "version": 20,
+        "globalId": 48,
+        "avro": {
+          "type": "record",
+          "name": "Codex15Aug26SchemaVersionContinuation2",
+          "namespace": "com.nif",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string"
+            },
+            {
+              "name": "extra_2",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_3",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_4",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_5",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_6",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_7",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_8",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_9",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_10",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_11",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_12",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_13",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_14",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_15",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_16",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_17",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_18",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_19",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            },
+            {
+              "name": "extra_20",
+              "type": [
+                "null",
+                "string"
+              ],
+              "default": null
+            }
+          ]
+        }
+      },
+      "screenshot": "07-version-current-editable.png"
+    }
+  ]
+}

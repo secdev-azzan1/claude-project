@@ -69,6 +69,7 @@ import {
   saveSchemaTemplate,
   stageCeremonyDraft,
   verifySchema,
+  type RegistrySubjectVersion,
   type VerifySchemaResult,
 } from "@/prototype/api";
 import type { InferenceReport } from "@/prototype/inference";
@@ -232,13 +233,16 @@ function KindBadge({ globalId }: { globalId?: number }) {
 function TemplateRegistrationBadge({
   globalId,
   version,
+  registered = globalId != null,
   compact,
 }: {
   globalId?: number;
   version?: number;
+  registered?: boolean;
   compact?: boolean;
 }) {
-  if (globalId == null) {
+  const isRegistered = registered || globalId != null;
+  if (!isRegistered) {
     if (compact) return null;
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-border bg-transparent px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
@@ -250,10 +254,10 @@ function TemplateRegistrationBadge({
     <span className="inline-flex items-center gap-1 rounded-full border border-success/20 bg-success-muted px-2 py-0.5 text-xs font-medium text-success">
       <ShieldCheck className="h-3 w-3" />
       {compact ? (
-        <span className="font-mono">#{globalId}</span>
+        globalId != null ? <span className="font-mono">#{globalId}</span> : <span>Registered</span>
       ) : (
         <>
-          Registered · <span className="font-mono">#{globalId}</span>
+          Registered{globalId != null && <> · <span className="font-mono">#{globalId}</span></>}
           {version != null && (
             <>
               {" "}
@@ -519,6 +523,7 @@ const Schemas = () => {
   /** Template being registered directly (independently of any flow ceremony). */
   const [registerFor, setRegisterFor] = useState<SchemaTemplate | null>(null);
   const [registerSubject, setRegisterSubject] = useState("");
+  const [registeredSubjectByTemplateId, setRegisteredSubjectByTemplateId] = useState<Record<string, string>>({});
 
   // ─── artifact list ────────────────────────────────────────────────────
   const artifacts = useMemo<Artifact[]>(() => {
@@ -556,7 +561,11 @@ const Schemas = () => {
     const query = debouncedSearch.trim().toLowerCase();
     return artifacts.filter((artifact) => {
       if (registrationFilter !== "all") {
-        const registered = artifact.kind === "approved" || artifact.template.registryGlobalId != null;
+        const registered =
+          artifact.kind === "approved" ||
+          artifact.template.registryGlobalId != null ||
+          artifact.template.registeredSubject != null ||
+          registeredSubjectByTemplateId[artifact.id] != null;
         if (registrationFilter === "registered" && !registered) return false;
         if (registrationFilter === "not_registered" && registered) return false;
       }
@@ -601,21 +610,42 @@ const Schemas = () => {
   // (editable) buffer; picking an OLDER version fetches it straight from the
   // registry and shows it read-only, mirroring `approvalVersion` above.
   const [viewedRegistryVersion, setViewedRegistryVersion] = useState<number | null>(null);
-  const registeredSubject = selectedTemplate?.registryGlobalId != null ? selectedTemplate.registeredSubject : undefined;
-  const templateIsRegistered = !!registeredSubject;
+  useEffect(() => {
+    if (selectedTemplate?.id && selectedTemplate.registeredSubject) {
+      setRegisteredSubjectByTemplateId((prev) =>
+        prev[selectedTemplate.id] === selectedTemplate.registeredSubject
+          ? prev
+          : { ...prev, [selectedTemplate.id]: selectedTemplate.registeredSubject },
+      );
+    }
+  }, [selectedTemplate?.id, selectedTemplate?.registeredSubject]);
+
+  const resolvedRegisteredSubject = useMemo(() => {
+    if (!selectedTemplate) return undefined;
+    return selectedTemplate.registeredSubject ?? registeredSubjectByTemplateId[selectedTemplate.id];
+  }, [registeredSubjectByTemplateId, selectedTemplate]);
+
+  const templateIsRegistered =
+    !!selectedTemplate && (selectedTemplate.registryGlobalId != null || resolvedRegisteredSubject != null);
+  const registeredSubject = useMemo(() => {
+    if (!selectedTemplate || !templateIsRegistered) return undefined;
+    return resolvedRegisteredSubject ?? suggestSubject(selectedTemplate.name);
+  }, [resolvedRegisteredSubject, selectedTemplate, templateIsRegistered]);
 
   const { data: templateRegistryVersions = [], isFetching: templateVersionsLoading } = useQuery({
     queryKey: ["schemaRegistryVersions", registeredSubject],
     queryFn: () => listRegistrySubjectVersions(registeredSubject!),
-    enabled: templateIsRegistered,
+    enabled: registeredSubject != null,
   });
 
-  const isViewingOldTemplateVersion = templateIsRegistered && viewedRegistryVersion != null;
+  const currentTemplateRegistryVersion = templateRegistryVersions.at(-1)?.version ?? selectedTemplate?.registeredVersion ?? null;
+  const isViewingOldTemplateVersion =
+    templateIsRegistered && viewedRegistryVersion != null && viewedRegistryVersion !== currentTemplateRegistryVersion;
 
   const { data: viewedTemplateVersionDetail, isFetching: viewedTemplateVersionLoading } = useQuery({
     queryKey: ["schemaRegistryVersionDetail", registeredSubject, viewedRegistryVersion],
     queryFn: () => getRegistrySubjectVersion(registeredSubject!, viewedRegistryVersion!),
-    enabled: templateIsRegistered && viewedRegistryVersion != null,
+    enabled: registeredSubject != null && viewedRegistryVersion != null,
   });
 
   // ─── the one source of truth for the editor ───────────────────────────
@@ -721,6 +751,20 @@ const Schemas = () => {
 
   // ─── mutations ────────────────────────────────────────────────────────
   const invalidateTemplates = () => queryClient.invalidateQueries({ queryKey: ["schemaTemplates"] });
+  const invalidateRegistrySubject = (subject: string) => {
+    void queryClient.invalidateQueries({ queryKey: ["schemaRegistryVersions", subject] });
+    void queryClient.invalidateQueries({ queryKey: ["schemaRegistryVersionDetail", subject] });
+  };
+  const updateRegistrySubjectVersionsCache = (subject: string, version: number) => {
+    queryClient.setQueryData<RegistrySubjectVersion[]>(["schemaRegistryVersions", subject], (current) => {
+      const next = [...(current ?? [])];
+      if (!next.some((entry) => entry.version === version)) {
+        next.push({ version });
+        next.sort((a, b) => a.version - b.version);
+      }
+      return next;
+    });
+  };
 
   const createMut = useMutation({
     mutationFn: createSchemaTemplate,
@@ -827,9 +871,32 @@ const Schemas = () => {
   const registerMut = useMutation({
     mutationFn: (vars: { subject: string; avro: unknown; templateId?: string }) =>
       registerSchema(vars.subject, vars.avro, vars.templateId),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
+      const versionNumber = Number(result.version);
+      const hasNumericVersion = Number.isFinite(versionNumber);
+      if (variables.templateId) {
+        const now = new Date().toISOString();
+        setRegisteredSubjectByTemplateId((prev) => ({ ...prev, [variables.templateId!]: result.subject }));
+        queryClient.setQueryData<SchemaTemplate[]>(["schemaTemplates"], (current) =>
+          (current ?? []).map((template) =>
+            template.id === variables.templateId
+              ? {
+                  ...template,
+                  registeredSubject: result.subject,
+                  registryGlobalId: result.globalId,
+                  registeredVersion: hasNumericVersion ? versionNumber : template.registeredVersion,
+                  registeredAt: now,
+                }
+              : template,
+          ),
+        );
+      }
       toast.success(`Registered — ${result.subject} (global id ${result.globalId})`);
+      if (hasNumericVersion) {
+        updateRegistrySubjectVersionsCache(result.subject, versionNumber);
+      }
       setRegisterFor(null);
+      invalidateRegistrySubject(result.subject);
       void invalidateSchemas();
       void invalidateTemplates();
     },
@@ -975,7 +1042,9 @@ const Schemas = () => {
    *  last direct registration (if any) or a tokenized suggestion. */
   const openRegisterForTemplate = (template: SchemaTemplate) => {
     setRegisterFor(template);
-    setRegisterSubject(template.registeredSubject || suggestSubject(template.name));
+    setRegisterSubject(
+      template.registeredSubject || registeredSubjectByTemplateId[template.id] || suggestSubject(template.name),
+    );
   };
 
   /**
@@ -1145,9 +1214,19 @@ const Schemas = () => {
                           <KindBadge globalId={artifact.schema.registryGlobalId} />
                         </div>
                       ) : (
-                        artifact.template.registryGlobalId != null && (
+                        (artifact.template.registryGlobalId != null ||
+                          artifact.template.registeredSubject != null ||
+                          registeredSubjectByTemplateId[artifact.id] != null) && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 pl-5">
-                            <TemplateRegistrationBadge globalId={artifact.template.registryGlobalId} compact />
+                            <TemplateRegistrationBadge
+                              globalId={artifact.template.registryGlobalId}
+                              registered={
+                                artifact.template.registryGlobalId != null ||
+                                artifact.template.registeredSubject != null ||
+                                registeredSubjectByTemplateId[artifact.id] != null
+                              }
+                              compact
+                            />
                           </div>
                         )
                       )}
@@ -1389,7 +1468,8 @@ const Schemas = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <TemplateRegistrationBadge
                           globalId={selectedTemplate.registryGlobalId}
-                          version={selectedTemplate.registeredVersion}
+                          version={currentTemplateRegistryVersion ?? undefined}
+                          registered={templateIsRegistered}
                         />
                         <span className="text-xs text-muted-foreground">
                           updated {relativeTime(selectedTemplate.updatedAt)}
@@ -1398,9 +1478,9 @@ const Schemas = () => {
                           <span className="text-xs font-medium text-warning">unsaved changes</span>
                         )}
                       </div>
-                      {selectedTemplate.registeredSubject && (
+                      {registeredSubject && (
                         <p className="font-mono text-xs text-muted-foreground">
-                          {selectedTemplate.registeredSubject}
+                          {registeredSubject}
                           {selectedTemplate.registeredAt && (
                             <span className="font-sans"> · registered {relativeTime(selectedTemplate.registeredAt)}</span>
                           )}
@@ -1420,7 +1500,7 @@ const Schemas = () => {
                         disabled={isViewingOldTemplateVersion}
                         title={
                           isViewingOldTemplateVersion
-                            ? `Viewing registered v${viewedRegistryVersion} — select v${selectedTemplate.registeredVersion} to edit and register the working copy.`
+                            ? `Viewing registered v${viewedRegistryVersion} — select v${currentTemplateRegistryVersion} to edit and register the working copy.`
                             : "Check the shape, then pick the stream it is registered under"
                         }
                         onClick={() => {
@@ -1444,7 +1524,7 @@ const Schemas = () => {
                             ? `Cannot verify: ${buffer.rawError}`
                             : "Structural validation plus a registry compatibility check against the latest registered version — registers nothing"
                         }
-                        onClick={() => runVerify(selectedTemplate.id, selectedTemplate.registeredSubject)}
+                        onClick={() => runVerify(selectedTemplate.id, registeredSubject)}
                       >
                         {verifyMut.isPending ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1459,7 +1539,7 @@ const Schemas = () => {
                         disabled={isViewingOldTemplateVersion}
                         title={
                           isViewingOldTemplateVersion
-                            ? `Viewing registered v${viewedRegistryVersion} — select v${selectedTemplate.registeredVersion} to edit and register the working copy.`
+                            ? `Viewing registered v${viewedRegistryVersion} — select v${currentTemplateRegistryVersion} to edit and register the working copy.`
                             : "Register the current buffer to the registry immediately — independent of any flow ceremony"
                         }
                         onClick={() => openRegisterForTemplate(selectedTemplate)}
@@ -1481,11 +1561,11 @@ const Schemas = () => {
                       <History className="h-3.5 w-3.5 text-muted-foreground" />
                       <Label className="text-xs text-muted-foreground">Registered version</Label>
                       <Select
-                        value={String(viewedRegistryVersion ?? selectedTemplate.registeredVersion ?? "")}
+                        value={String(viewedRegistryVersion ?? currentTemplateRegistryVersion ?? "")}
                         onValueChange={(value) => {
                           const num = Number(value);
                           setViewedRegistryVersion(
-                            selectedTemplate.registeredVersion != null && num === selectedTemplate.registeredVersion
+                            currentTemplateRegistryVersion != null && num === currentTemplateRegistryVersion
                               ? null
                               : num,
                           );
@@ -1494,13 +1574,13 @@ const Schemas = () => {
                         <SelectTrigger className="h-8 w-[10rem]">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-72 overflow-y-auto">
                           {[...templateRegistryVersions]
                             .sort((a, b) => b.version - a.version)
                             .map((rv) => (
                               <SelectItem key={rv.version} value={String(rv.version)}>
                                 v{rv.version}
-                                {rv.version === selectedTemplate.registeredVersion ? " · current" : ""}
+                                {rv.version === currentTemplateRegistryVersion ? " · current" : ""}
                               </SelectItem>
                             ))}
                         </SelectContent>
@@ -1513,8 +1593,8 @@ const Schemas = () => {
 
                   {isViewingOldTemplateVersion && (
                     <p className="rounded-md border border-warning/30 bg-warning-muted p-2.5 text-xs text-muted-foreground">
-                      Viewing registered v{viewedRegistryVersion} — read-only. Select v
-                      {selectedTemplate.registeredVersion} to edit the working copy.
+                      Viewing registered v{viewedRegistryVersion} — read-only. Select v{currentTemplateRegistryVersion} to edit
+                      the working copy.
                     </p>
                   )}
 
@@ -1557,7 +1637,7 @@ const Schemas = () => {
                       disabled={!templateDirty || !!buffer.rawError || saveMut.isPending || isViewingOldTemplateVersion}
                       title={
                         isViewingOldTemplateVersion
-                          ? `Viewing registered v${viewedRegistryVersion} — select v${selectedTemplate.registeredVersion} to edit and save the working copy.`
+                          ? `Viewing registered v${viewedRegistryVersion} — select v${currentTemplateRegistryVersion} to edit and save the working copy.`
                           : buffer.rawError
                             ? `Cannot save: ${buffer.rawError}`
                             : undefined

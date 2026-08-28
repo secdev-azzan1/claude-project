@@ -221,10 +221,40 @@ def _build_query(pagination: Dict[str, Any], *, key_value_query_param: Optional[
         parts.append(f"{size_param}=${{page_size}}")
     elif ptype == "cursor":
         parts.append(f"{fields.get('cursorParam', 'cursor')}=${{cursor}}")
+        if "sizeValue" in fields or "sizeParam" in fields:
+            size_param = fields.get("sizeParam", "limit")
+            parts.append(f"{size_param}=${{page_size}}")
     if key_value_query_param:
         name, param_ref = key_value_query_param
         parts.append(f"{name}={param_ref}")
     return "&".join(parts)
+
+
+def _pagination_init_props(ptype: str, pagination: Dict[str, Any]) -> Dict[str, Any]:
+    """Seed the pagination counter attributes `init` sets on the entry
+    flowfile. Shared by read mode (counters land in `fetch`'s URL template)
+    and write mode's pagination extension (same counters, but land in
+    `render_body`'s body template instead) — the counters themselves
+    (`offset`/`limit`, `page`/`page_size`, `cursor`, `page_count`) are
+    mode-agnostic; only *where* the resulting EL is embedded differs."""
+    fields = pagination.get("fields", {}) or {}
+    props: Dict[str, Any] = {}
+    if ptype == "offset":
+        props["offset"] = "0"
+        props["limit"] = str(fields.get("limitValue", "100"))
+        props["page_count"] = "0"
+    elif ptype == "page":
+        props["page"] = str(fields.get("firstPage", "1"))
+        props["page_size"] = str(fields.get("sizeValue", "100"))
+        props["page_count"] = "0"
+    elif ptype == "cursor":
+        props["cursor"] = ""
+        props["page_count"] = "0"
+        if "sizeValue" in fields or "sizeParam" in fields:
+            props["page_size"] = str(fields.get("sizeValue", "100"))
+    elif ptype == "next_url":
+        props["page_count"] = "0"
+    return props
 
 
 def _probe_path(record_path: str) -> str:
@@ -355,6 +385,33 @@ def compile_read(
     else:
         entry_key = "inputPort"
 
+    # ---- promote parent-record fields referenced in the path template --------
+    # A non-root read block receives one flowfile per parent record (wired in
+    # by routing.wire_children); any ${field} in `path` (e.g.
+    # "/sites/${id}/assets") must be pulled out of that record's JSON content
+    # into a flowfile attribute — exactly what _compile_write's body_template
+    # and _compile_lookup's path already do (same _el_field_refs/
+    # _extract_fields helpers). This MUST happen before `init`, not merely
+    # before `fetch`: per the C4 note below, `init` itself evaluates and
+    # freezes the URL into the `request.url` ATTRIBUTE for pagination types
+    # without a fetch-side placeholder (none/next_url) — an attribute value
+    # is never re-evaluated, so the field must already be a resolvable
+    # attribute by the time `init` runs. A root read has no incoming record
+    # to extract from, so a field reference there is a config error, not
+    # something to silently compile into an empty value.
+    path_fields = _el_field_refs(path)
+    entry_source: Tail = (entry_key, "success" if entry_key == "trigger" else "")
+    if path_fields:
+        if is_root:
+            raise CompileError(
+                f"http read block {block.id!r} is a flow root — its path cannot reference record "
+                f"fields ({', '.join(path_fields)}); there is no parent record to extract them from"
+            )
+        entry_source = _extract_fields(
+            builder, key="extract_path_fields", fields=path_fields, source=entry_source,
+            preserve_existing=True,
+        )
+
     # ---- init: seed pagination + request.url -----------------------------------
     key_value_query_param = None
     if service.config.get("authMode") == "api_key" and service.config.get("keyLocation") == "query":
@@ -364,7 +421,11 @@ def compile_read(
 
     query = _build_query(pagination, key_value_query_param=key_value_query_param)
     base_expr = _base_url_expr(block=block, service=service, ctx=ctx, add_param=add_param)
-    initial_url = f"{base_expr}{path}" + (f"?{query}" if query else "")
+    # `path` may already embed a literal "?..." query (e.g. a static date-math
+    # filter written directly into the block config); pagination's own query
+    # params must then join with "&", not a second "?".
+    query_sep = "&" if "?" in path else "?"
+    initial_url = f"{base_expr}{path}" + (f"{query_sep}{query}" if query else "")
 
     # C4: the pagination EL placeholders must sit on the property NiFi
     # actually evaluates per FlowFile — `fetch`'s own "HTTP URL" — because EL
@@ -377,27 +438,13 @@ def compile_read(
     init_props: Dict[str, Any] = {"Accept": "application/json", "mime.type": "application/json"}
     if not url_on_fetch:
         init_props["request.url"] = initial_url
-    if ptype == "offset":
-        fields = pagination.get("fields", {})
-        init_props["offset"] = "0"
-        init_props["limit"] = str(fields.get("limitValue", "100"))
-        init_props["page_count"] = "0"
-    elif ptype == "page":
-        fields = pagination.get("fields", {})
-        init_props["page"] = str(fields.get("firstPage", "1"))
-        init_props["page_size"] = str(fields.get("sizeValue", "100"))
-        init_props["page_count"] = "0"
-    elif ptype == "cursor":
-        init_props["cursor"] = ""
-        init_props["page_count"] = "0"
-    elif ptype == "next_url":
-        init_props["page_count"] = "0"
+    init_props.update(_pagination_init_props(ptype, pagination))
 
     builder.add_processor(
         ProcessorSpec(key="init", name="init", type="org.apache.nifi.processors.attributes.UpdateAttribute",
                       properties=init_props)
     )
-    builder.link(entry_key, "init", ["success"] if entry_key == "trigger" else [])
+    builder.link(entry_source[0], "init", [entry_source[1]] if entry_source[1] else [])
     fetch_source: Tail = ("init", "success")
 
     # ---- session_token login -------------------------------------------------
@@ -675,25 +722,103 @@ def _el_field_refs(template: str) -> List[str]:
     return seen
 
 
-def _extract_fields(builder: "BlockBuilder", *, key: str, fields: List[str], source: Tail) -> Tail:
-    """One `EvaluateJsonPath` promoting each of `fields` (record JsonPath
-    `$.<field>`) to a same-named flowfile attribute — mirrors routing.py's
-    `route_fields` exactly (same property shape, same `Path Not Found
-    Behavior: ignore` + `autoTerminate=["unmatched"]` + DLQ-on-failure, same
-    `(key, "matched")` return convention), reused here so a write's body
-    template / a lookup's path template can reference `${field}` over the
-    parent record via NiFi EL."""
-    props: Dict[str, Any] = {"Destination": "flowfile-attribute", "Path Not Found Behavior": "ignore",
-                              "Return Type": "scalar"}
-    for f in fields:
-        props[f] = f"$.{f}"
-    builder.add_processor(
-        ProcessorSpec(key=key, name=key, type=_EVALUATE_JSON_PATH, properties=props, autoTerminate=["unmatched"])
-    )
-    src_key, src_rel = source
-    builder.link(src_key, key, [src_rel] if src_rel else [])
-    builder.to_dlq(key, "failure")
-    return key, "matched"
+def _extract_fields(
+    builder: "BlockBuilder", *, key: str, fields: List[str], source: Tail,
+    preserve_existing: bool = False,
+) -> Tail:
+    """Ensure each referenced parent field is available as a FlowFile
+    attribute without clobbering an attribute that is already present.
+
+    Child HTTP reads normally inherit their parent identifiers as attributes
+    from the parent branch.  The old implementation always ran one
+    multi-property ``EvaluateJsonPath`` and NiFi could replace an existing
+    attribute with an empty value when the JSONPath lookup did not resolve on
+    that child FlowFile.  The resulting URL became e.g. ``/sites//assets``.
+
+    Each field now has an exclusive ``present``/``missing`` gate.  The
+    present path skips JSON extraction; only the missing path evaluates
+    ``$.<field>``.  A no-op ``UpdateAttribute`` rejoins the paths so callers
+    still receive one ``(processor, relationship)`` tail.
+    """
+    if not fields:
+        return source
+
+    # Write/lookup body/path promotion historically uses one direct
+    # EvaluateJsonPath.  The runtime bug being fixed is specifically the
+    # chained HTTP-read path, where the parent identifier is already carried
+    # as an attribute.  Keep the existing shape for those other callers and
+    # opt into the guarded form only for child reads.
+    if not preserve_existing:
+        props: Dict[str, Any] = {
+            "Destination": "flowfile-attribute",
+            "Path Not Found Behavior": "ignore",
+            "Return Type": "scalar",
+        }
+        for field in fields:
+            props[field] = f"$.{field}"
+        builder.add_processor(
+            ProcessorSpec(
+                key=key, name=key, type=_EVALUATE_JSON_PATH,
+                properties=props, autoTerminate=["unmatched"],
+            )
+        )
+        src_key, src_rel = source
+        builder.link(src_key, key, [src_rel] if src_rel else [])
+        builder.to_dlq(key, "failure")
+        return key, "matched"
+
+    working_key, working_rel = source
+    for index, field in enumerate(fields):
+        gate_key = f"{key}__check_{index}"
+        extract_key = key if len(fields) == 1 else f"{key}__extract_{index}"
+
+        builder.add_processor(
+            ProcessorSpec(
+                key=gate_key,
+                name=gate_key,
+                type="org.apache.nifi.processors.standard.RouteOnAttribute",
+                properties={
+                    "Routing Strategy": "Route to Property name",
+                    "present": f"${{{field}:isEmpty():not()}}",
+                    "missing": f"${{{field}:isEmpty()}}",
+                },
+                autoTerminate=["unmatched"],
+            )
+        )
+        builder.link(working_key, gate_key, [working_rel] if working_rel else [])
+        builder.to_dlq(gate_key, "failure")
+
+        props: Dict[str, Any] = {
+            "Destination": "flowfile-attribute",
+            "Path Not Found Behavior": "ignore",
+            "Return Type": "scalar",
+            field: f"$.{field}",
+        }
+        builder.add_processor(
+            ProcessorSpec(
+                key=extract_key,
+                name=extract_key,
+                type=_EVALUATE_JSON_PATH,
+                properties=props,
+                autoTerminate=["unmatched"],
+            )
+        )
+        builder.link(gate_key, extract_key, ["missing"])
+        builder.to_dlq(extract_key, "failure")
+
+        merge_key = f"{key}__merge_{index}"
+        builder.add_processor(
+            ProcessorSpec(
+                key=merge_key,
+                name=merge_key,
+                type="org.apache.nifi.processors.attributes.UpdateAttribute",
+            )
+        )
+        builder.link(gate_key, merge_key, ["present"])
+        builder.link(extract_key, merge_key, ["matched"])
+        working_key, working_rel = merge_key, "success"
+
+    return working_key, working_rel
 
 
 def _compile_write(
@@ -714,6 +839,22 @@ def _compile_write(
     response is the data to process", i.e. root http-write only really makes
     sense with `writeForwards: "response"`, but both values compile either
     way): a trigger seeds it exactly like read mode, same `_build_trigger`.
+
+    Pagination (new): a write block may set `config.pagination` exactly like
+    a read block (offset/page/cursor/next_url, same `fields` shape) for
+    POST-with-body list endpoints (compiler-spec gap this closes — see
+    `docs/orchestration/e2e` FortiSIEM plan's "8 deferred CMDB entities").
+    Only legal when `writeForwards: "response"`: pagination decides whether
+    to continue by inspecting the PARSED RESPONSE (same `_build_pagination`
+    "does the probed record path have content" / cursor-in-body-or-header
+    check read mode already uses), so there must be a response to parse.
+    Mechanically this mirrors read mode's `fetch`-URL-template counters
+    (`_pagination_init_props`), except the counters (`${offset}`/`${limit}`/
+    `${page}`/`${cursor}`) are expected INSIDE `body_template` rather than
+    the URL — write mode has no query string to inject them into — and the
+    pagination loop-back target is `render_body` (which re-renders the body
+    from the just-updated counters), not `write` directly, since `write`
+    itself has no per-page state of its own.
     """
     service = _service_for(block, ctx)
     method = str(block.config.get("method") or "POST").upper()
@@ -722,6 +863,14 @@ def _compile_write(
     path = _normalize_path(str(block.config.get("path", "")), service)
     body_template = str(block.config.get("bodyTemplate", "") or "")
     write_forwards = str(block.config.get("writeForwards", "original") or "original")
+    pagination = block.config.get("pagination") or {"type": "none", "fields": {}}
+    ptype = pagination.get("type", "none")
+    if ptype != "none" and write_forwards != "response":
+        raise CompileError(
+            f"http write block {block.id!r} configures {ptype!r} pagination but writeForwards is "
+            f"{write_forwards!r} — pagination needs the parsed response to decide whether to continue, "
+            "so writeForwards must be \"response\""
+        )
 
     if is_root:
         builder.add_processor(_build_trigger(flow))
@@ -729,8 +878,9 @@ def _compile_write(
     else:
         entry_key = "inputPort"
 
+    init_props: Dict[str, Any] = {"mime.type": "application/json", **_pagination_init_props(ptype, pagination)}
     builder.add_processor(
-        ProcessorSpec(key="init", name="init", type=_UPDATE_ATTRIBUTE, properties={"mime.type": "application/json"})
+        ProcessorSpec(key="init", name="init", type=_UPDATE_ATTRIBUTE, properties=init_props)
     )
     builder.link(entry_key, "init", ["success"] if entry_key == "trigger" else [])
     source: Tail = ("init", "success")
@@ -758,6 +908,9 @@ def _compile_write(
         invoke_props[header] = _session_header_value(service)
     else:
         _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
+    if ptype == "cursor" and (pagination.get("fields") or {}).get("cursorSource") == "header":
+        invoke_props["Response Header Request Attributes Enabled"] = "true"
+        invoke_props["Response Header Request Attributes Pattern"] = (pagination["fields"].get("cursorHeaderName", "cursor"))
 
     unused_relationship = "Response" if write_forwards != "response" else "Original"
     builder.add_processor(
@@ -771,10 +924,13 @@ def _compile_write(
         record_path = str(block.config.get("recordPath", "$"))
         split = bool(block.config.get("split", True))
         response_format = str(block.config.get("responseFormat", "json"))
-        record_tail, _original_tail = _parse_response(
+        record_tail, original_tail = _parse_response(
             builder, source=("write", "Response"), response_format=response_format, split=split,
-            record_path=record_path, ptype="none",
+            record_path=record_path, ptype=ptype,
         )
+        if ptype != "none":
+            _build_pagination(builder, ptype=ptype, pagination=pagination, record_path=record_path,
+                              original_tail=original_tail, loop_target="render_body")
         return record_tail
     return "write", "Original"
 

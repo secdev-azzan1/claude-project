@@ -54,6 +54,7 @@ SECRET_CONFIG_KEYS: List[str] = [
     "keyValue",
     "saslPassword",
     "adminKey",
+    "s3AccessKey",
     "s3SecretKey",
     "oauthClientSecret",
     # kafka platform connection in kafbat mode authenticates to the Kafbat UI

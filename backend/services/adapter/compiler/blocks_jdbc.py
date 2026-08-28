@@ -1,27 +1,15 @@
-"""`jdbc` adapter compilation — compiler-spec.md §3.2.
+"""`jdbc` adapter compilation - compiler-spec.md §3.2.
 
 FULL scope: all three modes (read/write/lookup). `jdbc` is never `terminal`
 per `compile_flow.py`'s dispatch (only `kafka`/`kafka_kc` set `terminal =
 True`) and `compile_entry()` here DOES receive `builder` (unlike
-`blocks_kafka.compile_entry` — see that module's docstring for why that one
-needed a very different design), so every mode below adds its processors
+`blocks_kafka.compile_entry`), so every mode below adds its processors
 directly and returns a real tail, exactly like `blocks_http.compile_read`.
 
 `read` can be a flow root (`compute_root_menu()` lists "jdbc · read");
-`write`/`lookup` never are (`compute_add_menu()`-only entries) — each mode
-guards `is_root` accordingly.
-
-read-mode non-root edge case (flagged, not fully resolved — see
-`_compile_read`'s docstring): `compute_add_menu()` also offers "jdbc · read"
-MID-CHAIN ("Read a table per record"), a materially different runtime
-behavior (per-incoming-record query) than the root case's bulk/incremental
-table poll. compiler-spec §3.2's one-line read description does not
-disambiguate the two, and no config key distinguishes them either — this
-compiles BOTH uniformly as `QueryDatabaseTableRecord` (root: cron/timer
-scheduling; non-root: a benign always-on timer default), which is faithful
-to the root/bulk-poll case the spec clearly describes, but likely not the
-intended runtime behavior for the mid-chain "per record" case. Flagged for
-live E2E / a follow-up design pass.
+`write`/`lookup` never are (`compute_add_menu()`-only entries) - each mode
+guards `is_root` accordingly. The mid-chain "jdbc read" menu item is no
+longer legal.
 """
 
 from __future__ import annotations
@@ -192,15 +180,10 @@ def _compile_read(
             "Start at Current Maximum Values" if initial_position == "new" else "Start at Beginning"
         )
 
-    if is_root:
-        period, strategy = cron_or_period(flow.cron)
-    else:
-        # Not the flow root -- mid-chain "jdbc · read" (see this module's
-        # docstring: a materially different, currently-unresolved runtime
-        # meaning). QueryDatabaseTableRecord is a source processor (no
-        # incoming connections possible) either way, so this just keeps it
-        # continuously polling on a benign default rather than a cron.
-        period, strategy = "0 sec", "TIMER_DRIVEN"
+    if not is_root:
+        raise CompileError(f"jdbc read block {block.id!r} cannot be placed mid-chain")
+
+    period, strategy = cron_or_period(flow.cron)
 
     builder.add_processor(
         ProcessorSpec(key="query", name="query", type="org.apache.nifi.processors.standard.QueryDatabaseTableRecord",
@@ -293,11 +276,9 @@ def _compile_lookup(
     "Lookup Key Column" property are moderate-confidence best guesses.
     Flagged for live E2E.
 
-    NOTE: the frontend does not currently expose a jdbc-lookup join-field
-    control (only http-lookup's `lookupJoinField` input exists in
-    BlockForm.tsx) -- this reads `config.lookupJoinField` defensively
-    (same key name, for consistency with http lookup) with an `"id"`
-    fallback, since nothing currently sets it from the UI.
+    NOTE: `config.lookupJoinField` is optional. The frontend exposes it for
+    JDBC lookup blocks, and the compiler falls back to `"id"` when it is
+    omitted so existing flows keep working.
     """
     if is_root:
         raise CompileError(f"jdbc lookup block {block.id!r} cannot be a flow root")

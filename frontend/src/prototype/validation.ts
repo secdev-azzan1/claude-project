@@ -59,7 +59,7 @@ export function gatewayRefusals(block: FlowBlock, gateway: GatewaySnapshot, serv
   const proxy = gateway.proxies.find((p) => p.id === proxyId);
   if (!proxy)
     return [
-      `The APISIX proxy this block routes through (${proxyId}) no longer exists — pick one on the APISIX Gateway page.`,
+      `The APISIX proxy this block routes through (${proxyId}) no longer exists — pick one on the Proxies page.`,
     ];
   const refusals: string[] = [];
   if (proxy.status !== "Reconciled")
@@ -328,7 +328,7 @@ export function deployPreflight(
       checks.push({
         label: `Gateway proxy resolves — ${proxyId}`,
         ok: false,
-        detail: `${users.join(", ")} route through a proxy that no longer exists. Pick one on the APISIX Gateway page.`,
+        detail: `${users.join(", ")} route through a proxy that no longer exists. Pick one on the Proxies page.`,
       });
       continue;
     }
