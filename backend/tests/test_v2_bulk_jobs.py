@@ -117,15 +117,17 @@ def test_all_unknown_flow_ids_is_404(fake_db):
     assert resp.status_code == 404
 
 
-def test_second_concurrent_run_is_409(fake_db, monkeypatch):
-    monkeypatch.setattr(bulk_runner, "launch_bulk_job", lambda db, job_id: None)  # never runs -> stays pending
+def test_second_submission_is_queued(fake_db, monkeypatch):
+    monkeypatch.setattr(bulk_runner, "launch_bulk_job", lambda db, job_id: None)  # leave both queued
     client = _make_client(fake_db)
 
     first = client.post("/api/v2/flows/bulk", json={"verb": "start", "flowIds": ["flow-0"]})
     assert first.status_code == 202
     second = client.post("/api/v2/flows/bulk", json={"verb": "stop", "flowIds": ["flow-1"]})
-    assert second.status_code == 409
-    assert "already in progress" in second.json()["detail"]
+    assert second.status_code == 202
+    jobs = fake_db.bulk_jobs_v2.docs
+    assert [job["verb"] for job in jobs] == ["start", "stop"]
+    assert all(job["status"] == "queued" for job in jobs)
 
 
 # ------------------------------------------------------------------- runner
@@ -207,12 +209,12 @@ def test_counters_total_matches_succeeded_plus_failed(fake_db, monkeypatch):
 # -------------------------------------------------------------- cancellation
 
 
-def test_cancel_stops_before_the_next_item(fake_db, monkeypatch):
+def test_running_job_cannot_be_cancelled_mid_operation(fake_db, monkeypatch):
     processed: List[str] = []
 
     async def fake_run_one(db, verb, flow_doc):
         processed.append(flow_doc["id"])
-        # Request cancellation from inside the first item.
+        # A stale flag from another caller must not interrupt a running job.
         await fake_db.bulk_jobs_v2.update_one(
             {"id": fake_db.bulk_jobs_v2.docs[0]["id"]}, {"$set": {"cancel_requested": True}}
         )
@@ -220,9 +222,9 @@ def test_cancel_stops_before_the_next_item(fake_db, monkeypatch):
     monkeypatch.setattr(bulk_runner, "_run_one", fake_run_one)
     job = _run_job_to_completion(fake_db, "deploy", ["flow-0", "flow-1", "flow-2"])
 
-    assert processed == ["flow-0"]  # the other two never ran
-    assert job["status"] == "cancelled"
-    assert [i["status"] for i in job["items"]] == ["succeeded", "skipped", "skipped"]
+    assert processed == ["flow-0", "flow-1", "flow-2"]
+    assert job["status"] == "completed"
+    assert [i["status"] for i in job["items"]] == ["succeeded", "succeeded", "succeeded"]
 
 
 def test_cancel_endpoint_sets_the_flag(fake_db, monkeypatch):
@@ -233,6 +235,7 @@ def test_cancel_endpoint_sets_the_flag(fake_db, monkeypatch):
     resp = client.post(f"/api/v2/flows/bulk/{job_id}/cancel")
     assert resp.status_code == 200, resp.text
     assert resp.json()["cancelRequested"] is True
+    assert resp.json()["status"] == "cancelled"
 
 
 def test_cancel_unknown_job_404(fake_db):

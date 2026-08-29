@@ -87,11 +87,35 @@ async def _run_one(db: Any, verb: str, flow_doc: Dict[str, Any]) -> None:
     Imported lazily: routers/v2/flows.py imports this module, so a top-level
     import here would be circular.
     """
-    from routers.v2.flows import _VERB_HANDLERS
+    from models.adapter import Flow
+    from routers.v2.flows import (
+        _VERB_HANDLERS,
+        _get_enable_block_reason,
+        _get_verb_block_reason,
+        _load_connections,
+        _load_gateway,
+        _load_schemas,
+        _load_services,
+    )
 
     if verb == "delete":
         await lifecycle.delete(db, flow_doc)
         return
+
+    flow = Flow(**flow_doc)
+    if verb in ("enable", "disable"):
+        reason = _get_enable_block_reason(flow, verb == "enable")
+    else:
+        reason = _get_verb_block_reason(
+            flow,
+            verb,
+            await _load_services(db),
+            await _load_schemas(db),
+            await _load_gateway(db),
+            await _load_connections(db),
+        )
+    if reason:
+        raise lifecycle.LifecycleError(reason)
 
     if verb in ("enable", "disable"):
         await db[COLLECTIONS.flows].update_one(
@@ -129,15 +153,17 @@ async def _run_bulk_job_inner(db: Any, job_id: str) -> None:
 
     verb = str(job.get("verb") or "")
     items = list(job.get("items") or [])
+    # The worker claims the job before entering here. Keep this write for
+    # direct/test callers, but never turn a cancelled job back into running.
+    if job.get("status") == "cancelled":
+        return
     await _patch(db, job_id, {"status": "running"})
 
     succeeded = 0
     failed = 0
 
-    # No mid-run cancellation: a job that has started runs to completion.
-    # Cancelling is only offered while a job is still queued, because
-    # abandoning a partially-applied NiFi teardown leaves worse state than
-    # finishing it does.
+    # Cancellation is only allowed while the job remains queued. Once the
+    # worker has claimed it, the current flow operation must finish.
     for index, item in enumerate(items):
         flow_id = str(item.get("flow_id") or "")
         flow_name = str(item.get("flow_name") or flow_id)
@@ -260,6 +286,15 @@ def ensure_worker(db: Any) -> None:
     if _worker_task is not None and not _worker_task.done():
         return
     _worker_task = asyncio.create_task(_worker_loop(db))
+
+
+def launch_bulk_job(db: Any, job_id: str) -> None:
+    """Compatibility entry point used by the router and older tests.
+
+    The queue worker drains all queued jobs, so the id is intentionally only
+    used to ensure a worker exists; ordering is determined by created_at.
+    """
+    ensure_worker(db)
 
 
 def worker_is_running() -> bool:

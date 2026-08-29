@@ -321,17 +321,6 @@ async def start_bulk_job_v2(payload: BulkJobRequest, db: AsyncIOMotorDatabase = 
     if not payload.flowIds:
         raise HTTPException(status_code=422, detail="No flows selected.")
 
-    # One run at a time. Two concurrent bulk runs would interleave NiFi calls,
-    # which is exactly what sequential execution exists to avoid.
-    running = await db[COLLECTIONS.bulk_jobs].find_one(
-        {"status": {"$in": ["pending", "running"]}}, {"_id": 0, "id": 1}
-    )
-    if running:
-        raise HTTPException(
-            status_code=409,
-            detail="A bulk run is already in progress. Wait for it to finish or cancel it.",
-        )
-
     docs = await db[COLLECTIONS.flows].find({"id": {"$in": payload.flowIds}}, {"_id": 0}).to_list(None)
     if not docs:
         raise HTTPException(status_code=404, detail="None of the selected flows exist.")
@@ -353,12 +342,21 @@ async def start_bulk_job_v2(payload: BulkJobRequest, db: AsyncIOMotorDatabase = 
     return {"jobId": job["id"]}
 
 
+@router.get("/bulk/queue", summary="Flow operation queue")
+async def list_bulk_queue_v2(db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Return queued/running jobs plus a small recent terminal history."""
+    docs = await db[COLLECTIONS.bulk_jobs].find(
+        {}, {"_id": 0}, sort=[("created_at", -1)]
+    ).to_list(100)
+    return [bulk_job_to_response(doc) for doc in docs]
+
+
 @router.get("/bulk/active", summary="The bulk run currently in flight, if any")
 async def get_active_bulk_job_v2(db: AsyncIOMotorDatabase = Depends(get_db)):
     """Lets the Flows page reattach to a running job after a refresh -- without
     this, progress would be lost the moment the tab reloaded."""
     doc = await db[COLLECTIONS.bulk_jobs].find_one(
-        {"status": {"$in": ["pending", "running"]}}, {"_id": 0}, sort=[("created_at", -1)]
+        {"status": {"$in": ["queued", "pending", "running"]}}, {"_id": 0}, sort=[("created_at", -1)]
     )
     return bulk_job_to_response(doc) if doc else None
 
@@ -378,11 +376,21 @@ async def cancel_bulk_job_v2(job_id: str, db: AsyncIOMotorDatabase = Depends(get
         raise HTTPException(status_code=404, detail="Bulk job not found")
     if doc.get("status") in TERMINAL_BULK_STATES:
         raise HTTPException(status_code=409, detail="That run has already finished.")
+    if doc.get("status") != "queued":
+        raise HTTPException(status_code=409, detail="A running operation cannot be cancelled.")
 
-    # Cooperative: the runner stops before the next flow. Work already in
-    # flight on NiFi is not interrupted.
+    # A queued job is cancelled atomically, so the worker cannot claim it
+    # after this update. All child items remain untouched.
     await db[COLLECTIONS.bulk_jobs].update_one(
-        {"id": job_id}, {"$set": {"cancel_requested": True, "updated_at": now_iso()}}
+        {"id": job_id, "status": "queued"},
+        {
+            "$set": {
+                "status": "cancelled",
+                "cancel_requested": True,
+                "updated_at": now_iso(),
+                "finished_at": now_iso(),
+            }
+        },
     )
     updated = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
     return bulk_job_to_response(updated)
