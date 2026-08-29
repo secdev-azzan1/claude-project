@@ -36,10 +36,10 @@
     "semantic_hash": "2cfe81cda16697d082e2aa8d4662ac56"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\_secrets.py": {
-    "mtime": 1786794173.78882,
-    "seen": 1787722919.7458408,
-    "ast_hash": "8a9315f8aa383bc2754553817fbaf767",
-    "semantic_hash": "8a9315f8aa383bc2754553817fbaf767"
+    "mtime": 1787859242.830361,
+    "seen": 1787921114.865274,
+    "ast_hash": "719062dfb5dd33d98d4997918e21f6f9",
+    "semantic_hash": "719062dfb5dd33d98d4997918e21f6f9"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\models\\adapter\\audit.py": {
     "mtime": 1786576175.574589,
@@ -348,16 +348,16 @@
     "semantic_hash": "b76d0f26c6517c86f0a8c90b1437c552"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_http.py": {
-    "mtime": 1786612252.2646728,
-    "seen": 1787722919.7459335,
-    "ast_hash": "7290f24a6f23d2b463512363f28550d1",
-    "semantic_hash": "7290f24a6f23d2b463512363f28550d1"
+    "mtime": 1787938453.6949553,
+    "seen": 1788009728.8590565,
+    "ast_hash": "7c26726bab38a657499bc83a892d6a29",
+    "semantic_hash": "7c26726bab38a657499bc83a892d6a29"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_jdbc.py": {
-    "mtime": 1786793422.9071593,
-    "seen": 1787722919.7459354,
-    "ast_hash": "deeab94d26c54075a53ebd325e40e53d",
-    "semantic_hash": "deeab94d26c54075a53ebd325e40e53d"
+    "mtime": 1787859242.8416457,
+    "seen": 1787921114.865389,
+    "ast_hash": "ec8131ed046bd768ce98b9f0d8fbbcce",
+    "semantic_hash": "ec8131ed046bd768ce98b9f0d8fbbcce"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\blocks_kafka.py": {
     "mtime": 1786601372.8710313,
@@ -390,16 +390,16 @@
     "semantic_hash": "118a0daf6ace9808d4f829d6013baa19"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\ir.py": {
-    "mtime": 1786600597.706055,
-    "seen": 1787722919.745946,
-    "ast_hash": "6200101ff003b53f69f610a9d01fdadc",
-    "semantic_hash": "6200101ff003b53f69f610a9d01fdadc"
+    "mtime": 1787859242.8460307,
+    "seen": 1787921114.865401,
+    "ast_hash": "73d29ee5cd6690580d8b49aa19ba8403",
+    "semantic_hash": "73d29ee5cd6690580d8b49aa19ba8403"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\routing.py": {
-    "mtime": 1786600641.6966953,
-    "seen": 1787722919.7459474,
-    "ast_hash": "abd39f1003e142c30fbd7b989ad70886",
-    "semantic_hash": "abd39f1003e142c30fbd7b989ad70886"
+    "mtime": 1787859242.851203,
+    "seen": 1787921114.865403,
+    "ast_hash": "cce2c5d0b5e5330b420540eb063a76f0",
+    "semantic_hash": "cce2c5d0b5e5330b420540eb063a76f0"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\compiler\\transforms.py": {
     "mtime": 1786600558.3683817,
@@ -438,10 +438,10 @@
     "semantic_hash": "7e08a72521ed677bdf2a80cfe0aaf298"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\legality.py": {
-    "mtime": 1786794144.2133262,
-    "seen": 1787722919.7459598,
-    "ast_hash": "2a7ba2f4d0c328e012c3b6a9b78d4709",
-    "semantic_hash": "2a7ba2f4d0c328e012c3b6a9b78d4709"
+    "mtime": 1787859242.8567164,
+    "seen": 1787921114.8654172,
+    "ast_hash": "cc99d4685b1b6dd12d45bad7f2365124",
+    "semantic_hash": "cc99d4685b1b6dd12d45bad7f2365124"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\adapter\\naming.py": {
     "mtime": 1786577022.6092865,
@@ -510,10 +510,10 @@
     "semantic_hash": "bbbbf16704a31fc9d10a2ea257f5975d"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\connection_resolver.py": {
-    "mtime": 1786799407.5028892,
-    "seen": 1787722919.7459803,
-    "ast_hash": "f5e624d9f9b399b88dac94b05a0324ed",
-    "semantic_hash": "f5e624d9f9b399b88dac94b05a0324ed"
+    "mtime": 1787859242.8600242,
+    "seen": 1787921114.8654416,
+    "ast_hash": "a989d1c1decb49783302170c14e3205d",
+    "semantic_hash": "a989d1c1decb49783302170c14e3205d"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\services\\content_store.py": {
     "mtime": 1784289320.7152073,
@@ -726,10 +726,10 @@
     "semantic_hash": "5191bf11db37cb12f0d0d3019ad312c5"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\fixtures\\compiler\\golden_flow.json": {
-    "mtime": 1786603883.6658344,
-    "seen": 1787722919.7460437,
-    "ast_hash": "c9d57bc4695a0d35f7dcb0341a134659",
-    "semantic_hash": "c9d57bc4695a0d35f7dcb0341a134659"
+    "mtime": 1787859289.2646973,
+    "seen": 1787921114.8655188,
+    "ast_hash": "47a926fae7d2f3239374fe0282fc91e9",
+    "semantic_hash": "47a926fae7d2f3239374fe0282fc91e9"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\fixtures\\iceberg_connector_bronze.fileshare.asset__history.json": {
     "mtime": 1784634085.1533008,
@@ -810,16 +810,16 @@
     "semantic_hash": "a1d6dc439aa17adb4525b31d8d85f01a"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_adapter_models.py": {
-    "mtime": 1786794233.4448383,
-    "seen": 1787722919.7460675,
-    "ast_hash": "65e95dcd80343fc2607c7974f4fa3b52",
-    "semantic_hash": "65e95dcd80343fc2607c7974f4fa3b52"
+    "mtime": 1787859242.863364,
+    "seen": 1787921114.8655477,
+    "ast_hash": "44777056174ddd7a4a707e9c62fce42d",
+    "semantic_hash": "44777056174ddd7a4a707e9c62fce42d"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_adapter_rules.py": {
-    "mtime": 1786794150.0436385,
-    "seen": 1787722919.746069,
-    "ast_hash": "f0d2c41159f35a2b3b331157e70b9dcc",
-    "semantic_hash": "f0d2c41159f35a2b3b331157e70b9dcc"
+    "mtime": 1787859242.8683896,
+    "seen": 1787921114.8655496,
+    "ast_hash": "fbc9f5bd084f1c4a0947dcacaec8d0dc",
+    "semantic_hash": "fbc9f5bd084f1c4a0947dcacaec8d0dc"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_apicurio_client.py": {
     "mtime": 1786600554.4295843,
@@ -834,10 +834,10 @@
     "semantic_hash": "811f35b54532e188d1767184950eea5a"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_compiler.py": {
-    "mtime": 1786794172.3130622,
-    "seen": 1787722919.7460742,
-    "ast_hash": "eb7c2e560699abda6bbdc69516c73119",
-    "semantic_hash": "eb7c2e560699abda6bbdc69516c73119"
+    "mtime": 1787938805.2535324,
+    "seen": 1788009728.8592339,
+    "ast_hash": "6e145f54aff3a65ed3a31c74a6797727",
+    "semantic_hash": "6e145f54aff3a65ed3a31c74a6797727"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_connection_fingerprint.py": {
     "mtime": 1786578915.9253218,
@@ -1128,10 +1128,10 @@
     "semantic_hash": "41b21405d94b626f70528715837bf6f7"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\tests\\test_v2_services.py": {
-    "mtime": 1786794226.955534,
-    "seen": 1787722919.7461622,
-    "ast_hash": "b01fc82206bf36f027d5eef8e93a4935",
-    "semantic_hash": "b01fc82206bf36f027d5eef8e93a4935"
+    "mtime": 1787859242.8760839,
+    "seen": 1787921114.865661,
+    "ast_hash": "93197aaa10d11b6800a3096d4bcedf02",
+    "semantic_hash": "93197aaa10d11b6800a3096d4bcedf02"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\App.tsx": {
     "mtime": 1786474506.4876013,
@@ -1176,10 +1176,10 @@
     "semantic_hash": "3ae1d40173bc5c29fdd26452bddc94e3"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\BlockForm.tsx": {
-    "mtime": 1786793222.7795143,
-    "seen": 1787722919.7461755,
-    "ast_hash": "071f16b350556216b7bb3700d2db78e9",
-    "semantic_hash": "071f16b350556216b7bb3700d2db78e9"
+    "mtime": 1787909937.0408316,
+    "seen": 1788009728.8593578,
+    "ast_hash": "d0796ea767cec44c1f3a659fbd79cc02",
+    "semantic_hash": "d0796ea767cec44c1f3a659fbd79cc02"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\BranchesCard.tsx": {
     "mtime": 1786538931.4240456,
@@ -1230,10 +1230,10 @@
     "semantic_hash": "f6bd1a49a3c1af8a1a13ccf0b52aeab3"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\PaginationFields.tsx": {
-    "mtime": 1786528339.6247797,
-    "seen": 1787722919.7462075,
-    "ast_hash": "fb8698c7190d8077206190a85c2b4973",
-    "semantic_hash": "fb8698c7190d8077206190a85c2b4973"
+    "mtime": 1787878700.165886,
+    "seen": 1788009728.8593767,
+    "ast_hash": "79415bf599dee1a22baccdc6f6cbb970",
+    "semantic_hash": "79415bf599dee1a22baccdc6f6cbb970"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\flow-builder\\PreflightDialog.tsx": {
     "mtime": 1786476499.0120046,
@@ -1344,10 +1344,10 @@
     "semantic_hash": "ce69ea4794d1e53f3ea446bb552bd7ed"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\service-form\\ServiceFormFields.tsx": {
-    "mtime": 1786794154.6581464,
-    "seen": 1787722919.746241,
-    "ast_hash": "36689768ea1a1ecbcd1f0e2c16a25b0e",
-    "semantic_hash": "36689768ea1a1ecbcd1f0e2c16a25b0e"
+    "mtime": 1787905085.196076,
+    "seen": 1787921114.8657033,
+    "ast_hash": "dc50cdbb8e4a8c1cfafb9224bb8de5bc",
+    "semantic_hash": "dc50cdbb8e4a8c1cfafb9224bb8de5bc"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\components\\ui\\accordion.tsx": {
     "mtime": 1778960949.464347,
@@ -1932,10 +1932,10 @@
     "semantic_hash": "4854f683fd4e984e12a41a5d6e9f7fc3"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Apisix.tsx": {
-    "mtime": 1786793110.0366435,
-    "seen": 1787722919.7464507,
-    "ast_hash": "e815cde339b687480e28b440b0f8cfff",
-    "semantic_hash": "e815cde339b687480e28b440b0f8cfff"
+    "mtime": 1787859242.894506,
+    "seen": 1787921114.8659124,
+    "ast_hash": "027ee54429386852d4b8112c0e9af356",
+    "semantic_hash": "027ee54429386852d4b8112c0e9af356"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\AppServices.tsx": {
     "mtime": 1786528561.3404326,
@@ -1956,10 +1956,10 @@
     "semantic_hash": "fa3dfff3b43e170946d954f7eae9158e"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Connections.tsx": {
-    "mtime": 1786794137.4395225,
-    "seen": 1787722919.746457,
-    "ast_hash": "6ed444b39ae4c56aa5b9ceda25955d22",
-    "semantic_hash": "6ed444b39ae4c56aa5b9ceda25955d22"
+    "mtime": 1787859242.8986692,
+    "seen": 1787921114.8659203,
+    "ast_hash": "71b15b39a960e3b11791b34f8f8505b8",
+    "semantic_hash": "71b15b39a960e3b11791b34f8f8505b8"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Dashboard.tsx": {
     "mtime": 1786575806.6532273,
@@ -1986,10 +1986,10 @@
     "semantic_hash": "1d241dad42965aceed9991690b080fb2"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Flows.tsx": {
-    "mtime": 1786793533.9459,
-    "seen": 1787722919.746465,
-    "ast_hash": "481570623f4c8f735ad81a686a40d2c8",
-    "semantic_hash": "481570623f4c8f735ad81a686a40d2c8"
+    "mtime": 1787859242.90424,
+    "seen": 1787921114.8659317,
+    "ast_hash": "ea623d5203122abc43022ff5411dcc60",
+    "semantic_hash": "ea623d5203122abc43022ff5411dcc60"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\NifiServices.tsx": {
     "mtime": 1780549913.1849425,
@@ -2010,10 +2010,10 @@
     "semantic_hash": "49ff47af75869b3eda9fb0254b409ef6"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Schemas.tsx": {
-    "mtime": 1786794395.9555235,
-    "seen": 1787722919.7464714,
-    "ast_hash": "5ad8367998ccd0abb6e80b3b54089df2",
-    "semantic_hash": "5ad8367998ccd0abb6e80b3b54089df2"
+    "mtime": 1787859242.9088266,
+    "seen": 1787921114.8659406,
+    "ast_hash": "1062b6f4be226407b7385b948d699d27",
+    "semantic_hash": "1062b6f4be226407b7385b948d699d27"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\pages\\Settings.tsx": {
     "mtime": 1782979097.2960901,
@@ -2058,16 +2058,16 @@
     "semantic_hash": "ad60770492e0f4881b6adc1063ee9c8f"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\legality.test.ts": {
-    "mtime": 1786793228.8725739,
-    "seen": 1787722919.7465024,
-    "ast_hash": "45547601f6510c24c8302e43b11c4efa",
-    "semantic_hash": "45547601f6510c24c8302e43b11c4efa"
+    "mtime": 1787859242.9128306,
+    "seen": 1787921114.8659573,
+    "ast_hash": "a0cc87877decb826beaf30aee48a842a",
+    "semantic_hash": "a0cc87877decb826beaf30aee48a842a"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\legality.ts": {
-    "mtime": 1786793190.545632,
-    "seen": 1787722919.7465043,
-    "ast_hash": "48ebadba4835d02098dfcaf27b2e58d2",
-    "semantic_hash": "48ebadba4835d02098dfcaf27b2e58d2"
+    "mtime": 1787859242.9165297,
+    "seen": 1787921114.8659594,
+    "ast_hash": "dccbd46671718d65f2338469bb166ae5",
+    "semantic_hash": "dccbd46671718d65f2338469bb166ae5"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\migrate.test.ts": {
     "mtime": 1786539260.8206625,
@@ -2136,10 +2136,10 @@
     "semantic_hash": "7ae4c68a1cee8cc9e757f19f41adde3f"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\prototype\\validation.ts": {
-    "mtime": 1786794158.18972,
-    "seen": 1787722919.746524,
-    "ast_hash": "ac0e81ec5c8833dfa59d064ac5149e16",
-    "semantic_hash": "ac0e81ec5c8833dfa59d064ac5149e16"
+    "mtime": 1787859242.91968,
+    "seen": 1787921114.8659856,
+    "ast_hash": "c241bb83da01437f9a5b536998bda05f",
+    "semantic_hash": "c241bb83da01437f9a5b536998bda05f"
   },
   "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\src\\test\\example.test.ts": {
     "mtime": 1778960949.5381224,
@@ -2374,5 +2374,1085 @@
     "seen": 1787722919.746589,
     "ast_hash": "ac13964120f69d1b2a2fd78c64ea6035",
     "semantic_hash": "ac13964120f69d1b2a2fd78c64ea6035"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\DummyJson\\flow.json": {
+    "mtime": 1784638106.9562793,
+    "seen": 1787921114.8650844,
+    "ast_hash": "156e606293a02ebf7bf6837a417821db",
+    "semantic_hash": "156e606293a02ebf7bf6837a417821db"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\DummyJson\\schemas\\bronze.dummyjson.user__history-value\\artifact.json": {
+    "mtime": 1784638106.9742954,
+    "seen": 1787921114.8650935,
+    "ast_hash": "f37a871a4fcfb23351b773d999baf386",
+    "semantic_hash": "f37a871a4fcfb23351b773d999baf386"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\DummyJson\\schemas\\bronze.dummyjson.user__history-value\\versions\\1.json": {
+    "mtime": 1784638106.9782896,
+    "seen": 1787921114.865097,
+    "ast_hash": "05a3d442552d69d3264ef05592627e74",
+    "semantic_hash": "05a3d442552d69d3264ef05592627e74"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\DummyJson\\services\\nifi.json": {
+    "mtime": 1784638106.9692898,
+    "seen": 1787921114.865099,
+    "ast_hash": "79eea8ab7088173a8a5ad804847f01e7",
+    "semantic_hash": "79eea8ab7088173a8a5ad804847f01e7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\DummyJson\\source\\source.json": {
+    "mtime": 1784638106.9612832,
+    "seen": 1787921114.8651013,
+    "ast_hash": "5e5a4506c5faf0fc7e689951b51f9335",
+    "semantic_hash": "5e5a4506c5faf0fc7e689951b51f9335"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\DummyJson\\source\\streams\\stream-1784614002417-aafqck.json": {
+    "mtime": 1784638106.9652832,
+    "seen": 1787921114.8651032,
+    "ast_hash": "600c91f4ce84418d46973f794bf7b7d0",
+    "semantic_hash": "600c91f4ce84418d46973f794bf7b7d0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\flow.json": {
+    "mtime": 1784616625.0653758,
+    "seen": 1787921114.8651052,
+    "ast_hash": "bf728de813dce747f92a0b0e3c951769",
+    "semantic_hash": "bf728de813dce747f92a0b0e3c951769"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\openapi\\915eb20e-34bb-4b20-b975-c79c62206746\\spec.json": {
+    "mtime": 1784616625.088158,
+    "seen": 1787921114.8651066,
+    "ast_hash": "0801362762a533985d248fb7369405d8",
+    "semantic_hash": "0801362762a533985d248fb7369405d8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616625.0941594,
+    "seen": 1787921114.8651083,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616625.098682,
+    "seen": 1787921114.86511,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\services\\application.json": {
+    "mtime": 1784616625.083622,
+    "seen": 1787921114.8651116,
+    "ast_hash": "074ed8f6d313f64b5751524ae004dd42",
+    "semantic_hash": "074ed8f6d313f64b5751524ae004dd42"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\source\\source.json": {
+    "mtime": 1784616625.070971,
+    "seen": 1787921114.8651133,
+    "ast_hash": "9bbfa81bb9affee8bc7a9335eac0d7d9",
+    "semantic_hash": "9bbfa81bb9affee8bc7a9335eac0d7d9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\source\\streams\\1d8712f6-0f0b-4d0e-9d86-83c2f1b08a10.json": {
+    "mtime": 1784616625.0745056,
+    "seen": 1787921114.8651152,
+    "ast_hash": "0d695c8995334d3dc0be3e6b44a5526b",
+    "semantic_hash": "0d695c8995334d3dc0be3e6b44a5526b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Helper Primary Copy\\source\\streams\\1f6d5f9d-e9f1-4e8c-bf43-003d9e68bb2d.json": {
+    "mtime": 1784616625.0790262,
+    "seen": 1787921114.865117,
+    "ast_hash": "122daed392da1e148bdc36af2e56e47e",
+    "semantic_hash": "122daed392da1e148bdc36af2e56e47e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\flow.json": {
+    "mtime": 1784616624.7446792,
+    "seen": 1787921114.8651187,
+    "ast_hash": "58f45c296a7a2053b5c5d3f83c50d246",
+    "semantic_hash": "58f45c296a7a2053b5c5d3f83c50d246"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\openapi\\df6a969b-f255-44af-90a1-3dc9c1908232\\spec.json": {
+    "mtime": 1784616624.7634153,
+    "seen": 1787921114.8651204,
+    "ast_hash": "a404e1295776f242ef04cbdd4e5dbca7",
+    "semantic_hash": "a404e1295776f242ef04cbdd4e5dbca7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616624.7689123,
+    "seen": 1787921114.865122,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616624.7734373,
+    "seen": 1787921114.8651237,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\services\\application.json": {
+    "mtime": 1784616624.7584162,
+    "seen": 1787921114.8651254,
+    "ast_hash": "0d54cc71964db8163b87fcaa5be7a92c",
+    "semantic_hash": "0d54cc71964db8163b87fcaa5be7a92c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\source\\source.json": {
+    "mtime": 1784616624.7488847,
+    "seen": 1787921114.865127,
+    "ast_hash": "f6061ec6b487a43f09186ff44e1e076e",
+    "semantic_hash": "f6061ec6b487a43f09186ff44e1e076e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Canonical\\source\\streams\\1286663a-4e04-45dc-8a4f-c2e43786d7ca.json": {
+    "mtime": 1784616624.7538848,
+    "seen": 1787921114.8651288,
+    "ast_hash": "4423d2fbb957fb4fa041b289144d23b3",
+    "semantic_hash": "4423d2fbb957fb4fa041b289144d23b3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\flow.json": {
+    "mtime": 1784616623.8410287,
+    "seen": 1787921114.8651302,
+    "ast_hash": "eebfefe81c7428c67c9057f88c99e8cf",
+    "semantic_hash": "eebfefe81c7428c67c9057f88c99e8cf"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\openapi\\a977a2da-8933-4328-9f26-7155b42642c3\\spec.json": {
+    "mtime": 1784616623.860571,
+    "seen": 1787921114.8651319,
+    "ast_hash": "a7c6d9b8b6daee29762cd5b774e0982a",
+    "semantic_hash": "a7c6d9b8b6daee29762cd5b774e0982a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\schemas\\bronze.imported_rapid7_designer_copy.sites__history-value\\artifact.json": {
+    "mtime": 1784616623.8660223,
+    "seen": 1787921114.8651338,
+    "ast_hash": "2cb517d3876798ddb477aafba3f8a112",
+    "semantic_hash": "2cb517d3876798ddb477aafba3f8a112"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\schemas\\bronze.imported_rapid7_designer_copy.sites__history-value\\versions\\1.json": {
+    "mtime": 1784616623.8709097,
+    "seen": 1787921114.8651357,
+    "ast_hash": "d404c04edb6f1266f204b72333bc4b59",
+    "semantic_hash": "d404c04edb6f1266f204b72333bc4b59"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\services\\application.json": {
+    "mtime": 1784616623.8548677,
+    "seen": 1787921114.8651373,
+    "ast_hash": "d3472f1a0563220700fbc8ba293a2081",
+    "semantic_hash": "d3472f1a0563220700fbc8ba293a2081"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\source\\source.json": {
+    "mtime": 1784616623.8455868,
+    "seen": 1787921114.865139,
+    "ast_hash": "5fd4029aa3d41bb6d569a8fe7747b968",
+    "semantic_hash": "5fd4029aa3d41bb6d569a8fe7747b968"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Designer Copy\\source\\streams\\9c21832e-5cd4-4ced-92d3-f7bd5b9b2add.json": {
+    "mtime": 1784616623.8499284,
+    "seen": 1787921114.8651404,
+    "ast_hash": "199a5289f78e0aeca294bc39d2a7b8a6",
+    "semantic_hash": "199a5289f78e0aeca294bc39d2a7b8a6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\flow.json": {
+    "mtime": 1784616623.5110254,
+    "seen": 1787921114.865142,
+    "ast_hash": "b5b8b80e7de6e3ad31d89d8684875950",
+    "semantic_hash": "b5b8b80e7de6e3ad31d89d8684875950"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\openapi\\546e1955-37af-4499-8b32-55455a9d47df\\spec.json": {
+    "mtime": 1784616623.5320404,
+    "seen": 1787921114.8651435,
+    "ast_hash": "0d508f0aaafe4d0bd14d61dabf54e4f3",
+    "semantic_hash": "0d508f0aaafe4d0bd14d61dabf54e4f3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616623.5375588,
+    "seen": 1787921114.8651452,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616623.5435882,
+    "seen": 1787921114.8651466,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\services\\application.json": {
+    "mtime": 1784616623.526021,
+    "seen": 1787921114.8651483,
+    "ast_hash": "dbfd47c8ac447bc87fc844c876a6fa57",
+    "semantic_hash": "dbfd47c8ac447bc87fc844c876a6fa57"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\source\\source.json": {
+    "mtime": 1784616623.5154996,
+    "seen": 1787921114.8651497,
+    "ast_hash": "feff8b419c0e43c2a9e613efb95d7663",
+    "semantic_hash": "feff8b419c0e43c2a9e613efb95d7663"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Hydrated\\source\\streams\\20d3fd3a-6f4a-4282-b80a-2efc887c9306.json": {
+    "mtime": 1784616623.5205193,
+    "seen": 1787921114.8651512,
+    "ast_hash": "16233bcd73fafd5df067826e68bc2d36",
+    "semantic_hash": "16233bcd73fafd5df067826e68bc2d36"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Linked\\flow.json": {
+    "mtime": 1784616624.1378765,
+    "seen": 1787921114.8651528,
+    "ast_hash": "eb33ff24502f7b0dc2e68f782ee8bcb3",
+    "semantic_hash": "eb33ff24502f7b0dc2e68f782ee8bcb3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Linked\\openapi\\12a0da13-e514-4120-a6b0-9c57b7009ffb\\spec.json": {
+    "mtime": 1784616624.1581304,
+    "seen": 1787921114.8651543,
+    "ast_hash": "a023fa21bb0923d96e7b7e4cc5f17f9f",
+    "semantic_hash": "a023fa21bb0923d96e7b7e4cc5f17f9f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Linked\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616624.1641269,
+    "seen": 1787921114.8651562,
+    "ast_hash": "de7d4d735dc0c4f6b3cff7f285a5caf7",
+    "semantic_hash": "de7d4d735dc0c4f6b3cff7f285a5caf7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Linked\\services\\application.json": {
+    "mtime": 1784616624.1525974,
+    "seen": 1787921114.8651578,
+    "ast_hash": "4628cc6ac03da6fa7da8fadf5c18294d",
+    "semantic_hash": "4628cc6ac03da6fa7da8fadf5c18294d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Linked\\source\\source.json": {
+    "mtime": 1784616624.1424038,
+    "seen": 1787921114.8651597,
+    "ast_hash": "02504b63ae1841c44e40c6ed5b3867e9",
+    "semantic_hash": "02504b63ae1841c44e40c6ed5b3867e9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Linked\\source\\streams\\6ea06637-4874-43e4-8339-45e5dba1ef16.json": {
+    "mtime": 1784616624.1479332,
+    "seen": 1787921114.8651612,
+    "ast_hash": "3f6aa45ec1e2653feffd6b5aa8c1a1d4",
+    "semantic_hash": "3f6aa45ec1e2653feffd6b5aa8c1a1d4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\flow.json": {
+    "mtime": 1784616624.4279177,
+    "seen": 1787921114.8651633,
+    "ast_hash": "67ea9bf63628cd80fc178c83164ff60c",
+    "semantic_hash": "67ea9bf63628cd80fc178c83164ff60c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\openapi\\a9a89e5c-c091-4646-bbc4-194e8e96a669\\spec.json": {
+    "mtime": 1784616624.4493392,
+    "seen": 1787921114.8651648,
+    "ast_hash": "366bb0bdf714eccdc8b31f78d98bb918",
+    "semantic_hash": "366bb0bdf714eccdc8b31f78d98bb918"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\schemas\\bronze.imported_rapid7_manual_name_ignored.sites__history-value\\artifact.json": {
+    "mtime": 1784616624.4563508,
+    "seen": 1787921114.8651667,
+    "ast_hash": "1c7eae27eec41f04fb19de08b5eed6e9",
+    "semantic_hash": "1c7eae27eec41f04fb19de08b5eed6e9"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\schemas\\bronze.imported_rapid7_manual_name_ignored.sites__history-value\\versions\\1.json": {
+    "mtime": 1784616624.46035,
+    "seen": 1787921114.8651683,
+    "ast_hash": "d404c04edb6f1266f204b72333bc4b59",
+    "semantic_hash": "d404c04edb6f1266f204b72333bc4b59"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\services\\application.json": {
+    "mtime": 1784616624.4438186,
+    "seen": 1787921114.8651702,
+    "ast_hash": "35889662ecc5eb2cad2e690ac2ce9f11",
+    "semantic_hash": "35889662ecc5eb2cad2e690ac2ce9f11"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\source\\source.json": {
+    "mtime": 1784616624.4335313,
+    "seen": 1787921114.8651717,
+    "ast_hash": "2191e8daaa3a823f77ac4c36ca6fe61f",
+    "semantic_hash": "2191e8daaa3a823f77ac4c36ca6fe61f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Manual Name Ignored\\source\\streams\\83168abd-d82d-485e-be6d-a30eda9401dc.json": {
+    "mtime": 1784616624.4378192,
+    "seen": 1787921114.865173,
+    "ast_hash": "de54120ace34d59fab52ba67ad875dcc",
+    "semantic_hash": "de54120ace34d59fab52ba67ad875dcc"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\flow.json": {
+    "mtime": 1784616623.990226,
+    "seen": 1787921114.8651748,
+    "ast_hash": "4c6ed838735e89349be9c3c2606e1cac",
+    "semantic_hash": "4c6ed838735e89349be9c3c2606e1cac"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\openapi\\6a29d179-3c28-4b90-8ba5-b29f4625da63\\spec.json": {
+    "mtime": 1784616624.0099292,
+    "seen": 1787921114.8651767,
+    "ast_hash": "627522127f29f1e530f9b50685eca341",
+    "semantic_hash": "627522127f29f1e530f9b50685eca341"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\schemas\\bronze.imported_rapid7_renamed_v4.sites__history-value\\artifact.json": {
+    "mtime": 1784616624.0154438,
+    "seen": 1787921114.865178,
+    "ast_hash": "7c36a59c09eb3b730eb754622d5ac716",
+    "semantic_hash": "7c36a59c09eb3b730eb754622d5ac716"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\schemas\\bronze.imported_rapid7_renamed_v4.sites__history-value\\versions\\1.json": {
+    "mtime": 1784616624.0204594,
+    "seen": 1787921114.86518,
+    "ast_hash": "d404c04edb6f1266f204b72333bc4b59",
+    "semantic_hash": "d404c04edb6f1266f204b72333bc4b59"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\services\\application.json": {
+    "mtime": 1784616624.0036304,
+    "seen": 1787921114.8651814,
+    "ast_hash": "7f4aa5444226044f070e1f145a9a639d",
+    "semantic_hash": "7f4aa5444226044f070e1f145a9a639d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\source\\source.json": {
+    "mtime": 1784616623.9949512,
+    "seen": 1787921114.8651836,
+    "ast_hash": "7b1f87b1fb578d8130a916c38ce0889b",
+    "semantic_hash": "7b1f87b1fb578d8130a916c38ce0889b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed V4\\source\\streams\\48049d19-6d80-4763-875a-d639f2078c7c.json": {
+    "mtime": 1784616623.9992983,
+    "seen": 1787921114.865185,
+    "ast_hash": "cb65c9ce1baed7616ffd2904c6e51dbd",
+    "semantic_hash": "cb65c9ce1baed7616ffd2904c6e51dbd"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\flow.json": {
+    "mtime": 1784616624.2798142,
+    "seen": 1787921114.865187,
+    "ast_hash": "0f9294d20dc2c44d86aa49d6ff2e1510",
+    "semantic_hash": "0f9294d20dc2c44d86aa49d6ff2e1510"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\openapi\\5fa64e7a-f546-49d0-8ace-c8b5413182c6\\spec.json": {
+    "mtime": 1784616624.2986202,
+    "seen": 1787921114.8651886,
+    "ast_hash": "1be3c247fcfc20520c774e98a52ac18b",
+    "semantic_hash": "1be3c247fcfc20520c774e98a52ac18b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\schemas\\bronze.imported_rapid7_renamed.sites__history-value\\artifact.json": {
+    "mtime": 1784616624.304129,
+    "seen": 1787921114.8651905,
+    "ast_hash": "8cf70508083b7b3f7d821fc6e5dcb1da",
+    "semantic_hash": "8cf70508083b7b3f7d821fc6e5dcb1da"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\schemas\\bronze.imported_rapid7_renamed.sites__history-value\\versions\\1.json": {
+    "mtime": 1784616624.309716,
+    "seen": 1787921114.865192,
+    "ast_hash": "d404c04edb6f1266f204b72333bc4b59",
+    "semantic_hash": "d404c04edb6f1266f204b72333bc4b59"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\services\\application.json": {
+    "mtime": 1784616624.2933493,
+    "seen": 1787921114.8651934,
+    "ast_hash": "b3eb53edf2a16fc8c34c3dcf1c0a0df0",
+    "semantic_hash": "b3eb53edf2a16fc8c34c3dcf1c0a0df0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\source\\source.json": {
+    "mtime": 1784616624.2838075,
+    "seen": 1787921114.8651953,
+    "ast_hash": "3e3da6985cb5a5fd9946e8ac020090f6",
+    "semantic_hash": "3e3da6985cb5a5fd9946e8ac020090f6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Renamed\\source\\streams\\3757f9d6-d94a-47bc-85d9-f01df36e1006.json": {
+    "mtime": 1784616624.2893262,
+    "seen": 1787921114.865197,
+    "ast_hash": "d373df5babd0d9518cce5f80f1edf850",
+    "semantic_hash": "d373df5babd0d9518cce5f80f1edf850"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\flow.json": {
+    "mtime": 1784616624.5835667,
+    "seen": 1787921114.8651989,
+    "ast_hash": "591b2888f33be1cf8b99fb261588367a",
+    "semantic_hash": "591b2888f33be1cf8b99fb261588367a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\openapi\\8c2cc541-3309-4f7f-b1e1-a1a003acba17\\spec.json": {
+    "mtime": 1784616624.610042,
+    "seen": 1787921114.8652008,
+    "ast_hash": "0620c18336f747467e0ea93ef8fab37c",
+    "semantic_hash": "0620c18336f747467e0ea93ef8fab37c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\schemas\\bronze.imported_rapid7.site_assets-value\\artifact.json": {
+    "mtime": 1784616624.6165595,
+    "seen": 1787921114.8652022,
+    "ast_hash": "d666a48482ba069e38111d250e715ce4",
+    "semantic_hash": "d666a48482ba069e38111d250e715ce4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\schemas\\bronze.imported_rapid7.site_assets-value\\versions\\1.json": {
+    "mtime": 1784616624.62157,
+    "seen": 1787921114.8652036,
+    "ast_hash": "8bb290b1d6701267af92b80a401f4c70",
+    "semantic_hash": "8bb290b1d6701267af92b80a401f4c70"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616624.6268144,
+    "seen": 1787921114.8652055,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616624.630803,
+    "seen": 1787921114.865207,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\services\\application.json": {
+    "mtime": 1784616624.604499,
+    "seen": 1787921114.8652086,
+    "ast_hash": "f3c539e09be58c42393dfc9260be1ee1",
+    "semantic_hash": "f3c539e09be58c42393dfc9260be1ee1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\source\\source.json": {
+    "mtime": 1784616624.589781,
+    "seen": 1787921114.8652103,
+    "ast_hash": "65fca258e42f235d1f45341a25272d3f",
+    "semantic_hash": "65fca258e42f235d1f45341a25272d3f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\source\\streams\\2e80052f-a680-4a57-84d8-1929f40b626c.json": {
+    "mtime": 1784616624.599348,
+    "seen": 1787921114.865212,
+    "ast_hash": "2da00c283da38098d51e99f403782f7d",
+    "semantic_hash": "2da00c283da38098d51e99f403782f7d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Routes\\source\\streams\\72f41c1a-2c16-464d-96c0-5413b2c1be47.json": {
+    "mtime": 1784616624.5938196,
+    "seen": 1787921114.8652134,
+    "ast_hash": "1671c70829c62518d6d5cef5c7fa2fed",
+    "semantic_hash": "1671c70829c62518d6d5cef5c7fa2fed"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\flow.json": {
+    "mtime": 1784616623.6706727,
+    "seen": 1787921114.865215,
+    "ast_hash": "8224f4369a826c3710aedb38e1b9c030",
+    "semantic_hash": "8224f4369a826c3710aedb38e1b9c030"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\openapi\\522b7b4f-c7c9-4a25-9482-6f6478a41678\\spec.json": {
+    "mtime": 1784616623.6915874,
+    "seen": 1787921114.8652165,
+    "ast_hash": "7300603936fd8ab46c8dcaea79a14c07",
+    "semantic_hash": "7300603936fd8ab46c8dcaea79a14c07"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616623.698168,
+    "seen": 1787921114.8652182,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616623.7031693,
+    "seen": 1787921114.8652198,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\services\\application.json": {
+    "mtime": 1784616623.6865416,
+    "seen": 1787921114.8652213,
+    "ast_hash": "d66992bfcde139fbd48109f7faff4c46",
+    "semantic_hash": "d66992bfcde139fbd48109f7faff4c46"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\source\\source.json": {
+    "mtime": 1784616623.676706,
+    "seen": 1787921114.8652232,
+    "ast_hash": "202b3840588c8c786f9f81c5673f60bd",
+    "semantic_hash": "202b3840588c8c786f9f81c5673f60bd"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Runtime Reset\\source\\streams\\57d1c1d1-6216-460c-86e8-04dcb51b86ff.json": {
+    "mtime": 1784616623.6813025,
+    "seen": 1787921114.865225,
+    "ast_hash": "858bf0502a6fe3075610d1b3a46ae87a",
+    "semantic_hash": "858bf0502a6fe3075610d1b3a46ae87a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\flow.json": {
+    "mtime": 1784616624.897475,
+    "seen": 1787921114.8652272,
+    "ast_hash": "a5e35029f2c56919c6608e07829a8e98",
+    "semantic_hash": "a5e35029f2c56919c6608e07829a8e98"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\openapi\\d46e2340-e9a4-4d06-a1f7-662e13531523\\spec.json": {
+    "mtime": 1784616624.9169936,
+    "seen": 1787921114.8652294,
+    "ast_hash": "c18ac603540402b624c9d8935ab4738f",
+    "semantic_hash": "c18ac603540402b624c9d8935ab4738f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616624.9232764,
+    "seen": 1787921114.8652308,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616624.9286907,
+    "seen": 1787921114.8652325,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\services\\application.json": {
+    "mtime": 1784616624.911542,
+    "seen": 1787921114.8652341,
+    "ast_hash": "e093e1713754c887aa9886d738dc93c8",
+    "semantic_hash": "e093e1713754c887aa9886d738dc93c8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\source\\source.json": {
+    "mtime": 1784616624.9024396,
+    "seen": 1787921114.8652358,
+    "ast_hash": "08cfb601878bd2eb7de311507758ef1c",
+    "semantic_hash": "08cfb601878bd2eb7de311507758ef1c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Rapid7 Topic Copy\\source\\streams\\f09de1de-1e10-436a-a7bc-99e77d7abaa1.json": {
+    "mtime": 1784616624.9065378,
+    "seen": 1787921114.865237,
+    "ast_hash": "a795e9b2460bd9f92bf2d83401d1b851",
+    "semantic_hash": "a795e9b2460bd9f92bf2d83401d1b851"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\flow.json": {
+    "mtime": 1784616625.22547,
+    "seen": 1787921114.8652387,
+    "ast_hash": "e6723298a70d28b81d5519658ac4648c",
+    "semantic_hash": "e6723298a70d28b81d5519658ac4648c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\openapi\\ab61581a-43d4-4f2f-8c28-8c1a3adeca11\\spec.json": {
+    "mtime": 1784616625.244551,
+    "seen": 1787921114.8652403,
+    "ast_hash": "2b50299469bbc89362ba97c60ebb0853",
+    "semantic_hash": "2b50299469bbc89362ba97c60ebb0853"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\schemas\\bronze.imported_rapid7.sites-value\\artifact.json": {
+    "mtime": 1784616625.2490711,
+    "seen": 1787921114.865242,
+    "ast_hash": "c665ef51aaaf023a6e193ede81718286",
+    "semantic_hash": "c665ef51aaaf023a6e193ede81718286"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\schemas\\bronze.imported_rapid7.sites-value\\versions\\1.json": {
+    "mtime": 1784616625.2540717,
+    "seen": 1787921114.8652437,
+    "ast_hash": "9d0d9b6116576077670dff772fb642a8",
+    "semantic_hash": "9d0d9b6116576077670dff772fb642a8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\services\\application.json": {
+    "mtime": 1784616625.2385511,
+    "seen": 1787921114.8652453,
+    "ast_hash": "793bc27b6d41a19b15e3bb6986a0588b",
+    "semantic_hash": "793bc27b6d41a19b15e3bb6986a0588b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\source\\source.json": {
+    "mtime": 1784616625.2294822,
+    "seen": 1787921114.865247,
+    "ast_hash": "43eaff9c3cef72ea1f616a0490a55815",
+    "semantic_hash": "43eaff9c3cef72ea1f616a0490a55815"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\flows\\Imported Via Router\\source\\streams\\6fc87b2f-4260-412b-87e9-c866f6ae9758.json": {
+    "mtime": 1784616625.2334824,
+    "seen": 1787921114.8652487,
+    "ast_hash": "e9042e603bc0800352b18819256441d3",
+    "semantic_hash": "e9042e603bc0800352b18819256441d3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.content-store\\manifest.json": {
+    "mtime": 1784289584.2010543,
+    "seen": 1787921114.8652503,
+    "ast_hash": "5d3862c9c4c21fe3c76a552d51b55c89",
+    "semantic_hash": "5d3862c9c4c21fe3c76a552d51b55c89"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\openapi_ops_summary.json": {
+    "mtime": 1778968941.1875854,
+    "seen": 1787921114.8653188,
+    "ast_hash": "a0a38c8275177b6f59eda6f4d1993ff5",
+    "semantic_hash": "a0a38c8275177b6f59eda6f4d1993ff5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\openapi_snapshot.json": {
+    "mtime": 1782027731.883685,
+    "seen": 1787921114.8653204,
+    "ast_hash": "96460d6f65a481fe5b640db770dce915",
+    "semantic_hash": "96460d6f65a481fe5b640db770dce915"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\sources_backup_20260714_064304.json": {
+    "mtime": 1784011384.284992,
+    "seen": 1787921114.865517,
+    "ast_hash": "ad2642ffb3897312b8078784fcc15bc5",
+    "semantic_hash": "ad2642ffb3897312b8078784fcc15bc5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\datatypes-continuation.spec.ts": {
+    "mtime": 1786798326.6447005,
+    "seen": 1787921114.8659964,
+    "ast_hash": "2a8dcffd5434a2ffc585aa6be5490fa6",
+    "semantic_hash": "2a8dcffd5434a2ffc585aa6be5490fa6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\datatypes-remediation.spec.ts": {
+    "mtime": 1786623514.6823363,
+    "seen": 1787921114.8659983,
+    "ast_hash": "787e1153ebb1a8d646f696d9e4ef058d",
+    "semantic_hash": "787e1153ebb1a8d646f696d9e4ef058d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\datatypes.spec.ts": {
+    "mtime": 1786621772.3443067,
+    "seen": 1787921114.8660004,
+    "ast_hash": "7ecb134fe95daefba2acdd527eadcb20",
+    "semantic_hash": "7ecb134fe95daefba2acdd527eadcb20"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\debug-check-start.mjs": {
+    "mtime": 1786622252.368618,
+    "seen": 1787921114.8660018,
+    "ast_hash": "a2dbdd1689e5ade6709127758e5543d1",
+    "semantic_hash": "a2dbdd1689e5ade6709127758e5543d1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\fortisiem-columnar-fix.spec.ts": {
+    "mtime": 1787911186.307224,
+    "seen": 1787921114.8660038,
+    "ast_hash": "5b5f84278c397c01db65125826d08d2d",
+    "semantic_hash": "5b5f84278c397c01db65125826d08d2d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\fortisiem-path-fix.spec.ts": {
+    "mtime": 1787908093.0123367,
+    "seen": 1787921114.866005,
+    "ast_hash": "b2ad4b023ff5b11dde1d4dde4fb3d76a",
+    "semantic_hash": "b2ad4b023ff5b11dde1d4dde4fb3d76a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\fortisiem-proxy-fix.spec.ts": {
+    "mtime": 1787906753.9516506,
+    "seen": 1787921114.8660069,
+    "ast_hash": "d138e3eda8f7829efbfce7554c95d6b6",
+    "semantic_hash": "d138e3eda8f7829efbfce7554c95d6b6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\gateway-iceberg-2.spec.ts": {
+    "mtime": 1786623125.3911178,
+    "seen": 1787921114.8660083,
+    "ast_hash": "f5f013f7c633a5f2b3797b521f936b78",
+    "semantic_hash": "f5f013f7c633a5f2b3797b521f936b78"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\gateway-iceberg-continuation.spec.ts": {
+    "mtime": 1786796058.5661297,
+    "seen": 1787921114.86601,
+    "ast_hash": "a7b50091787a87b8b74b4f089a4d0cb3",
+    "semantic_hash": "a7b50091787a87b8b74b4f089a4d0cb3"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\gateway-iceberg.spec.ts": {
+    "mtime": 1786620957.6268501,
+    "seen": 1787921114.8660114,
+    "ast_hash": "fe9ff9500624f71e5a559836c8ac2abd",
+    "semantic_hash": "fe9ff9500624f71e5a559836c8ac2abd"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\jdbc-continuation.spec.ts": {
+    "mtime": 1786798853.1279118,
+    "seen": 1787921114.8660133,
+    "ast_hash": "e8c4563eb30eb38fee25d2b19bdd6d92",
+    "semantic_hash": "e8c4563eb30eb38fee25d2b19bdd6d92"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\playwright.config.ts": {
+    "mtime": 1786613101.3957405,
+    "seen": 1787921114.866015,
+    "ast_hash": "9d402b1abd5993cc8c146f630f8d3cf6",
+    "semantic_hash": "9d402b1abd5993cc8c146f630f8d3cf6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\schema-version-continuation.spec.ts": {
+    "mtime": 1786797481.407315,
+    "seen": 1787921114.866017,
+    "ast_hash": "cb55add406f8f138cc7eee7b45381b49",
+    "semantic_hash": "cb55add406f8f138cc7eee7b45381b49"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\frontend\\e2e\\ui-journey.spec.ts": {
+    "mtime": 1786615755.042037,
+    "seen": 1787921114.8660185,
+    "ast_hash": "a283f453af6f8cdb6b989178f74fd090",
+    "semantic_hash": "a283f453af6f8cdb6b989178f74fd090"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\add_avro_branches_from_kafka_samples.py": {
+    "mtime": 1787000856.272143,
+    "seen": 1787921114.8660202,
+    "ast_hash": "f4836e8a05d9de8a870eee043d7a7a0d",
+    "semantic_hash": "f4836e8a05d9de8a870eee043d7a7a0d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\clear_all_redis_dedup_cache.py": {
+    "mtime": 1787149295.4957697,
+    "seen": 1787921114.8660219,
+    "ast_hash": "a9ae91c20f3684b72e3ccdcea5a4c5c1",
+    "semantic_hash": "a9ae91c20f3684b72e3ccdcea5a4c5c1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\drop_fortisiem_entities.py": {
+    "mtime": 1787208677.587147,
+    "seen": 1787921114.8660238,
+    "ast_hash": "6be91cb8fa35fddb608c820734ced368",
+    "semantic_hash": "6be91cb8fa35fddb608c820734ced368"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\fix_fortisiem_nifi_raw.py": {
+    "mtime": 1786992102.8861742,
+    "seen": 1787921114.8660252,
+    "ast_hash": "9f273c9564a1e19678f3a1f9bca8f1b5",
+    "semantic_hash": "9f273c9564a1e19678f3a1f9bca8f1b5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\fix_sentinelone_nifi_raw.py": {
+    "mtime": 1786992139.8148334,
+    "seen": 1787921114.8660266,
+    "ast_hash": "234f9dd0a50bfc37ff2c18e07821da4d",
+    "semantic_hash": "234f9dd0a50bfc37ff2c18e07821da4d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.activity__raw.avro-value.json": {
+    "mtime": 1787127151.0611691,
+    "seen": 1787921114.8660285,
+    "ast_hash": "e080cc222de0266cb8552ce1667a1108",
+    "semantic_hash": "e080cc222de0266cb8552ce1667a1108"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.activity_type__raw.avro-value.json": {
+    "mtime": 1787127163.2093697,
+    "seen": 1787921114.86603,
+    "ast_hash": "a82e13bf4794561065ee0ac38fca1c0b",
+    "semantic_hash": "a82e13bf4794561065ee0ac38fca1c0b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.agent__raw.avro-value.json": {
+    "mtime": 1787127144.6354995,
+    "seen": 1787921114.866032,
+    "ast_hash": "811dbc0fcbdee2a1f64c62bd1e8be23b",
+    "semantic_hash": "811dbc0fcbdee2a1f64c62bd1e8be23b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.agent_package__raw.avro-value.json": {
+    "mtime": 1787127177.671419,
+    "seen": 1787921114.8660333,
+    "ast_hash": "37cf1ee9f7752ff3952dd7f693d31bd5",
+    "semantic_hash": "37cf1ee9f7752ff3952dd7f693d31bd5"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.agent_tag__raw.avro-value.json": {
+    "mtime": 1787127173.0706213,
+    "seen": 1787921114.866035,
+    "ast_hash": "ed8ddca8459a2324690e5b4b4899841c",
+    "semantic_hash": "ed8ddca8459a2324690e5b4b4899841c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.alert__raw.avro-value.json": {
+    "mtime": 1787127164.636683,
+    "seen": 1787921114.8660364,
+    "ast_hash": "4a9079d07b4e401c20ad8a8e34f15a80",
+    "semantic_hash": "4a9079d07b4e401c20ad8a8e34f15a80"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.application_cve__raw.avro-value.json": {
+    "mtime": 1787127147.6161165,
+    "seen": 1787921114.8660383,
+    "ast_hash": "cacfa7e14ca4ce51c37ea3fbb78479d6",
+    "semantic_hash": "cacfa7e14ca4ce51c37ea3fbb78479d6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.cloud_detection_rule__raw.avro-value.json": {
+    "mtime": 1787127174.815968,
+    "seen": 1787921114.86604,
+    "ast_hash": "f829cd4d9dc3ef270e26a6453fcf0540",
+    "semantic_hash": "f829cd4d9dc3ef270e26a6453fcf0540"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.config_override__raw.avro-value.json": {
+    "mtime": 1787127161.7117062,
+    "seen": 1787921114.8660417,
+    "ast_hash": "ac18e80e78e13dc314c596293d30b43e",
+    "semantic_hash": "ac18e80e78e13dc314c596293d30b43e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.exclusion__raw.avro-value.json": {
+    "mtime": 1787127158.7215824,
+    "seen": 1787921114.866043,
+    "ast_hash": "77ecd1ad5660d02ee62c9354f48f1986",
+    "semantic_hash": "77ecd1ad5660d02ee62c9354f48f1986"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.group__raw.avro-value.json": {
+    "mtime": 1787127142.854397,
+    "seen": 1787921114.8660448,
+    "ast_hash": "4561012961d7cd26e8218e481ff7324c",
+    "semantic_hash": "4561012961d7cd26e8218e481ff7324c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.group_policy__raw.avro-value.json": {
+    "mtime": 1787127184.979317,
+    "seen": 1787921114.8660462,
+    "ast_hash": "592dbb533c938c15068dc9647dd94ba0",
+    "semantic_hash": "592dbb533c938c15068dc9647dd94ba0"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.installed_application__raw.avro-value.json": {
+    "mtime": 1787127146.162224,
+    "seen": 1787921114.866048,
+    "ast_hash": "a932d6a7e5412a741181e50f06734464",
+    "semantic_hash": "a932d6a7e5412a741181e50f06734464"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.location__raw.avro-value.json": {
+    "mtime": 1787127179.100165,
+    "seen": 1787921114.8660495,
+    "ast_hash": "3150cc77e6b20b361bf904ea411576e8",
+    "semantic_hash": "3150cc77e6b20b361bf904ea411576e8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.restriction__raw.avro-value.json": {
+    "mtime": 1787127160.1824007,
+    "seen": 1787921114.866051,
+    "ast_hash": "29e05aeb3256dcece96555322b24a91c",
+    "semantic_hash": "29e05aeb3256dcece96555322b24a91c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.role__raw.avro-value.json": {
+    "mtime": 1787127157.078168,
+    "seen": 1787921114.8660526,
+    "ast_hash": "5648749adc7342ec9cda711b3b5e7a8b",
+    "semantic_hash": "5648749adc7342ec9cda711b3b5e7a8b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.service_user__raw.avro-value.json": {
+    "mtime": 1787127176.1687615,
+    "seen": 1787921114.8660543,
+    "ast_hash": "5e2040eade95b3a47c93a8684a677a87",
+    "semantic_hash": "5e2040eade95b3a47c93a8684a677a87"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.site__raw.avro-value.json": {
+    "mtime": 1787127140.9604065,
+    "seen": 1787921114.866056,
+    "ast_hash": "766c07dda5fab162aaeb2e96137cec4d",
+    "semantic_hash": "766c07dda5fab162aaeb2e96137cec4d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.site_policy__raw.avro-value.json": {
+    "mtime": 1787127153.464831,
+    "seen": 1787921114.8660576,
+    "ast_hash": "0dd1ac4983a34f2fc2e5f5da84c4273b",
+    "semantic_hash": "0dd1ac4983a34f2fc2e5f5da84c4273b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.system_info__raw.avro-value.json": {
+    "mtime": 1787127182.7284975,
+    "seen": 1787921114.8660593,
+    "ast_hash": "f346c64ffe97500396673a2b161a47bf",
+    "semantic_hash": "f346c64ffe97500396673a2b161a47bf"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.tenant_policy__raw.avro-value.json": {
+    "mtime": 1787127181.138167,
+    "seen": 1787921114.8660612,
+    "ast_hash": "db24dd3851292ac69ffc59dd6741b7f7",
+    "semantic_hash": "db24dd3851292ac69ffc59dd6741b7f7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.threat__raw.avro-value.json": {
+    "mtime": 1787127149.5250854,
+    "seen": 1787921114.8660629,
+    "ast_hash": "a528ed617d8c17b5135f42928d9f039f",
+    "semantic_hash": "a528ed617d8c17b5135f42928d9f039f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.threat_timeline__raw.avro-value.json": {
+    "mtime": 1787127167.7111998,
+    "seen": 1787921114.8660643,
+    "ast_hash": "f9b74b484769c88c6520bb7131dad39d",
+    "semantic_hash": "f9b74b484769c88c6520bb7131dad39d"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.user__raw.avro-value.json": {
+    "mtime": 1787127155.6847792,
+    "seen": 1787921114.866066,
+    "ast_hash": "2f8bbe82b9734f8f91eebf2187e8accf",
+    "semantic_hash": "2f8bbe82b9734f8f91eebf2187e8accf"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.xdr_asset__raw.avro-value.json": {
+    "mtime": 1787127170.4365618,
+    "seen": 1787921114.8660676,
+    "ast_hash": "7de744d1f0317667f64d1da53cbc9c4c",
+    "semantic_hash": "7de744d1f0317667f64d1da53cbc9c4c"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\generated_schemas\\bronze.sentinelone.xdr_asset_tag__raw.avro-value.json": {
+    "mtime": 1787127171.640005,
+    "seen": 1787921114.8660696,
+    "ast_hash": "ebf389d68e7f6e787ceee89288d86238",
+    "semantic_hash": "ebf389d68e7f6e787ceee89288d86238"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\infer_rapid7_securado_schemas.py": {
+    "mtime": 1787230738.2843246,
+    "seen": 1787921114.866071,
+    "ast_hash": "6c435190b264abd22c8a4c6c2b7552a6",
+    "semantic_hash": "6c435190b264abd22c8a4c6c2b7552a6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\inspect_rapid7_sample.py": {
+    "mtime": 1786945930.308419,
+    "seen": 1787921114.866073,
+    "ast_hash": "bf8d74d1ace8951a981c311c11f48e86",
+    "semantic_hash": "bf8d74d1ace8951a981c311c11f48e86"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\patch_fortisiem_org_device_object_id.py": {
+    "mtime": 1787203629.5549352,
+    "seen": 1787921114.8660743,
+    "ast_hash": "d84334b70f4331cdfd9e5703f71b00d4",
+    "semantic_hash": "d84334b70f4331cdfd9e5703f71b00d4"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\patch_hash_policy_all_flows.py": {
+    "mtime": 1787169364.1115606,
+    "seen": 1787921114.866076,
+    "ast_hash": "d78810146863040a5199d9bf48cc1d28",
+    "semantic_hash": "d78810146863040a5199d9bf48cc1d28"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\patch_rapid7_asyad_object_id_and_headers.py": {
+    "mtime": 1787148130.1705866,
+    "seen": 1787921114.8660777,
+    "ast_hash": "cafb694bb017c130c7f484a28233b65b",
+    "semantic_hash": "cafb694bb017c130c7f484a28233b65b"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\patch_rapid7_securado_object_id_and_headers.py": {
+    "mtime": 1787148769.2434807,
+    "seen": 1787921114.8660798,
+    "ast_hash": "e1a3aa6a61ed56db57c886b81f78f8b6",
+    "semantic_hash": "e1a3aa6a61ed56db57c886b81f78f8b6"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\patch_sentinelone_object_id_and_raw_body.py": {
+    "mtime": 1787140555.9335873,
+    "seen": 1787921114.8660812,
+    "ast_hash": "e4d30a9d4220325a68e7bed162008c4e",
+    "semantic_hash": "e4d30a9d4220325a68e7bed162008c4e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\probe_fortisiem_entities.py": {
+    "mtime": 1787915248.0758893,
+    "seen": 1787921114.8660831,
+    "ast_hash": "72f7a914f3903aa71b8cfdea3c0a5549",
+    "semantic_hash": "72f7a914f3903aa71b8cfdea3c0a5549"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\probe_fortisiem_new_endpoints.py": {
+    "mtime": 1787636237.374455,
+    "seen": 1787921114.866085,
+    "ast_hash": "8391f48613605afa1ad20efef22e4ce7",
+    "semantic_hash": "8391f48613605afa1ad20efef22e4ce7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\remove_rapid7_avro_double_publish.py": {
+    "mtime": 1787205898.8885355,
+    "seen": 1787921114.866087,
+    "ast_hash": "44eaa5d4e2d7bb1a33034f851f635cfe",
+    "semantic_hash": "44eaa5d4e2d7bb1a33034f851f635cfe"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\remove_rapid7_securado_empty_entities.py": {
+    "mtime": 1787411593.2865324,
+    "seen": 1787921114.8660886,
+    "ast_hash": "ce3c5c393895e949a7fbb2823d9ba079",
+    "semantic_hash": "ce3c5c393895e949a7fbb2823d9ba079"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\tools\\tune_rapid7_securado_perf.py": {
+    "mtime": 1787685368.2479513,
+    "seen": 1787921114.8660905,
+    "ast_hash": "d3405784a7422033ecebd94a66be1fb7",
+    "semantic_hash": "d3405784a7422033ecebd94a66be1fb7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\DummyJson_Dedup.json": {
+    "mtime": 1786575219.304721,
+    "seen": 1787921114.8660917,
+    "ast_hash": "971d0b17db8793e3deebe1bd0a9bd580",
+    "semantic_hash": "971d0b17db8793e3deebe1bd0a9bd580"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\Ingest3.json": {
+    "mtime": 1786618800.8051069,
+    "seen": 1787921114.8660934,
+    "ast_hash": "7710448f6265348dd97db890bc81d652",
+    "semantic_hash": "7710448f6265348dd97db890bc81d652"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\Publish3.json": {
+    "mtime": 1786618800.965486,
+    "seen": 1787921114.8660955,
+    "ast_hash": "0383fbcd1bf557765b97c26437ff0796",
+    "semantic_hash": "0383fbcd1bf557765b97c26437ff0796"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\fileshare__assets (2).json": {
+    "mtime": 1778960949.3437116,
+    "seen": 1787921114.8660975,
+    "ast_hash": "5b39d08b091316912cae9a0f9bdfc6b8",
+    "semantic_hash": "5b39d08b091316912cae9a0f9bdfc6b8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\fortisiem__devices (1).json": {
+    "mtime": 1778960949.3437116,
+    "seen": 1787921114.866099,
+    "ast_hash": "b8e4f107c090763d712d513efc564e50",
+    "semantic_hash": "b8e4f107c090763d712d513efc564e50"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\pokeapi-offset-test (1).json": {
+    "mtime": 1778960949.350676,
+    "seen": 1787921114.8661008,
+    "ast_hash": "d7d43d518cf14aae818662911bfd6561",
+    "semantic_hash": "d7d43d518cf14aae818662911bfd6561"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\rapid7-securado__assets (1).json": {
+    "mtime": 1778960949.350676,
+    "seen": 1787921114.866103,
+    "ast_hash": "b8c40d5a6625ad40da3697be1299b90f",
+    "semantic_hash": "b8c40d5a6625ad40da3697be1299b90f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\reference\\nifi-flows\\sentinelone__agents (2).json": {
+    "mtime": 1778960949.3575988,
+    "seen": 1787921114.8661046,
+    "ast_hash": "41ee238b55e79e913c63361459c33551",
+    "semantic_hash": "41ee238b55e79e913c63361459c33551"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_kafka_status.json": {
+    "mtime": 1787908451.5308635,
+    "seen": 1788009728.8588746,
+    "ast_hash": "3b7cef54af210e08643f3a8cec1e5f2e",
+    "semantic_hash": "3b7cef54af210e08643f3a8cec1e5f2e"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_kb_clusters.json": {
+    "mtime": 1787908800.0700886,
+    "seen": 1788009728.8588786,
+    "ast_hash": "7027a684489e16617a1b8fdff00c6357",
+    "semantic_hash": "7027a684489e16617a1b8fdff00c6357"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_kb_topic.json": {
+    "mtime": 1787908806.1883132,
+    "seen": 1788009728.8588808,
+    "ast_hash": "90e0cf095b41f38a211bb4ab547ff587",
+    "semantic_hash": "90e0cf095b41f38a211bb4ab547ff587"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_kpg.json": {
+    "mtime": 1787908759.927053,
+    "seen": 1788009728.8588827,
+    "ast_hash": "99b734a03e870c7d08bc8005418332d1",
+    "semantic_hash": "99b734a03e870c7d08bc8005418332d1"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_metrics2.json": {
+    "mtime": 1787908502.5209248,
+    "seen": 1788009728.858884,
+    "ast_hash": "6c5f4fcbaf78668bc7a6968a21e34da7",
+    "semantic_hash": "6c5f4fcbaf78668bc7a6968a21e34da7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_metrics3.json": {
+    "mtime": 1787908568.6699588,
+    "seen": 1788009728.858886,
+    "ast_hash": "6c5f4fcbaf78668bc7a6968a21e34da7",
+    "semantic_hash": "6c5f4fcbaf78668bc7a6968a21e34da7"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_metrics_final.json": {
+    "mtime": 1787909134.8738234,
+    "seen": 1788009728.8588877,
+    "ast_hash": "610346202f772d4e6c10acec6b62d770",
+    "semantic_hash": "610346202f772d4e6c10acec6b62d770"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_msgs2.json": {
+    "mtime": 1787908600.989059,
+    "seen": 1788009728.858889,
+    "ast_hash": "394daf1a187e2f2a82ac593c04a0f637",
+    "semantic_hash": "394daf1a187e2f2a82ac593c04a0f637"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_params.json": {
+    "mtime": 1787908767.8931904,
+    "seen": 1788009728.858891,
+    "ast_hash": "91ca657200f6244fb4c3b86309b4e077",
+    "semantic_hash": "91ca657200f6244fb4c3b86309b4e077"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_pg_status.json": {
+    "mtime": 1787908405.4957595,
+    "seen": 1788009728.858893,
+    "ast_hash": "ea76cf9ae21a77111de6c9be56c0da4f",
+    "semantic_hash": "ea76cf9ae21a77111de6c9be56c0da4f"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_pgcheck.json": {
+    "mtime": 1787908193.3081646,
+    "seen": 1788009728.8588946,
+    "ast_hash": "88ee17e5a61a7f74801249e97a4eb748",
+    "semantic_hash": "88ee17e5a61a7f74801249e97a4eb748"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_prov2.json": {
+    "mtime": 1787908434.1117105,
+    "seen": 1788009728.8588967,
+    "ast_hash": "3b260bb8a31041bb8883142dedffc794",
+    "semantic_hash": "3b260bb8a31041bb8883142dedffc794"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_prov3.json": {
+    "mtime": 1787908870.2344553,
+    "seen": 1788009728.8588986,
+    "ast_hash": "3160d2b00d74795249ba446ddf7b3ce8",
+    "semantic_hash": "3160d2b00d74795249ba446ddf7b3ce8"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_prov_final.json": {
+    "mtime": 1787909085.7142825,
+    "seen": 1788009728.8589003,
+    "ast_hash": "1518053f22f23281452e292949d051df",
+    "semantic_hash": "1518053f22f23281452e292949d051df"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_publish.json": {
+    "mtime": 1787908746.5294073,
+    "seen": 1788009728.858902,
+    "ast_hash": "e2db1358e9a85c0a2d439e24b147772a",
+    "semantic_hash": "e2db1358e9a85c0a2d439e24b147772a"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_split_content.json": {
+    "mtime": 1787909004.1845493,
+    "seen": 1788009728.858904,
+    "ast_hash": "5dad65bd2e841c3f42cbd85ec2ad5b05",
+    "semantic_hash": "5dad65bd2e841c3f42cbd85ec2ad5b05"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_write_proc.json": {
+    "mtime": 1787908213.14272,
+    "seen": 1788009728.8589056,
+    "ast_hash": "b563d69bc38b78a42fd62a187c0034ac",
+    "semantic_hash": "b563d69bc38b78a42fd62a187c0034ac"
+  },
+  "C:\\Users\\kaifm\\Desktop\\claude-project\\backend\\.tmp_work_write_status.json": {
+    "mtime": 1787908389.9007902,
+    "seen": 1788009728.8589077,
+    "ast_hash": "68bddb2ee55e591c82834eefdb1da4c9",
+    "semantic_hash": "68bddb2ee55e591c82834eefdb1da4c9"
   }
 }

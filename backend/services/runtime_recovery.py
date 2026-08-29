@@ -28,6 +28,7 @@ TERMINAL_INFERENCE_STATES = {
 @dataclass
 class RuntimeRecoveryReport:
     inference_jobs_recovered: int = 0
+    bulk_jobs_recovered: int = 0
     flow_locks_released: int = 0
     cleaned_nifi_process_groups: list[str] = field(default_factory=list)
     cleaned_kafka_topics: list[str] = field(default_factory=list)
@@ -90,6 +91,40 @@ async def reconcile_runtime_state(
             if job_id:
                 from services.lifecycle_locks import unlock_job
                 report.flow_locks_released += await unlock_job(db, job_id)
+
+    # Bulk flow-verb jobs run as detached in-process tasks, so a restart kills
+    # the runner while the doc still says "running". Mark those interrupted --
+    # there is no safe automatic resume, since we cannot know whether the
+    # in-flight flow's NiFi call landed.
+    # getattr rather than db[...]: the resilience test fakes expose collections
+    # as plain attributes and have no __getitem__, and older databases predate
+    # this collection entirely.
+    bulk_collection = getattr(db, "bulk_jobs_v2", None)
+    if bulk_collection is not None:
+        bulk_jobs = await bulk_collection.find(
+            {"status": {"$in": ["pending", "running"]}},
+            {"_id": 0},
+        ).to_list(1000)
+
+        for job in bulk_jobs:
+            job_id = str(job.get("id") or "")
+            owner_instance_id = str(job.get("owner_instance_id") or "")
+            heartbeat = job.get("heartbeat_at") or job.get("updated_at")
+            stale_before = now - timedelta(seconds=stale_after_seconds)
+            heartbeat_is_stale = not isinstance(heartbeat, datetime) or heartbeat < stale_before
+
+            if owner_instance_id != instance_id or heartbeat_is_stale:
+                await bulk_collection.update_one(
+                    {"id": job_id},
+                    {
+                        "$set": {
+                            "status": "interrupted",
+                            "error": "The backend restarted while this run was in progress.",
+                            "updated_at": now,
+                        }
+                    },
+                )
+                report.bulk_jobs_recovered += 1
 
     terminal_jobs = await db.schema_inference_jobs.find(
         {

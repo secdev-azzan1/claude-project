@@ -50,6 +50,7 @@ in scope here).
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
@@ -296,8 +297,62 @@ def _ensure_xml_reader(builder: "BlockBuilder") -> str:
     return key
 
 
+_COLUMNAR_NAME_BAD_CHARS = re.compile(r"[^A-Za-z0-9_]")
+
+
+def _sanitize_columnar_field_name(name: str, index: int) -> str:
+    """Column names come from a caller-supplied list, not schema
+    introspection (FortiSIEM's column-oriented rows carry no field names of
+    their own at runtime) — sanitize to `[A-Za-z_][A-Za-z0-9_]*` so the name
+    is safe to use as a Jolt output key, an EvaluateJsonPath property name,
+    and an Avro field name, matching `tools/build_fortisiem_native_query_cmdb.py`'s
+    convention."""
+    cleaned = _COLUMNAR_NAME_BAD_CHARS.sub("_", str(name).strip())
+    if not cleaned or not re.match(r"[A-Za-z_]", cleaned[0]):
+        cleaned = f"col_{index}_{cleaned}" if cleaned else f"col_{index}"
+    return cleaned
+
+
+def _apply_columnar_transform(builder: "BlockBuilder", *, source: Tail, columnar: Dict[str, Any]) -> Tail:
+    """Insert a `JoltTransformJSON` that turns a column-oriented HTTP
+    response (`{"<rowsField>": [[v0, v1, ...], ...], ...}` — FortiSIEM's
+    `/query/cmdb` family, and any other API that returns rows as bare
+    positional arrays instead of objects) into a root-level JSON array of
+    named objects, using a caller-supplied, pre-known column name list (there
+    is no per-record schema to read the names from at runtime — the columns
+    ARE the schema). Mirrors the shift-spec pattern already proven live in
+    `tools/build_fortisiem_native_query_cmdb.py` (reference-only script, this
+    is its declarative/compiler-native equivalent).
+
+    Without this, `SplitJson` would split `$.<rowsField>[*]` into per-row
+    FlowFiles whose content is a bare JSON array (`[v0, v1, ...]`) — every
+    downstream `EvaluateJsonPath`/field extraction silently finds nothing
+    (`Path Not Found Behavior: ignore`), so records flow all the way through
+    dedup/publish looking clean while carrying no usable fields. This
+    processor is what makes the rows into objects before the split ever
+    happens.
+    """
+    rows_field = str(columnar.get("rowsField") or "data")
+    columns = [str(c) for c in (columnar.get("columns") or [])]
+    if not columns:
+        raise CompileError("http columnar response transform requires at least one column name")
+    sanitized = [_sanitize_columnar_field_name(c, i) for i, c in enumerate(columns)]
+    shift_inner = {str(i): f"[&1].{name}" for i, name in enumerate(sanitized)}
+    jolt_spec = json.dumps({rows_field: {"*": shift_inner}})
+    builder.add_processor(
+        ProcessorSpec(key="columnar_transform", name="columnar_transform",
+                      type="org.apache.nifi.processors.jolt.JoltTransformJSON",
+                      properties={"Jolt Transform": "jolt-transform-shift", "Jolt Specification": jolt_spec})
+    )
+    src_key, src_rel = source
+    builder.link(src_key, "columnar_transform", [src_rel])
+    builder.to_dlq("columnar_transform", "failure")
+    return "columnar_transform", "success"
+
+
 def _parse_response(
     builder: "BlockBuilder", *, source: Tail, response_format: str, split: bool, record_path: str, ptype: str,
+    columnar: Optional[Dict[str, Any]] = None,
 ) -> "Tuple[Tail, Tail]":
     """`source`'s content -> `(record_tail, original_tail)`.
 
@@ -317,6 +372,17 @@ def _parse_response(
     `_compile_write`'s `writeForwards: "response"` branch (its `write`
     InvokeHTTP's own `Response`) — this is the "route Response through the
     same parse chain builder as read" the task brief asks for.
+
+    `columnar` (optional): a column-oriented response
+    (`{"<rowsField>": [[...], ...]}`) is passed through
+    `_apply_columnar_transform` BEFORE `SplitJson`, whose element path is
+    then forced to `$.[*]` (the transform's root array) instead of
+    `record_path`. `original_tail` is deliberately taken from the PRE-Jolt
+    `parse_source`, not the post-transform split's own `original`
+    relationship — the Jolt shift only keeps `rowsField`, dropping sibling
+    keys like a `totalCount` field, so pagination's total-count/probe check
+    (`_build_pagination`, fed by `original_tail`) must see the raw response,
+    forked off before the transform rather than after it.
     """
     src_key, src_rel = source
     if response_format == "json":
@@ -337,17 +403,32 @@ def _parse_response(
         )
 
     if not split:
+        if columnar:
+            raise CompileError(
+                "http columnar response transform requires \"split into records\" to be enabled"
+            )
         return parse_source, parse_source
 
-    p_key, p_rel = parse_source
+    if columnar:
+        transform_source = _apply_columnar_transform(builder, source=parse_source, columnar=columnar)
+        split_path = "$.[*]"
+        original_tail: Optional[Tail] = parse_source
+        split_autoterm = ["original"]
+    else:
+        transform_source = parse_source
+        split_path = record_path
+        original_tail = None
+        split_autoterm = ["original"] if ptype == "none" else []
+
+    p_key, p_rel = transform_source
     builder.add_processor(
         ProcessorSpec(key="split", name="split", type="org.apache.nifi.processors.standard.SplitJson",
-                      properties={"JsonPath Expression": record_path},
-                      autoTerminate=(["original"] if ptype == "none" else []))
+                      properties={"JsonPath Expression": split_path},
+                      autoTerminate=split_autoterm)
     )
     builder.link(p_key, "split", [p_rel])
     builder.to_dlq("split", "failure")
-    return ("split", "split"), ("split", "original")
+    return ("split", "split"), (original_tail or ("split", "original"))
 
 
 def compile_read(
@@ -376,6 +457,9 @@ def compile_read(
     ptype = pagination.get("type", "none")
     split = bool(block.config.get("split", True))
     record_path = str(block.config.get("recordPath", "$"))
+    columnar = block.config.get("columnar") or None
+    if columnar and not columnar.get("enabled"):
+        columnar = None
     path = _normalize_path(str(block.config.get("path", "")), service)
 
     # ---- trigger / input port -------------------------------------------------
@@ -474,7 +558,7 @@ def compile_read(
     # ---- response parsing --------------------------------------------------
     record_tail, original_tail = _parse_response(
         builder, source=("fetch", "Response"), response_format=response_format, split=split,
-        record_path=record_path, ptype=ptype,
+        record_path=record_path, ptype=ptype, columnar=columnar,
     )
 
     # ---- pagination ----------------------------------------------------------
@@ -622,20 +706,53 @@ _UPDATE_ATTRIBUTE = "org.apache.nifi.processors.attributes.UpdateAttribute"
 
 def _build_pagination(
     builder: "BlockBuilder", *, ptype: str, pagination: Dict[str, Any], record_path: str,
-    original_tail: Tail, loop_target: str,
+    original_tail: Tail, loop_target: str, extra_next_props: Optional[Dict[str, Any]] = None,
 ) -> None:
+    """`extra_next_props`: additional attributes the `next` UpdateAttribute must
+    re-set on every loop iteration. Read mode passes nothing. Write mode uses it
+    to restore `mime.type` — see `_compile_write`'s call site for why the loop
+    would otherwise poison the next request's Content-Type."""
     fields = pagination.get("fields", {}) or {}
     max_pages = fields.get("maxPages")
 
     if ptype == "offset" or ptype == "page":
-        page_meta_type = _EVALUATE_JSON_PATH
-        page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "json",
-                            "Path Not Found Behavior": "ignore", "probe": _probe_path(record_path)}
-        cond = "${probe:isEmpty():not()}"
         next_props = (
             {"offset": "${offset:toNumber():plus(" + str(fields.get("limitValue", 100)) + ")}"}
             if ptype == "offset" else {"page": "${page:toNumber():plus(1)}"}
         )
+        stop_key = "offsetStop" if ptype == "offset" else "stop"
+        if fields.get(stop_key, "empty_response") == "total_count":
+            # Total-count stop: continue while (pages fetched so far) * page
+            # size hasn't reached the API-reported total yet. Reuses the
+            # `page_count` counter every pagination style already increments
+            # once per loop (`next_props["page_count"]` below) — no new
+            # counter attribute needed. A missing total (path/header not
+            # found -> attribute left unset by "Path Not Found Behavior:
+            # ignore") fails safe via the standard NiFi isEmpty->ifElse
+            # default idiom, which never calls :toNumber() on the possibly-
+            # empty raw value, so it stops instead of throwing or looping
+            # forever.
+            prefix = "offsetTotalCount" if ptype == "offset" else "totalCount"
+            source = fields.get(f"{prefix}Source", "body")
+            page_size = fields.get("limitValue" if ptype == "offset" else "sizeValue", 100)
+            if source == "header":
+                page_meta_type = _UPDATE_ATTRIBUTE
+                header_name = fields.get(f"{prefix}Header", "X-Total-Count")
+                page_meta_props = {"total_count": "${invokehttp.response.header." + str(header_name) + "}"}
+            else:
+                page_meta_type = _EVALUATE_JSON_PATH
+                page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
+                                    "Path Not Found Behavior": "ignore",
+                                    "total_count": fields.get(f"{prefix}Path", "$.totalCount")}
+            cond = (
+                "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
+                ":gt(${page_count:toNumber():plus(1):multiply(" + str(page_size) + ")})}"
+            )
+        else:
+            page_meta_type = _EVALUATE_JSON_PATH
+            page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "json",
+                                "Path Not Found Behavior": "ignore", "probe": _probe_path(record_path)}
+            cond = "${probe:isEmpty():not()}"
     elif ptype == "cursor":
         source = fields.get("cursorSource", "body")
         if source == "body":
@@ -685,6 +802,8 @@ def _build_pagination(
     )
 
     next_props["page_count"] = "${page_count:toNumber():plus(1)}"
+    if extra_next_props:
+        next_props.update(extra_next_props)
     builder.add_processor(
         ProcessorSpec(key="next", name="next", type="org.apache.nifi.processors.attributes.UpdateAttribute",
                       properties=next_props)
@@ -821,6 +940,56 @@ def _extract_fields(
     return working_key, working_rel
 
 
+def _auto_fill_pagination_body(body_template: str, *, ptype: str, fields: Dict[str, Any]) -> str:
+    """Splice the offset/page pagination key-value pairs onto a write block's
+    own JSON body template automatically, so the person building the flow
+    never hand-types `${offset}`/`${limit}` (or `${page}`/`${page_size}`)
+    tokens into the free-text Body template box — they only fill in the same
+    named Offset/Limit/Page-parameter boxes read-mode pagination already
+    uses (`PaginationFields.tsx`), exactly like `_build_query` does for read
+    mode's URL. Mechanically a text splice, not a real JSON parse: the
+    template legitimately contains non-JSON EL tokens (a bare `${offset}`)
+    until NiFi evaluates it at runtime, so a json.loads/dumps round-trip
+    would corrupt those tokens.
+    """
+    if ptype == "offset":
+        pairs = [
+            (str(fields.get("offsetParam", "offset")), "${offset}"),
+            (str(fields.get("limitParam", "limit")), "${limit}"),
+        ]
+    elif ptype == "page":
+        pairs = [
+            (str(fields.get("pageParam", "page")), "${page}"),
+            (str(fields.get("sizeParam", "size")), "${page_size}"),
+        ]
+    else:
+        return body_template
+
+    trimmed = body_template.rstrip()
+    if not trimmed.endswith("}"):
+        raise CompileError(
+            f"http write block body template must be a JSON object ending in '}}' so {ptype!r} "
+            "pagination fields can be added to it automatically"
+        )
+
+    for key, _ in pairs:
+        # Simple, documented text search for an existing quoted key — same
+        # "keep it simple" philosophy as _EL_BUILTIN_DENY above, not a real
+        # JSON parser.
+        if re.search(r'"' + re.escape(key) + r'"\s*:', body_template):
+            raise CompileError(
+                f"http write block body template already defines a {key!r} field, which collides with "
+                f"the {ptype} pagination parameter of the same name — rename the pagination parameter or "
+                "the body field"
+            )
+
+    head = trimmed[:-1]
+    empty_object = not head.rstrip().rstrip("{")
+    pairs_text = ", ".join(f'"{key}": {value}' for key, value in pairs)
+    separator = "" if empty_object else ", "
+    return f"{head}{separator}{pairs_text}}}"
+
+
 def _compile_write(
     builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
     is_root: bool, add_param,
@@ -849,12 +1018,16 @@ def _compile_write(
     "does the probed record path have content" / cursor-in-body-or-header
     check read mode already uses), so there must be a response to parse.
     Mechanically this mirrors read mode's `fetch`-URL-template counters
-    (`_pagination_init_props`), except the counters (`${offset}`/`${limit}`/
-    `${page}`/`${cursor}`) are expected INSIDE `body_template` rather than
-    the URL — write mode has no query string to inject them into — and the
-    pagination loop-back target is `render_body` (which re-renders the body
-    from the just-updated counters), not `write` directly, since `write`
-    itself has no per-page state of its own.
+    (`_pagination_init_props`). The counters are emitted in BOTH places: spliced
+    into `body_template` by `_auto_fill_pagination_body`, and appended to the
+    request URL's query string via read mode's own `_build_query` (see the call
+    site for why body-only was a correctness bug, not just an omission). The
+    pagination loop-back target is `render_body` (which re-renders the body from
+    the just-updated counters), not `write` directly, since `write` itself has
+    no per-page state of its own.
+
+    Only `offset` and `page` are supported here; `cursor`/`next_url` are
+    rejected up front (see the guard below).
     """
     service = _service_for(block, ctx)
     method = str(block.config.get("method") or "POST").upper()
@@ -865,12 +1038,31 @@ def _compile_write(
     write_forwards = str(block.config.get("writeForwards", "original") or "original")
     pagination = block.config.get("pagination") or {"type": "none", "fields": {}}
     ptype = pagination.get("type", "none")
+    if ptype in ("cursor", "next_url"):
+        # Write mode only supports the two counter styles. Both of the other
+        # styles COMPILE today but produce a loop that never advances, so the
+        # flow re-POSTs page 1 against the source API forever:
+        #   - next_url: `next` sets the `request.url` attribute, but a write
+        #     block's "HTTP URL" is the concrete `{base}{path}` (only read
+        #     mode's `fetch` reads `${request.url}`), so the URL never changes.
+        #   - cursor: `_auto_fill_pagination_body` deliberately splices only
+        #     offset/page pairs, so `${cursor}` never reaches the body and the
+        #     request is byte-identical every iteration.
+        # `PaginationFields.tsx` already hides both for write blocks; this makes
+        # the compiler agree rather than silently emitting an API-hammering loop
+        # for a config that arrives from an import, a seed, or a direct API call.
+        raise CompileError(
+            f"http write block {block.id!r} configures {ptype!r} pagination, which is not supported for "
+            "write mode (a POST body has no URL or cursor token to advance) — use \"offset\" or \"page\""
+        )
     if ptype != "none" and write_forwards != "response":
         raise CompileError(
             f"http write block {block.id!r} configures {ptype!r} pagination but writeForwards is "
             f"{write_forwards!r} — pagination needs the parsed response to decide whether to continue, "
             "so writeForwards must be \"response\""
         )
+    if ptype in ("offset", "page"):
+        body_template = _auto_fill_pagination_body(body_template, ptype=ptype, fields=pagination.get("fields") or {})
 
     if is_root:
         builder.add_processor(_build_trigger(flow))
@@ -901,7 +1093,28 @@ def _compile_write(
     builder.to_dlq("render_body", "failure")
 
     base_expr = _base_url_expr(block=block, service=service, ctx=ctx, add_param=add_param)
-    invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": method, "HTTP URL": f"{base_expr}{path}",
+    # Pagination counters ride in the QUERY STRING as well as the body.
+    #
+    # The original write-mode design put them in the body alone, on the stated
+    # reasoning that "write mode has no query string to inject them into". That
+    # is wrong: a POST has a URL like any other request, and a large class of
+    # POST-paginated list endpoints reads paging off the URL and ignores it in
+    # the body entirely. FortiSIEM's `/query/cmdb` is one — verified live:
+    # `{"start": 0}` and `{"start": 3}` in the body return byte-identical rows,
+    # while `?start=0` and `?start=3` return different pages. Body-only paging
+    # against such an API silently re-fetches page 1 forever (with an
+    # empty-response stop it never terminates; with a total-count stop it
+    # republishes the same page ceil(total/size) times).
+    #
+    # Emitting both mirrors how the hand-built reference flow wires the same
+    # endpoint, and reuses read mode's `_build_query` so the two modes derive
+    # identical parameter names from identical config fields. Sending a paging
+    # parameter an API does not read is inert; failing to send one it does read
+    # is silent data corruption.
+    page_query = _build_query(pagination, key_value_query_param=None) if ptype in ("offset", "page") else ""
+    query_sep = "&" if "?" in path else "?"
+    write_url = f"{base_expr}{path}" + (f"{query_sep}{page_query}" if page_query else "")
+    invoke_props: Dict[str, Any] = {**_INVOKE_HTTP_BASELINE, "HTTP Method": method, "HTTP URL": write_url,
                                      "Request Body Enabled": "true"}
     if service.config.get("authMode") == "session_token":
         header = str(service.config.get("tokenHeader", "Authorization")) or "Authorization"
@@ -924,13 +1137,26 @@ def _compile_write(
         record_path = str(block.config.get("recordPath", "$"))
         split = bool(block.config.get("split", True))
         response_format = str(block.config.get("responseFormat", "json"))
+        columnar = block.config.get("columnar") or None
+        if columnar and not columnar.get("enabled"):
+            columnar = None
         record_tail, original_tail = _parse_response(
             builder, source=("write", "Response"), response_format=response_format, split=split,
-            record_path=record_path, ptype=ptype,
+            record_path=record_path, ptype=ptype, columnar=columnar,
         )
         if ptype != "none":
+            # `mime.type` must be re-set on every loop iteration. `init` seeds it
+            # once, but the loop path (page_meta -> has_more -> next ->
+            # render_body) carries the flowfile that came off `write`'s Response
+            # relationship — and InvokeHTTP overwrites `mime.type` on that
+            # flowfile with the RESPONSE's Content-Type. Since the baseline sets
+            # "Request Content-Type": "${mime.type}", page 2 onward would POST a
+            # JSON body advertised as whatever the API replied with (e.g.
+            # application/xml for FortiSIEM), which servers reject. ReplaceText
+            # cannot set attributes, so the reset belongs on `next`.
             _build_pagination(builder, ptype=ptype, pagination=pagination, record_path=record_path,
-                              original_tail=original_tail, loop_target="render_body")
+                              original_tail=original_tail, loop_target="render_body",
+                              extra_next_props={"mime.type": "application/json"})
         return record_tail
     return "write", "Original"
 

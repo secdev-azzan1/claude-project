@@ -27,6 +27,7 @@ PROBES = {
     "full_device": "#{SOURCE_API_BASE}/cmdbDeviceInfo/device?ip=" + DEVICE_IP + "&loadDepend=true&organization=" + ORG_NAME,
     "agent_status": "#{SOURCE_API_BASE}/agentStatus/all?request=1," + DEVICE_IP,
     "short_device_list": "#{SOURCE_API_BASE}/cmdbDeviceInfo/devices?organization=" + ORG_NAME,
+    "org_list": "#{SOURCE_API_BASE}/config/Domain",
 }
 
 

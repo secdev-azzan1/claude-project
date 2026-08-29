@@ -871,7 +871,17 @@ def test_http_write_response_continuation_reuses_parse_chain():
     assert onward and onward[0].relationships == ["split"]
 
 
-def http_write_paginated_flow(*, write_forwards: str = "response") -> Flow:
+def http_write_paginated_flow(
+    *, write_forwards="response", ptype="offset", body_template='{"target": "USER"}', extra_fields=None,
+) -> Flow:
+    """A write-mode pagination fixture whose `bodyTemplate` holds only the
+    caller's own payload -- no hand-typed `${offset}`/`${limit}`/`${page}`/
+    `${page_size}` tokens. The compiler (`_auto_fill_pagination_body`) splices
+    those on automatically from the same named fields the UI's offset/page
+    pagination boxes already write, exactly like `_build_query` does for a
+    read block's URL."""
+    base_fields = {"limitValue": 500} if ptype == "offset" else {"sizeValue": 250}
+    fields = {**base_fields, **(extra_fields or {})}
     return Flow(
         id="flow-hwrite-page", name="Http Write Paginated Flow", cron=None, state="Draft", enabled=True,
         createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
@@ -879,9 +889,9 @@ def http_write_paginated_flow(*, write_forwards: str = "response") -> Flow:
             FlowBlock(
                 id="b-write", adapter="http", mode="write", name="Query CMDB", parentId=None, serviceId="svc-http",
                 config={"method": "POST", "path": "/query/cmdb",
-                        "bodyTemplate": '{"start": ${offset}, "size": ${limit}}',
+                        "bodyTemplate": body_template,
                         "writeForwards": write_forwards, "responseFormat": "json", "recordPath": "$.data[*]",
-                        "split": True, "pagination": {"type": "offset", "fields": {"limitValue": 500}}},
+                        "split": True, "pagination": {"type": ptype, "fields": fields}},
             ),
             FlowBlock(
                 id="b-continue", adapter="kafka", mode="write", name="Log Result", parentId="b-write",
@@ -903,8 +913,10 @@ def test_http_write_offset_pagination_seeds_counters_and_loops_to_render_body():
     assert init.properties["limit"] == "500"
     assert init.properties["page_count"] == "0"
 
+    # the user's own body is untouched apart from the two auto-appended
+    # pagination fields -- no hand-typed ${offset}/${limit} in the fixture.
     render = next(p for p in group.processors if p.key == "render_body")
-    assert render.properties["Replacement Value"] == '{"start": ${offset}, "size": ${limit}}'
+    assert render.properties["Replacement Value"] == '{"target": "USER", "offset": ${offset}, "limit": ${limit}}'
 
     next_proc = next(p for p in group.processors if p.key == "next")
     assert next_proc.properties["offset"] == "${offset:toNumber():plus(500)}"
@@ -919,9 +931,316 @@ def test_http_write_offset_pagination_seeds_counters_and_loops_to_render_body():
     assert "original" not in split.autoTerminate
 
 
+def test_http_write_page_pagination_auto_fills_body_and_loops_to_render_body():
+    plan = compile_flow(http_write_paginated_flow(ptype="page"), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    keys = [p.key for p in group.processors]
+    assert {"init", "render_body", "write", "split", "page_meta", "has_more", "next"} <= set(keys)
+
+    init = next(p for p in group.processors if p.key == "init")
+    assert init.properties["page"] == "1"
+    assert init.properties["page_size"] == "250"
+    assert init.properties["page_count"] == "0"
+
+    render = next(p for p in group.processors if p.key == "render_body")
+    assert render.properties["Replacement Value"] == '{"target": "USER", "page": ${page}, "size": ${page_size}}'
+
+    next_proc = next(p for p in group.processors if p.key == "next")
+    assert next_proc.properties["page"] == "${page:toNumber():plus(1)}"
+
+    loop_edge = [c for c in group.connections if c.from_ == "next" and c.to == "render_body"]
+    assert loop_edge and loop_edge[0].relationships == ["success"]
+
+
+def test_http_write_pagination_body_field_collision_raises():
+    # the body already hand-writes "offset" -- the same name the (default)
+    # Offset parameter field would also splice in.
+    flow = http_write_paginated_flow(body_template='{"target": "USER", "offset": 0}')
+    with pytest.raises(CompileError, match="offset"):
+        compile_flow(flow, http_svc_ctx())
+
+
+def test_http_write_pagination_body_field_collision_raises_custom_param_name():
+    # collision still fires when the pagination parameter is renamed away
+    # from the default -- the guard matches on the configured field name.
+    flow = http_write_paginated_flow(
+        body_template='{"target": "USER", "start": 0}',
+        extra_fields={"offsetParam": "start"},
+    )
+    with pytest.raises(CompileError, match="start"):
+        compile_flow(flow, http_svc_ctx())
+
+
+def test_http_write_offset_pagination_total_count_stop_from_body_path():
+    flow = http_write_paginated_flow(
+        extra_fields={"offsetStop": "total_count", "offsetTotalCountSource": "body",
+                      "offsetTotalCountPath": "$.meta.total"},
+    )
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    assert page_meta.type == "org.apache.nifi.processors.standard.EvaluateJsonPath"
+    assert page_meta.properties["total_count"] == "$.meta.total"
+
+    has_more = next(p for p in group.processors if p.key == "has_more")
+    assert has_more.properties["continue"] == (
+        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
+        ":gt(${page_count:toNumber():plus(1):multiply(500)})}"
+    )
+
+
+def test_http_write_offset_pagination_total_count_stop_from_header():
+    flow = http_write_paginated_flow(
+        extra_fields={"offsetStop": "total_count", "offsetTotalCountSource": "header",
+                      "offsetTotalCountHeader": "X-Total-Count"},
+    )
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    assert page_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert page_meta.properties["total_count"] == "${invokehttp.response.header.X-Total-Count}"
+
+    has_more = next(p for p in group.processors if p.key == "has_more")
+    assert has_more.properties["continue"] == (
+        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
+        ":gt(${page_count:toNumber():plus(1):multiply(500)})}"
+    )
+
+
+def test_http_write_page_pagination_total_count_stop_from_body_path():
+    flow = http_write_paginated_flow(
+        ptype="page",
+        extra_fields={"stop": "total_count", "totalCountSource": "body", "totalCountPath": "$.meta.total"},
+    )
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    assert page_meta.type == "org.apache.nifi.processors.standard.EvaluateJsonPath"
+    assert page_meta.properties["total_count"] == "$.meta.total"
+
+    has_more = next(p for p in group.processors if p.key == "has_more")
+    assert has_more.properties["continue"] == (
+        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
+        ":gt(${page_count:toNumber():plus(1):multiply(250)})}"
+    )
+
+
+def test_http_write_page_pagination_total_count_stop_from_header():
+    flow = http_write_paginated_flow(
+        ptype="page",
+        extra_fields={"stop": "total_count", "totalCountSource": "header", "totalCountHeader": "X-Total-Count"},
+    )
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    assert page_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert page_meta.properties["total_count"] == "${invokehttp.response.header.X-Total-Count}"
+
+    has_more = next(p for p in group.processors if p.key == "has_more")
+    assert has_more.properties["continue"] == (
+        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
+        ":gt(${page_count:toNumber():plus(1):multiply(250)})}"
+    )
+
+
 def test_http_write_pagination_requires_write_forwards_response():
     with pytest.raises(CompileError, match="writeForwards"):
         compile_flow(http_write_paginated_flow(write_forwards="original"), http_svc_ctx())
+
+
+def test_http_write_offset_pagination_also_rides_in_the_query_string():
+    """Counters must reach the URL, not just the body.
+
+    FortiSIEM's `/query/cmdb` (verified live) ignores `start`/`size` in the POST
+    body and paginates only off the query string: body `{"start": 0}` and
+    `{"start": 3}` return byte-identical rows, while `?start=0` and `?start=3`
+    return different pages. Body-only paging there re-fetches page 1 forever.
+    """
+    flow = http_write_paginated_flow(extra_fields={"offsetParam": "start", "limitParam": "size"})
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.properties["HTTP URL"] == (
+        "#{svc_svc-http_base_url}/query/cmdb?start=${offset}&size=${limit}"
+    )
+    # ...and still in the body, for APIs that read it there instead.
+    render = next(p for p in group.processors if p.key == "render_body")
+    assert render.properties["Replacement Value"] == '{"target": "USER", "start": ${offset}, "size": ${limit}}'
+
+
+def test_http_write_page_pagination_also_rides_in_the_query_string():
+    plan = compile_flow(http_write_paginated_flow(ptype="page"), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.properties["HTTP URL"] == (
+        "#{svc_svc-http_base_url}/query/cmdb?page=${page}&size=${page_size}"
+    )
+
+
+def test_http_write_pagination_query_joins_an_existing_literal_query_with_ampersand():
+    """A path that already carries its own `?...` must not grow a second `?`."""
+    flow = http_write_paginated_flow()
+    flow.blocks[0].config["path"] = "/query/cmdb?organization=Super"
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.properties["HTTP URL"] == (
+        "#{svc_svc-http_base_url}/query/cmdb?organization=Super&offset=${offset}&limit=${limit}"
+    )
+
+
+def test_http_write_pagination_loop_restores_mime_type():
+    """`next` must re-set `mime.type` on every iteration.
+
+    `init` seeds it once, but the loop path carries the flowfile that came off
+    `write`'s Response relationship — and InvokeHTTP overwrites `mime.type` there
+    with the RESPONSE's Content-Type. Since the baseline sets
+    "Request Content-Type": "${mime.type}", page 2 onward would otherwise POST a
+    JSON body advertised as whatever the API replied with.
+    """
+    for ptype in ("offset", "page"):
+        plan = compile_flow(http_write_paginated_flow(ptype=ptype), http_svc_ctx())
+        group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+        next_proc = next(p for p in group.processors if p.key == "next")
+        assert next_proc.properties["mime.type"] == "application/json", ptype
+
+
+def test_http_read_pagination_loop_does_not_set_mime_type():
+    """The mime.type reset is write-only — read mode's `next` is unchanged."""
+    plan = compile_flow(golden_flow(), golden_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    next_proc = next(p for p in group.processors if p.key == "next")
+    assert "mime.type" not in next_proc.properties
+
+
+@pytest.mark.parametrize("ptype", ["cursor", "next_url"])
+def test_http_write_rejects_cursor_and_next_url_pagination(ptype):
+    """Both compiled into a loop that never advanced.
+
+    `next_url` set the `request.url` attribute, which only read mode's `fetch`
+    reads — a write block's URL is the concrete `{base}{path}`. `cursor` never
+    reached the body, because `_auto_fill_pagination_body` splices offset/page
+    pairs only. Either way the request was byte-identical every iteration and the
+    flow re-POSTed page 1 against the source API forever.
+    """
+    flow = http_write_paginated_flow(ptype=ptype)
+    flow.blocks[0].config["pagination"] = {"type": ptype, "fields": {}}
+    with pytest.raises(CompileError, match=ptype):
+        compile_flow(flow, http_svc_ctx())
+
+
+# --------------------------------------------------------------------------
+# Columnar (FortiSIEM `/query/cmdb`-style) response transform
+# --------------------------------------------------------------------------
+
+
+def http_columnar_read_flow(*, ptype="none", extra_fields=None, split=True, columns=None) -> Flow:
+    fields = {"limitValue": 500, **(extra_fields or {})}
+    return Flow(
+        id="flow-hcolumnar", name="Http Columnar Read Flow", cron="0 * * * *", state="Draft", enabled=True,
+        createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
+        blocks=[
+            FlowBlock(
+                id="b-read", adapter="http", mode="read", name="Query CMDB", parentId=None, serviceId="svc-http",
+                config={"method": "GET", "path": "/query/cmdb", "responseFormat": "json", "recordPath": "$.data[*]",
+                        "split": split, "pagination": {"type": ptype, "fields": fields},
+                        "columnar": {"enabled": True, "rowsField": "data",
+                                     "columns": columns if columns is not None else ["name", "ip Address", "1status"]}},
+            ),
+        ],
+        topics=[], variables=[], servicePins={},
+    )
+
+
+def test_http_columnar_read_inserts_jolt_before_split_with_sanitized_names():
+    plan = compile_flow(http_columnar_read_flow(), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    keys = [p.key for p in group.processors]
+    assert keys.index("fetch") < keys.index("columnar_transform") < keys.index("split")
+
+    transform = next(p for p in group.processors if p.key == "columnar_transform")
+    assert transform.type == "org.apache.nifi.processors.jolt.JoltTransformJSON"
+    assert transform.properties["Jolt Transform"] == "jolt-transform-shift"
+    spec = json.loads(transform.properties["Jolt Specification"])
+    # "ip Address" -> "ip_Address" (space sanitized); "1status" doesn't start
+    # with a letter/underscore -> prefixed with its column index.
+    assert spec == {"data": {"*": {"0": "[&1].name", "1": "[&1].ip_Address", "2": "[&1].col_2_1status"}}}
+
+    fetch_to_transform = [c for c in group.connections if c.from_ == "fetch" and c.to == "columnar_transform"]
+    assert fetch_to_transform and fetch_to_transform[0].relationships == ["Response"]
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert split.properties["JsonPath Expression"] == "$.[*]"
+    transform_to_split = [c for c in group.connections if c.from_ == "columnar_transform" and c.to == "split"]
+    assert transform_to_split and transform_to_split[0].relationships == ["success"]
+
+    dlq_from_transform = [c for c in group.connections if c.from_ == "columnar_transform" and c.to == "dlq"]
+    assert dlq_from_transform and dlq_from_transform[0].relationships == ["failure"]
+
+
+def test_http_columnar_read_pagination_probe_reads_raw_pre_jolt_response():
+    # empty_response stop condition (default): page_meta's probe must read
+    # the RAW $.data[*] path off the un-transformed response, not the Jolt
+    # output -- the Jolt shift only keeps "data", but more importantly the
+    # probe/JSONPath here is evaluated against content that still has its
+    # original shape (bare row-arrays), which is exactly why this must be
+    # forked off BEFORE the transform rather than off the split's "original".
+    plan = compile_flow(http_columnar_read_flow(ptype="offset"), http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    fetch_to_page_meta = [c for c in group.connections if c.from_ == "fetch" and c.to == "page_meta"]
+    assert fetch_to_page_meta and fetch_to_page_meta[0].relationships == ["Response"]
+    # page_meta is NOT fed from the split's "original" relationship when columnar is active.
+    split_to_page_meta = [c for c in group.connections if c.from_ == "split" and c.to == "page_meta"]
+    assert not split_to_page_meta
+
+    probe = next(p for p in group.processors if p.key == "page_meta")
+    assert probe.properties["probe"] == "$.data[0]"
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert "original" in split.autoTerminate  # nothing consumes it -- page_meta reads pre-Jolt instead
+
+
+def test_http_columnar_write_total_count_stop_reads_raw_totalcount_field():
+    # The real FortiSIEM shape: POST /query/cmdb pagination (offset/limit
+    # auto-filled body) PLUS a columnar response whose totalCount sibling
+    # key the Jolt shift would otherwise drop.
+    flow = http_write_paginated_flow(
+        ptype="offset", extra_fields={"offsetStop": "total_count", "offsetTotalCountPath": "$.totalCount"},
+    )
+    block = flow.blocks[0]
+    block.config["columnar"] = {"enabled": True, "rowsField": "data", "columns": ["name", "status"]}
+    block.config["recordPath"] = "$.data[*]"
+
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    write_to_page_meta = [c for c in group.connections if c.from_ == "write" and c.to == "page_meta"]
+    assert write_to_page_meta and write_to_page_meta[0].relationships == ["Response"]
+
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    assert page_meta.properties["total_count"] == "$.totalCount"
+
+    split = next(p for p in group.processors if p.key == "split")
+    assert split.properties["JsonPath Expression"] == "$.[*]"
+
+    transform = next(p for p in group.processors if p.key == "columnar_transform")
+    assert transform.type == "org.apache.nifi.processors.jolt.JoltTransformJSON"
+
+
+def test_http_columnar_requires_split():
+    with pytest.raises(CompileError, match="split into records"):
+        compile_flow(http_columnar_read_flow(split=False), http_svc_ctx())
+
+
+def test_http_columnar_requires_at_least_one_column():
+    with pytest.raises(CompileError, match="at least one column"):
+        compile_flow(http_columnar_read_flow(columns=[]), http_svc_ctx())
 
 
 def http_lookup_flow() -> Flow:

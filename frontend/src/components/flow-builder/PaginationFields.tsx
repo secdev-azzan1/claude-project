@@ -60,6 +60,16 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
   const fields = pagination.fields ?? {};
   const type = pagination.type ?? "none";
 
+  // A write (POST/PUT/PATCH) body has no concept of a cursor token or a
+  // server-given next-URL to hand back — only "keep incrementing a counter"
+  // pagination styles make sense there, and the compiler's write-mode
+  // pagination (blocks_http.py::_compile_write) only auto-fills offset/page
+  // bodies. The "has more" flag stop condition stays unimplemented for both
+  // read and write blocks (pre-existing gap, not part of this fix).
+  const isWrite = block.mode === "write";
+  const paginationTypes = isWrite ? PAGINATION_TYPES.filter((p) => ["none", "page", "offset"].includes(p.value)) : PAGINATION_TYPES;
+  const stopConditions = isWrite ? STOP_CONDITIONS.filter((s) => ["empty_response", "total_count"].includes(s.value)) : STOP_CONDITIONS;
+
   const patch = (next: Partial<PaginationConfig>) =>
     onPatchConfig(block.id, {
       pagination: { ...pagination, ...next, fields: { ...fields, ...(next.fields ?? {}) } },
@@ -114,7 +124,7 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
 
   const stopSelect = (key: string) => {
     const value = fields[key] ?? "empty_response";
-    const meta = STOP_CONDITIONS.find((s) => s.value === value);
+    const meta = stopConditions.find((s) => s.value === value);
     return (
       <div className="grid gap-1.5">
         <Label className="text-xs font-normal text-muted-foreground">Stop condition</Label>
@@ -123,7 +133,7 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {STOP_CONDITIONS.map((s) => (
+            {stopConditions.map((s) => (
               <SelectItem key={s.value} value={s.value}>
                 {s.label}
               </SelectItem>
@@ -147,7 +157,7 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {PAGINATION_TYPES.map((p) => (
+          {paginationTypes.map((p) => (
             <SelectItem key={p.value} value={p.value}>
               {p.label}
             </SelectItem>

@@ -174,14 +174,29 @@ export function buildConfig(type: ServiceType, f: ServiceForm): Record<string, u
   switch (type) {
     case "http": {
       const cfg: Record<string, unknown> = { baseUrl: f.baseUrl.trim(), authMode: f.authMode };
-      if (f.authMode === "basic") cfg.username = f.username.trim();
+      // Secrets are write-only (per the file banner) — sent only when the
+      // user actually typed one, exactly like sink_destination's
+      // oauthClientSecret/s3SecretKey below. Omitting them unconditionally
+      // was a real bug: every basic/bearer/api_key/oauth2 service creation
+      // 422'd server-side (backend/routers/v2/services.py requires
+      // config.password/token/keyValue for those modes) because `cfg` never
+      // carried the secret the user just typed.
+      if (f.authMode === "basic") {
+        cfg.username = f.username.trim();
+        if (f.password.trim()) cfg.password = f.password.trim();
+      }
+      if (f.authMode === "bearer") {
+        if (f.token.trim()) cfg.token = f.token.trim();
+      }
       if (f.authMode === "api_key") {
         cfg.keyName = f.keyName.trim();
         cfg.keyLocation = f.keyLocation;
+        if (f.keyValue.trim()) cfg.keyValue = f.keyValue.trim();
       }
       if (f.authMode === "oauth2") {
         cfg.tokenUrl = f.tokenUrl.trim();
         cfg.clientId = f.clientId.trim();
+        if (f.clientSecret.trim()) cfg.clientSecret = f.clientSecret.trim();
       }
       if (f.authMode === "session_token") {
         cfg.loginPath = f.loginPath.trim();

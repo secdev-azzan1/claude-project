@@ -67,6 +67,7 @@ class COLLECTIONS:
     runtimes = "runtimes_v2"
     audit = "audit_v2"
     openapi_specs = "openapi_specs_v2"
+    bulk_jobs = "bulk_jobs_v2"  # background bulk flow-verb runs
 
 
 async def audit(

@@ -1,0 +1,60 @@
+"""Entity specs lifted verbatim from the live NiFi `fortisiem.maximum_useful` PG."""
+
+# target -> (entity, selectFields in order)  -- order matters: it IS the columnar schema
+CMDB = {
+    "CASE": ("case", ["Closed", "Close_Code", "Case_Note", "Customer_ID", "Due", "Case_Title",
+                      "Assigned", "Incident_IDs", "Case_Entity", "State", "Case_ID", "Age",
+                      "Resolution_Time", "Severity", "Stage", "Created", "Creator", "Assignee",
+                      "Customer_Name", "Case_Incidents_Name", "Case_Incidents_Tag"]),
+    "REPORT": ("report", ["Report_Description", "Report_Name", "Customer_ID", "Report_Inline_Flag",
+                          "Scope", "Rule_Category", "Report_Order_By_Clause", "Report_Baseline_Flag",
+                          "Report_Active", "Filter_Condition", "Report_Sync_Flag", "Data_Source",
+                          "Report_Beaconing_Flag", "Filter_Group_By", "Report_Schedule",
+                          "Report_Event_Type", "Report_Select_Clause", "Filter_Group_Constraint",
+                          "Filter_Name", "Customer_Name", "Notification_Receipt",
+                          "Report_Relevant_Filter"]),
+    "MONITOR": ("monitor", ["Monitor_Type_Category", "Perf_Object_Frequency", "Customer_ID",
+                            "Perf_Object_Threshold", "Monitor_Status", "Device_Type_Vendor",
+                            "Discover_Status", "Device_IP", "Monitor_Target",
+                            "Monitor_Status_Description", "Device_Type_Model", "Perf_Object_Method",
+                            "Perf_Object_Description", "Latest_Monitor_time", "Monitor_Enabled_Flag",
+                            "Monitor_Frequency", "Customer_Name", "Device_Name",
+                            "Monitor_Type_Display_Name", "Perf_Object_System_Defined_Flag"]),
+    "TASK": ("task", ["Task_Parameter", "Task_Progress", "Task_Action_Result", "Customer_ID",
+                      "Task_Type", "Task_Data", "Task_Destination", "Task_Gateway",
+                      "Task_Collector_ID", "Task_Description", "Customer_Name"]),
+    "RULE": ("rule", ["Clear_Condition_Constraints", "Rule_Trigger_Event_Attribute",
+                      "Incident_Title_Template", "Filter_Name", "Event_Type_Name", "Rule_Name",
+                      "Rule_Incident_Attribute", "Rule_Subcategory", "Exceptions", "Rule_Test_Status",
+                      "Technique_Name", "Customer_Name", "Event_Type_Severity",
+                      "Exception_Time_Condition", "Mitre_Attack_Technique_Name", "Rule_Active_Flag",
+                      "Rule_Description", "Customer_ID", "Data_Source", "Exception_Condition",
+                      "Rule_Update_Perf_Status_Flag", "Rule_Function", "Technique_Id", "Scope",
+                      "Rule_Type", "Incident_Tag", "Rule_Event_Category", "Rule_Incident_Fired_Flag",
+                      "Tactic_Name", "Clear_Condition_Option", "Filter_Group_Constraint",
+                      "Rule_Natural_ID", "Filter_Group_By", "Rule_Remediation",
+                      "Mitre_Attack_Technique_Id", "Exception_Notes", "Rule_Category",
+                      "Exception_Org", "Filter_Condition", "Rule_Subcategory_ID",
+                      "Detection_Technology", "Event_Type_Description"]),
+    "USER": ("user", ["User_Name", "Group_Name", "Customer_ID", "User_Full_Name", "LDAP_Last_Login",
+                      "User_Password_Last_Set", "User_Password_Age_(Days)", "User_Domain",
+                      "User_Privileged_Flag", "User_Company", "User_Local_Authentication_Flag",
+                      "RBAC_Profile_Name", "User_Description", "User_Notes", "User_Job_Title",
+                      "User_Alias", "User_Account_Control", "User_Employee_ID", "Customer_Name",
+                      "User_DN"]),
+}
+
+# entity -> (path, recordPath) for the plain JSON GETs
+SIMPLE_GETS = {
+    "watchlist": ("/watchlist/all", "$.response[*]"),
+    "lookup_table": ("/pub/lookupTable?size=1000", "$.data[*]"),
+}
+
+INCIDENT_FIELDS = ["eventSeverityCat", "eventSeverity", "incidentLastSeen", "incidentFirstSeen",
+                   "eventType", "eventName", "incidentSrc", "incidentTarget", "incidentDetail",
+                   "incidentRptIp", "incidentRptDevName", "incidentStatus", "incidentComments",
+                   "customer", "incidentClearedReason", "incidentClearedTime", "incidentClearedUser",
+                   "count", "incidentId", "incidentExtUser", "incidentExtClearedTime",
+                   "incidentExtTicketId", "incidentExtTicketState", "incidentExtTicketType",
+                   "incidentReso", "phIncidentCategory", "phSubIncidentCategory", "incidentTitle",
+                   "attackTechnique", "attackTactic"]

@@ -1,0 +1,266 @@
+"""Sequential background runner for bulk flow-verb jobs.
+
+Deliberately sequential: one flow finishes before the next starts, so NiFi
+sees exactly the load it would from running the verb by hand N times.
+Parameter-context updates and controller-service enables in `nifi_apply` are
+global-ish operations that this codebase has never exercised concurrently,
+and a bulk action is not the place to find out.
+
+Nothing here reimplements lifecycle logic. Each item dispatches through the
+same handlers `routers/v2/flows.py` uses for the single-flow path, so the two
+routes can never drift apart.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from models.adapter.bulk_job import BulkJob, BulkJobItem
+from services.adapter.common import COLLECTIONS, audit, now_iso
+from services.adapter.deployer import lifecycle
+from services.adapter.deployer.connect_apply import ConnectApplyError
+from services.adapter.deployer.nifi_apply import NifiApplyError
+
+logger = logging.getLogger(__name__)
+
+# Verbs that go through lifecycle's dispatch table. Kept in sync with
+# `_VERB_HANDLERS` in routers/v2/flows.py by importing it there rather than
+# re-listing the mapping here.
+_LIFECYCLE_VERBS = (
+    "deploy",
+    "redeploy",
+    "start",
+    "pause",
+    "resume",
+    "stop",
+    "stop_clear",
+    "undeploy",
+)
+
+
+async def create_bulk_job(
+    db: Any,
+    *,
+    verb: str,
+    flow_docs: List[Dict[str, Any]],
+    owner_instance_id: Optional[str] = None,
+    label: str = "",
+) -> Dict[str, Any]:
+    """Insert the job doc in `queued` state. Does NOT run it -- the single
+    worker picks it up in submission order."""
+    job = BulkJob(
+        verb=verb,
+        status="queued",
+        label=label or f"{verb} {len(flow_docs)} flow(s)",
+        total=len(flow_docs),
+        items=[
+            BulkJobItem(flow_id=str(doc.get("id") or ""), flow_name=str(doc.get("name") or ""))
+            for doc in flow_docs
+        ],
+        owner_instance_id=owner_instance_id,
+        heartbeat_at=datetime.now(timezone.utc),
+    )
+    doc = job.model_dump()
+    await db[COLLECTIONS.bulk_jobs].insert_one(dict(doc))
+    return doc
+
+
+async def _patch(db: Any, job_id: str, updates: Dict[str, Any]) -> None:
+    updates = {**updates, "updated_at": now_iso(), "heartbeat_at": datetime.now(timezone.utc)}
+    await db[COLLECTIONS.bulk_jobs].update_one({"id": job_id}, {"$set": updates})
+
+
+async def _patch_item(db: Any, job_id: str, index: int, updates: Dict[str, Any]) -> None:
+    """Positional update of one item. Uses an explicit index rather than an
+    array filter so two flows with the same name cannot collide."""
+    prefixed = {f"items.{index}.{key}": value for key, value in updates.items()}
+    prefixed["updated_at"] = now_iso()
+    prefixed["heartbeat_at"] = datetime.now(timezone.utc)
+    await db[COLLECTIONS.bulk_jobs].update_one({"id": job_id}, {"$set": prefixed})
+
+
+async def _run_one(db: Any, verb: str, flow_doc: Dict[str, Any]) -> None:
+    """Execute one verb against one flow, reusing the single-flow code paths.
+
+    Imported lazily: routers/v2/flows.py imports this module, so a top-level
+    import here would be circular.
+    """
+    from routers.v2.flows import _VERB_HANDLERS
+
+    if verb == "delete":
+        await lifecycle.delete(db, flow_doc)
+        return
+
+    if verb in ("enable", "disable"):
+        await db[COLLECTIONS.flows].update_one(
+            {"id": flow_doc.get("id")},
+            {"$set": {"enabled": verb == "enable", "updatedAt": now_iso()}},
+        )
+        return
+
+    handler = _VERB_HANDLERS[verb]
+    await handler(db, flow_doc)
+
+
+async def run_bulk_job(db: Any, job_id: str) -> None:
+    """The background task. Never raises -- any escape is recorded on the job
+    instead, because there is no caller left to catch it."""
+    try:
+        await _run_bulk_job_inner(db, job_id)
+    except Exception as exc:  # noqa: BLE001 - last line of defence for a detached task
+        logger.exception("bulk job %s crashed", job_id)
+        try:
+            await _patch(
+                db,
+                job_id,
+                {"status": "failed", "error": str(exc)[:500], "finished_at": now_iso()},
+            )
+        except Exception:  # noqa: BLE001 - nothing useful left to do
+            logger.exception("could not record failure for bulk job %s", job_id)
+
+
+async def _run_bulk_job_inner(db: Any, job_id: str) -> None:
+    job = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        logger.warning("bulk job %s vanished before it started", job_id)
+        return
+
+    verb = str(job.get("verb") or "")
+    items = list(job.get("items") or [])
+    await _patch(db, job_id, {"status": "running"})
+
+    succeeded = 0
+    failed = 0
+
+    # No mid-run cancellation: a job that has started runs to completion.
+    # Cancelling is only offered while a job is still queued, because
+    # abandoning a partially-applied NiFi teardown leaves worse state than
+    # finishing it does.
+    for index, item in enumerate(items):
+        flow_id = str(item.get("flow_id") or "")
+        flow_name = str(item.get("flow_name") or flow_id)
+        await _patch_item(db, job_id, index, {"status": "running", "started_at": now_iso()})
+
+        # Re-read the flow each time: an earlier item in this same run may have
+        # changed it, and the doc captured at submit time can be minutes stale.
+        flow_doc = await db[COLLECTIONS.flows].find_one({"id": flow_id}, {"_id": 0})
+        if not flow_doc:
+            failed += 1
+            await _patch_item(
+                db,
+                job_id,
+                index,
+                {"status": "failed", "error": "Flow no longer exists.", "finished_at": now_iso()},
+            )
+        else:
+            try:
+                await _run_one(db, verb, flow_doc)
+                succeeded += 1
+                await _patch_item(db, job_id, index, {"status": "succeeded", "finished_at": now_iso()})
+            except (NifiApplyError, ConnectApplyError, lifecycle.LifecycleError) as exc:
+                failed += 1
+                await _patch_item(
+                    db, job_id, index, {"status": "failed", "error": str(exc)[:500], "finished_at": now_iso()}
+                )
+            except Exception as exc:  # noqa: BLE001 - one bad flow must not end the run
+                failed += 1
+                logger.exception("bulk %s failed for flow %s", verb, flow_id)
+                await _patch_item(
+                    db, job_id, index, {"status": "failed", "error": str(exc)[:500], "finished_at": now_iso()}
+                )
+
+        # Counters are written after every item so the progress bar advances
+        # live rather than jumping at the end.
+        await _patch(
+            db, job_id, {"succeeded": succeeded, "failed": failed, "completed": succeeded + failed}
+        )
+        logger.info("bulk %s: %s/%s (%s)", verb, succeeded + failed, len(items), flow_name)
+
+    await _patch(
+        db,
+        job_id,
+        {
+            # "completed" means the run finished, not that every item passed --
+            # per-item failures are in `items` and counted in `failed`.
+            "status": "completed",
+            "succeeded": succeeded,
+            "failed": failed,
+            "completed": succeeded + failed,
+            "finished_at": now_iso(),
+        },
+    )
+    await audit(
+        db,
+        f"Bulk {verb} finished",
+        f"{succeeded} succeeded, {failed} failed",
+        status="Warning" if failed else "Success",
+        object="Flow",
+    )
+
+
+# ------------------------------------------------------------------ worker
+#
+# Exactly one worker drains the queue, so jobs run strictly one at a time in
+# submission order. That is the same sequential guarantee a single bulk run
+# already had, now extended across separately-submitted jobs: clicking
+# undeploy on three flows in a row enqueues three jobs that run back to back
+# rather than racing each other on NiFi.
+
+_worker_task: Optional["asyncio.Task[None]"] = None
+
+
+async def _next_queued(db: Any) -> Optional[Dict[str, Any]]:
+    return await db[COLLECTIONS.bulk_jobs].find_one(
+        {"status": "queued"}, {"_id": 0}, sort=[("created_at", 1)]
+    )
+
+
+async def _drain_queue(db: Any) -> None:
+    """Run queued jobs oldest-first until the queue is empty."""
+    while True:
+        job = await _next_queued(db)
+        if not job:
+            return
+        job_id = str(job.get("id") or "")
+        # Claim it before running so a second worker (or a restart racing this
+        # one) cannot pick up the same job.
+        claimed = await db[COLLECTIONS.bulk_jobs].update_one(
+            {"id": job_id, "status": "queued"},
+            {"$set": {"status": "running", "updated_at": now_iso()}},
+        )
+        if getattr(claimed, "modified_count", 1) == 0:
+            # Someone else took it (or it was cancelled between find and
+            # claim). Move on rather than double-running it.
+            continue
+        await run_bulk_job(db, job_id)
+
+
+async def _worker_loop(db: Any) -> None:
+    global _worker_task
+    try:
+        await _drain_queue(db)
+    except Exception:  # noqa: BLE001 - a detached worker has no caller
+        logger.exception("bulk queue worker crashed")
+    finally:
+        _worker_task = None
+        # A job enqueued while we were finishing would otherwise sit forever.
+        try:
+            if await _next_queued(db):
+                ensure_worker(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("could not re-arm bulk queue worker")
+
+
+def ensure_worker(db: Any) -> None:
+    """Start the drain loop if it is not already running. Safe to call on
+    every enqueue and at app startup."""
+    global _worker_task
+    if _worker_task is not None and not _worker_task.done():
+        return
+    _worker_task = asyncio.create_task(_worker_loop(db))
+
+
+def worker_is_running() -> bool:
+    return _worker_task is not None and not _worker_task.done()

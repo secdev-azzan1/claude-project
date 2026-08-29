@@ -1,0 +1,765 @@
+[
+  {
+    "id": "svc-l44jk6",
+    "type": "http",
+    "name": "T8.1 live-smoke service",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://example.invalid",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T00:36:46.462Z",
+    "updatedAt": "2026-08-13T08:16:33.143Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-loain8",
+    "type": "http",
+    "name": "T8.1 live-smoke service",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://example.invalid",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T00:37:07.780Z",
+    "updatedAt": "2026-08-13T08:16:35.830Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-vxgkzn",
+    "type": "http",
+    "name": "e2ea dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T01:21:16.265Z",
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T01:21:10.052Z",
+    "updatedAt": "2026-08-29T13:19:34.977Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-lrogto",
+    "type": "sink_destination",
+    "name": "e2ea iceberg",
+    "revision": 2,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T01:21:55.085Z",
+    "config": {
+      "kind": "iceberg_catalog",
+      "catalogUrl": "https://polaris.datapasc.com/api/catalog",
+      "warehouse": "bronze",
+      "oauthClientId": "root",
+      "s3Endpoint": "https://ozones3g.datapasc.com",
+      "s3AccessKey": "eltadmin",
+      "s3Region": "us-east-1",
+      "s3PathStyle": true,
+      "s3SecretKey": "OzoneS3Key123",
+      "oauthClientSecret": "s3cr3t"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T01:21:10.349Z",
+    "updatedAt": "2026-08-13T01:48:19.176Z",
+    "revisions": [
+      {
+        "revision": 1,
+        "config": {
+          "kind": "iceberg_catalog",
+          "catalogUrl": "https://polaris.datapasc.com",
+          "warehouse": "bronze",
+          "oauthClientId": "root",
+          "oauthClientSecret": null,
+          "s3Endpoint": "https://ozones3g.datapasc.com",
+          "s3AccessKey": "eltadmin",
+          "s3SecretKey": null,
+          "s3Region": "us-east-1",
+          "s3PathStyle": true
+        },
+        "name": "e2ea iceberg",
+        "type": "sink_destination",
+        "updatedAt": "2026-08-13T01:21:17.158Z",
+        "hasPassword": false,
+        "hasToken": false,
+        "hasClientSecret": false,
+        "hasKeyValue": false,
+        "hasSaslPassword": false,
+        "hasAdminKey": false,
+        "hasS3SecretKey": true,
+        "hasOauthClientSecret": true,
+        "hasKafbatPassword": false
+      }
+    ]
+  },
+  {
+    "id": "svc-bm377j",
+    "type": "http",
+    "name": "e2eb dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T01:23:29.043Z",
+    "updatedAt": "2026-08-29T13:20:23.780Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-l4obpb",
+    "type": "http",
+    "name": "e2ec proxied",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": "gw-proxy-0v4vpw"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T01:24:09.338Z",
+    "updatedAt": "2026-08-13T01:42:52.293Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-jkbzyv",
+    "type": "http",
+    "name": "e2ec session",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T01:30:36.595Z",
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "session_token",
+      "loginPath": "/auth/login",
+      "tokenPath": "$.accessToken",
+      "tokenHeader": "Authorization",
+      "username": "emilys",
+      "password": "emilyspass"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T01:30:31.175Z",
+    "updatedAt": "2026-08-13T01:42:52.578Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-worhyc",
+    "type": "http",
+    "name": "e2emain probe svc",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T06:16:54.221Z",
+    "updatedAt": "2026-08-29T13:19:38.191Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-l8n4oo",
+    "type": "http",
+    "name": "e2emain probe svc",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T06:17:03.268Z",
+    "updatedAt": "2026-08-13T06:19:52.098Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-wrd0dl",
+    "type": "http",
+    "name": "e2er dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T06:19:17.294Z",
+    "updatedAt": "2026-08-13T06:36:48.449Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-pw4309",
+    "type": "http",
+    "name": "e2er session",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T06:22:16.886Z",
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "session_token",
+      "loginPath": "/auth/login",
+      "tokenPath": "$.accessToken",
+      "tokenHeader": "Authorization",
+      "tokenTemplate": "Bearer ${token}",
+      "username": "emilys",
+      "password": "emilyspass"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T06:22:03.178Z",
+    "updatedAt": "2026-08-13T06:36:48.780Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-il1wlv",
+    "type": "sink_destination",
+    "name": "e2er iceberg",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T06:23:32.087Z",
+    "config": {
+      "kind": "iceberg_catalog",
+      "catalogUrl": "https://polaris.datapasc.com/api/catalog",
+      "warehouse": "bronze",
+      "oauthClientId": "root",
+      "oauthClientSecret": "s3cr3t",
+      "s3Endpoint": "https://ozones3g.datapasc.com",
+      "s3AccessKey": "eltadmin",
+      "s3SecretKey": "OzoneS3Key123",
+      "s3Region": "us-east-1",
+      "s3PathStyle": true
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T06:23:31.155Z",
+    "updatedAt": "2026-08-13T06:36:49.138Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-c1wnr9",
+    "type": "http",
+    "name": "e2emain session svc",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T07:01:53.299Z",
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "session_token",
+      "loginPath": "/auth/login",
+      "tokenPath": "$.accessToken",
+      "tokenHeader": "Authorization",
+      "tokenTemplate": "Bearer ${token}",
+      "username": "emilys",
+      "password": "emilyspass"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T07:01:51.599Z",
+    "updatedAt": "2026-08-13T08:01:45.222Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-rsou8m",
+    "type": "http",
+    "name": "e2ediag svc",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T08:56:27.827Z",
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T08:56:22.392Z",
+    "updatedAt": "2026-08-13T09:07:45.496Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-mchjpn",
+    "type": "http",
+    "name": "e2eui dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T09:55:38.552Z",
+    "updatedAt": "2026-08-13T09:57:38.718Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-5cv9jt",
+    "type": "http",
+    "name": "e2eui dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T09:57:41.348Z",
+    "updatedAt": "2026-08-13T09:59:33.768Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-lrorfl",
+    "type": "http",
+    "name": "e2eui dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T09:59:35.917Z",
+    "updatedAt": "2026-08-13T10:00:39.725Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-vru9n3",
+    "type": "http",
+    "name": "e2eui dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T10:00:42.311Z",
+    "updatedAt": "2026-08-13T10:00:56.625Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-jo77i5",
+    "type": "http",
+    "name": "e2eui dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T10:00:59.427Z",
+    "updatedAt": "2026-08-13T10:09:50.462Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-yzgixw",
+    "type": "http",
+    "name": "e2eui dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T10:10:07.848Z",
+    "updatedAt": "2026-08-13T10:14:04.476Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-u30ous",
+    "type": "http",
+    "name": "gw proxied dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": "gw-proxy-dw0e0l"
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T11:36:33.089Z",
+    "updatedAt": "2026-08-26T10:16:12.688Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-49419j",
+    "type": "http",
+    "name": "dt dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T11:37:39.061Z",
+    "updatedAt": "2026-08-26T10:16:11.015Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-fbnsme",
+    "type": "http",
+    "name": "dt csvhost",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://raw.githubusercontent.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T11:40:49.749Z",
+    "updatedAt": "2026-08-29T13:19:44.005Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-7m6biu",
+    "type": "http",
+    "name": "dt xmlhost",
+    "revision": 1,
+    "retired": false,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://feeds.bbci.co.uk",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T11:41:16.093Z",
+    "updatedAt": "2026-08-13T11:41:16.093Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-dmya5u",
+    "type": "sink_destination",
+    "name": "ice polaris",
+    "revision": 1,
+    "retired": false,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-13T11:43:15.639Z",
+    "config": {
+      "kind": "iceberg_catalog",
+      "catalogUrl": "https://polaris.datapasc.com/api/catalog",
+      "warehouse": "bronze",
+      "oauthClientId": "root",
+      "oauthClientSecret": "s3cr3t",
+      "s3Endpoint": "https://ozones3g.datapasc.com",
+      "s3AccessKey": "eltadmin",
+      "s3SecretKey": "OzoneS3Key123",
+      "s3Region": "us-east-1",
+      "s3PathStyle": true
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-13T11:43:13.816Z",
+    "updatedAt": "2026-08-13T11:43:15.639Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-afvdee",
+    "type": "http",
+    "name": "ice dummyjson",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://dummyjson.com",
+      "authMode": "none",
+      "proxyId": null
+    },
+    "hasSecret": false,
+    "createdAt": "2026-08-13T11:43:18.999Z",
+    "updatedAt": "2026-08-29T14:28:52.653Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-nsdqhv",
+    "type": "http",
+    "name": "Rapid7 Securado",
+    "revision": 2,
+    "retired": false,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-26T07:09:30.634Z",
+    "config": {
+      "baseUrl": "https://apisix.datapasc.com/rapid7_securado/api/3",
+      "authMode": "basic",
+      "username": "apiuser",
+      "password": "4$_yAv=Q21"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-26T07:00:05.894Z",
+    "updatedAt": "2026-08-26T07:09:30.634Z",
+    "revisions": [
+      {
+        "revision": 1,
+        "config": {
+          "baseUrl": "http://apisix:9080/rapid7_securado/api/3",
+          "authMode": "basic",
+          "username": "apiuser",
+          "password": null
+        },
+        "name": "Rapid7 Securado",
+        "type": "http",
+        "updatedAt": "2026-08-26T07:00:16.302Z",
+        "hasPassword": true,
+        "hasToken": false,
+        "hasClientSecret": false,
+        "hasKeyValue": false,
+        "hasSaslPassword": false,
+        "hasAdminKey": false,
+        "hasS3AccessKey": false,
+        "hasS3SecretKey": false,
+        "hasOauthClientSecret": false,
+        "hasKafbatPassword": false
+      }
+    ]
+  },
+  {
+    "id": "svc-b09gdg",
+    "type": "http",
+    "name": "SentinelOne MSSP",
+    "revision": 1,
+    "retired": false,
+    "private": null,
+    "health": "Healthy",
+    "lastTestedAt": "2026-08-26T21:23:16.248Z",
+    "config": {
+      "baseUrl": "https://euce1-120-mssp.sentinelone.net/web/api/v2.1",
+      "authMode": "api_key",
+      "keyName": "Authorization",
+      "keyLocation": "header",
+      "keyValue": "ApiToken eyJraWQiOiJldS1jZW50cmFsLTEtcHJvZC0wIiwiYWxnIjoiRVMyNTYifQ.eyJzdWIiOiJyYWl5YW4ubXVzdGFmYUBzZWN1cmFkby5uZXQiLCJpc3MiOiJhdXRobi1ldS1jZW50cmFsLTEtcHJvZCIsImRlcGxveW1lbnRfaWQiOiIxMjU3NCIsInR5cGUiOiJ1c2VyIiwiZXhwIjoxNzg5NTUwOTAwLCJpYXQiOjE3ODY5NTg5MDAsImp0aSI6IjRkNzU2OTc3LWY3MGQtNDcyYy1hYzY1LTdmZmQwNTUzMTk4ZCJ9.HJCLTxB9gqoYPBQknvR_v1FaNl9DvbCZIwIyjCmYRycZXjVvE83U5Mz3HYhi6aKV_wsV9AUoDKNzejrU4DqqyA"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-26T20:43:03.530Z",
+    "updatedAt": "2026-08-29T14:36:04.226Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-x2t2xj",
+    "type": "http",
+    "name": "FortiSIEM Test",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://172.16.30.6:443",
+      "authMode": "basic",
+      "username": "super/CMDBAPI",
+      "password": "F0rti$iem@2024!!",
+      "proxyId": null
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-28T08:18:31.270Z",
+    "updatedAt": "2026-08-28T08:19:50.335Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-6kwkji",
+    "type": "http",
+    "name": "FortiSIEM Test",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://172.16.30.6:443",
+      "authMode": "basic",
+      "username": "super/CMDBAPI",
+      "password": "F0rti$iem@2024!!",
+      "proxyId": null
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-28T08:19:52.451Z",
+    "updatedAt": "2026-08-28T08:20:55.191Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-rj08iv",
+    "type": "http",
+    "name": "FortiSIEM Test",
+    "revision": 1,
+    "retired": true,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://172.16.30.6:443",
+      "authMode": "basic",
+      "username": "super/CMDBAPI",
+      "password": "F0rti$iem@2024!!",
+      "proxyId": null
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-28T08:20:58.322Z",
+    "updatedAt": "2026-08-28T08:24:43.565Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-gkkvwr",
+    "type": "http",
+    "name": "FortiSIEM Test",
+    "revision": 2,
+    "retired": false,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://172.16.30.6:443",
+      "authMode": "basic",
+      "username": "super/CMDBAPI",
+      "proxyId": "gw-proxy-cqcfr2",
+      "password": "F0rti$iem@2024!!"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-28T08:24:46.588Z",
+    "updatedAt": "2026-08-28T08:41:35.060Z",
+    "revisions": [
+      {
+        "revision": 1,
+        "config": {
+          "baseUrl": "https://172.16.30.6:443",
+          "authMode": "basic",
+          "username": "super/CMDBAPI",
+          "password": null,
+          "proxyId": null
+        },
+        "name": "FortiSIEM Test",
+        "type": "http",
+        "updatedAt": "2026-08-28T08:24:46.588Z",
+        "hasPassword": true,
+        "hasToken": false,
+        "hasClientSecret": false,
+        "hasKeyValue": false,
+        "hasSaslPassword": false,
+        "hasAdminKey": false,
+        "hasS3AccessKey": false,
+        "hasS3SecretKey": false,
+        "hasOauthClientSecret": false,
+        "hasKafbatPassword": false
+      }
+    ]
+  },
+  {
+    "id": "svc-m4zt4o",
+    "type": "http",
+    "name": "FortiSIEM",
+    "revision": 1,
+    "retired": false,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "https://172.16.30.6:443",
+      "authMode": "basic",
+      "username": "super/CMDBAPI",
+      "proxyId": "gw-proxy-cqcfr2",
+      "password": "F0rti$iem@2024!!"
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-28T10:22:38.525Z",
+    "updatedAt": "2026-08-28T10:22:38.525Z",
+    "revisions": []
+  },
+  {
+    "id": "svc-67cso4",
+    "type": "http",
+    "name": "FortiSIEM CMDB (paginated POST demo)",
+    "revision": 1,
+    "retired": false,
+    "private": null,
+    "health": "Not Tested",
+    "lastTestedAt": null,
+    "config": {
+      "baseUrl": "http://apisix:9080/fortisiem/phoenix/rest",
+      "authMode": "basic",
+      "username": "super/CMDBAPI",
+      "password": "F0rti$iem@2024!!",
+      "proxyId": null
+    },
+    "hasSecret": true,
+    "createdAt": "2026-08-28T17:37:01.675Z",
+    "updatedAt": "2026-08-28T17:37:01.675Z",
+    "revisions": []
+  }
+]

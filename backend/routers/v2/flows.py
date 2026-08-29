@@ -25,9 +25,11 @@ from pydantic import BaseModel
 
 from db import get_db
 from models.adapter import AppService, ApprovedSchema, Flow, GatewayProxy, PlatformConnection
-from services.adapter import runtime as runtime_svc
+from models.adapter.bulk_job import BULK_VERBS, TERMINAL_BULK_STATES, bulk_job_to_response
+from services.adapter import bulk_runner, runtime as runtime_svc
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
 from services.adapter.deployer import lifecycle
+from services.runtime_recovery import APP_INSTANCE_ID
 from services.adapter.deployer.connect_apply import ConnectApplyError
 from services.adapter.deployer.nifi_apply import NifiApplyError
 from services.adapter.legality import validate_placement
@@ -295,6 +297,95 @@ _VERB_HANDLERS = {
     "stop_clear": lifecycle.stop_clear,
     "undeploy": lifecycle.undeploy,
 }
+
+
+# ------------------------------------------------------------- bulk jobs
+#
+# A bulk run is a background job rather than N synchronous requests because
+# deploy is slow (nifi_apply polls up to 30s for a parameter context, 45s for
+# controller services, per flow). Doing it in the browser meant the tab could
+# not be closed and gave no progress. Job state lives in Mongo so a refresh
+# reattaches and a restart leaves a readable `interrupted` record.
+
+
+class BulkJobRequest(BaseModel):
+    verb: str
+    flowIds: List[str]
+
+
+@router.post("/bulk", status_code=202, summary="Start a background bulk verb run")
+async def start_bulk_job_v2(payload: BulkJobRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    verb = (payload.verb or "").strip()
+    if verb not in BULK_VERBS:
+        raise HTTPException(status_code=422, detail=f"Unknown bulk verb: {verb}")
+    if not payload.flowIds:
+        raise HTTPException(status_code=422, detail="No flows selected.")
+
+    # One run at a time. Two concurrent bulk runs would interleave NiFi calls,
+    # which is exactly what sequential execution exists to avoid.
+    running = await db[COLLECTIONS.bulk_jobs].find_one(
+        {"status": {"$in": ["pending", "running"]}}, {"_id": 0, "id": 1}
+    )
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail="A bulk run is already in progress. Wait for it to finish or cancel it.",
+        )
+
+    docs = await db[COLLECTIONS.flows].find({"id": {"$in": payload.flowIds}}, {"_id": 0}).to_list(None)
+    if not docs:
+        raise HTTPException(status_code=404, detail="None of the selected flows exist.")
+
+    # Preserve the caller's ordering so the UI's list matches the run order.
+    by_id = {str(doc.get("id")): doc for doc in docs}
+    ordered = [by_id[fid] for fid in payload.flowIds if fid in by_id]
+
+    job = await bulk_runner.create_bulk_job(
+        db, verb=verb, flow_docs=ordered, owner_instance_id=APP_INSTANCE_ID
+    )
+    await audit(
+        db,
+        f"Bulk {verb} started",
+        f"{len(ordered)} flow(s)",
+        object="Flow",
+    )
+    bulk_runner.launch_bulk_job(db, job["id"])
+    return {"jobId": job["id"]}
+
+
+@router.get("/bulk/active", summary="The bulk run currently in flight, if any")
+async def get_active_bulk_job_v2(db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Lets the Flows page reattach to a running job after a refresh -- without
+    this, progress would be lost the moment the tab reloaded."""
+    doc = await db[COLLECTIONS.bulk_jobs].find_one(
+        {"status": {"$in": ["pending", "running"]}}, {"_id": 0}, sort=[("created_at", -1)]
+    )
+    return bulk_job_to_response(doc) if doc else None
+
+
+@router.get("/bulk/{job_id}", summary="Bulk run status")
+async def get_bulk_job_v2(job_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    doc = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Bulk job not found")
+    return bulk_job_to_response(doc)
+
+
+@router.post("/bulk/{job_id}/cancel", summary="Request cancellation of a bulk run")
+async def cancel_bulk_job_v2(job_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    doc = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Bulk job not found")
+    if doc.get("status") in TERMINAL_BULK_STATES:
+        raise HTTPException(status_code=409, detail="That run has already finished.")
+
+    # Cooperative: the runner stops before the next flow. Work already in
+    # flight on NiFi is not interrupted.
+    await db[COLLECTIONS.bulk_jobs].update_one(
+        {"id": job_id}, {"$set": {"cancel_requested": True, "updated_at": now_iso()}}
+    )
+    updated = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    return bulk_job_to_response(updated)
 
 
 @router.post("/{flow_id}/verbs/{verb}")

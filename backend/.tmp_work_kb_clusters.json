@@ -1,0 +1,1 @@
+[{"name":"local","defaultCluster":null,"status":"ONLINE","lastError":null,"brokerCount":1,"onlinePartitionCount":1327,"topicCount":331,"bytesInPerSec":null,"bytesOutPerSec":null,"readOnly":false,"version":"4.2-IV1","features":["KAFKA_CONNECT","SCHEMA_REGISTRY","TOPIC_DELETION","CLIENT_QUOTA_MANAGEMENT","FTS_ENABLED"]}]

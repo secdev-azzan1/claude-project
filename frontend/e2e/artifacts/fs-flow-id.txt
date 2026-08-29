@@ -1,0 +1,5 @@
+flowId=flow-9d7ask
+flowName=FortiSIEM Pagination Test
+serviceName=FortiSIEM Test
+topic=raw.fortisiem_pagination_test.event_pulling
+cron=*/2 * * * *

@@ -295,6 +295,8 @@ async def ensure_indexes():
         (db.connection_lifecycle_jobs, [("id", ASCENDING)], {"unique": True, "name": "uniq_lifecycle_job_id"}),
         (db.connection_lifecycle_jobs, [("status", ASCENDING)], {"name": "idx_lifecycle_job_status"}),
         (db.connection_lifecycle_jobs, [("owner_instance_id", ASCENDING)], {"name": "idx_lifecycle_job_owner"}),
+        (db.bulk_jobs_v2, [("id", ASCENDING)], {"unique": True, "name": "uniq_bulk_job_id"}),
+        (db.bulk_jobs_v2, [("status", ASCENDING), ("created_at", ASCENDING)], {"name": "idx_bulk_job_status_created"}),
         (db.orphaned_artifacts, [("id", ASCENDING)], {"unique": True, "name": "uniq_orphaned_artifact_id"}),
         (db.iceberg_sinks, [("id", ASCENDING)], {"unique": True, "name": "uniq_iceberg_sink_id"}),
         (db.iceberg_sinks, [("flow_id", ASCENDING), ("stream_id", ASCENDING)], {"unique": True, "name": "uniq_iceberg_sink_flow_stream"}),

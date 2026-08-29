@@ -1,0 +1,156 @@
+{
+  "id": "flow-9d7ask",
+  "name": "FortiSIEM Pagination Test",
+  "description": null,
+  "state": "Stopped",
+  "enabled": false,
+  "cron": "*/2 * * * *",
+  "blocks": [
+    {
+      "id": "b-utrhfu",
+      "adapter": "http",
+      "mode": "write",
+      "name": "New http write",
+      "parentId": null,
+      "branch": null,
+      "serviceId": "svc-gkkvwr",
+      "entity": "event_pulling",
+      "config": {
+        "method": "POST",
+        "path": "/phoenix/rest/query/cmdb",
+        "responseFormat": "json",
+        "split": true,
+        "pagination": {
+          "type": "offset",
+          "fields": {
+            "offsetParam": "start",
+            "limitParam": "size",
+            "limitValue": "50",
+            "offsetStop": "total_count",
+            "offsetTotalCountPath": "$.totalCount"
+          }
+        },
+        "proxyId": null,
+        "recordPath": "$.data[*]",
+        "bodyTemplate": "{\"target\":\"EVENT_PULLING\",\"selectFields\":[\"Discover_Status\",\"Agent_Status\",\"Customer_ID\",\"Device_Type_Model\",\"Event_Pulling_Reporter\",\"Agent_Policy\",\"Event_Pulling_Access_Protocol\",\"Latest_Event_Pulling_Time\",\"Event_Pulling_Status\",\"Agent_Type\",\"Device_IP\",\"Device_Type_Vendor\",\"Device_Name\",\"Agent_Version\",\"Customer_Name\",\"Agent_Upgrade_Status\",\"Event_Pulling_Status_Description\"]}",
+        "writeForwards": "response",
+        "columnar": {
+          "enabled": true,
+          "columns": [
+            "Discover_Status",
+            "Agent_Status",
+            "Customer_ID",
+            "Device_Type_Model",
+            "Event_Pulling_Reporter",
+            "Agent_Policy",
+            "Event_Pulling_Access_Protocol",
+            "Latest_Event_Pulling_Time",
+            "Event_Pulling_Status",
+            "Agent_Type",
+            "Device_IP",
+            "Device_Type_Vendor",
+            "Device_Name",
+            "Agent_Version",
+            "Customer_Name",
+            "Agent_Upgrade_Status",
+            "Event_Pulling_Status_Description"
+          ]
+        }
+      },
+      "transforms": [],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-flz7ij",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "New kafka write",
+      "parentId": "b-utrhfu",
+      "branch": null,
+      "serviceId": null,
+      "entity": "event_pulling",
+      "config": {},
+      "transforms": [],
+      "topicOverride": null,
+      "testResult": null
+    }
+  ],
+  "topics": [
+    {
+      "id": "t-tw31ag",
+      "kind": "materialized",
+      "name": "raw.fortisiem_pagination_test.event_pulling",
+      "sealed": false,
+      "writerBlockId": "b-flz7ij",
+      "backlogEstimate": null
+    }
+  ],
+  "variables": [],
+  "servicePins": {
+    "svc-gkkvwr": 2
+  },
+  "drift": null,
+  "deployedAt": "2026-08-28T09:09:17.547Z",
+  "lastRunAt": "2026-08-28T09:10:18.794Z",
+  "createdAt": "2026-08-28T08:24:49.269Z",
+  "updatedAt": "2026-08-28T09:50:24.150Z",
+  "runtimeScopeMap": {
+    "b-utrhfu": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "new_http_write__http",
+      "processGroupId": "47a14c18-01a0-1000-4c43-442c1d5cdd8e",
+      "components": {
+        "cs_kafka_conn": "47a14dda-01a0-1000-a582-92b92c5b0b51",
+        "trigger": "47a16458-01a0-1000-03ed-b6d330f697b4",
+        "init": "47a16491-01a0-1000-1a58-7a0aa316000f",
+        "render_body": "47a164cc-01a0-1000-5f37-2f52b4e1652a",
+        "write": "47a16507-01a0-1000-45bb-69f5739202b4",
+        "split": "47a16547-01a0-1000-2b33-d604466a606c",
+        "page_meta": "47a16587-01a0-1000-8f4e-4a0acd001fec",
+        "has_more": "47a165ce-01a0-1000-d63c-bcd13091f3dd",
+        "next": "47a16614-01a0-1000-0291-a67d934afd6f",
+        "dlq__meta": "47a1664e-01a0-1000-bff4-81c4f15cf186",
+        "dlq__publish": "47a16693-01a0-1000-6f36-8a95ccbcb4df",
+        "outputPort:b-flz7ij": "47a1678d-01a0-1000-765c-6d49215dcaa6"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-flz7ij": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "new_kafka_write__kafka",
+      "processGroupId": "47a14cf7-01a0-1000-dcd8-27e1dcac3472",
+      "components": {
+        "cs_kafka_conn": "47a15748-01a0-1000-ac0c-5e4ac5644445",
+        "cs_json_reader": "47a15786-01a0-1000-3574-4c1531ddf3c0",
+        "cs_json_writer": "47a157c3-01a0-1000-3257-94976b417f7d",
+        "publish": "47a166d5-01a0-1000-eb27-8e792fabe9fc",
+        "dlq__meta": "47a1670d-01a0-1000-058e-e2bd969aeae2",
+        "dlq__publish": "47a16748-01a0-1000-0bb0-c2d552210d98",
+        "inputPort": "47a167ce-01a0-1000-0726-3a567c263d85"
+      },
+      "connectorNames": [],
+      "topics": [
+        "raw.fortisiem_pagination_test.event_pulling"
+      ]
+    }
+  },
+  "nifiProcessGroupId": "47a14b28-01a0-1000-0aaa-4f5af22fb4ca",
+  "provenance": {
+    "kafka": {
+      "connectionId": "conn-5zledb"
+    },
+    "nifi": {
+      "connectionId": "conn-qa5isw",
+      "fingerprint": "657f40bd-019f-1000-4c4a-836ec84833cb"
+    },
+    "kafka_connect": {
+      "connectionId": "conn-7jvsut",
+      "fingerprint": "5L6g3nShT-eMCtK--X86sw"
+    },
+    "dedupConfigHashes": {}
+  }
+}

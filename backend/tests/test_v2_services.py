@@ -357,6 +357,174 @@ def test_retire_unknown_service_404():
     assert resp.status_code == 404
 
 
+# ------------------------------------------------------------------- delete
+#
+# Deletion is the permanent second stage after retirement. Both gates
+# (retired, and no dependent flows) are enforced here rather than trusted
+# from the UI, so each has its own test.
+
+
+def _make_service(client, name: str = "Partner Kafka") -> Dict[str, Any]:
+    return client.post(
+        "/api/v2/services/",
+        json={"type": "external_kafka", "name": name, "config": {"bootstrapServers": "k:9093"}},
+    ).json()
+
+
+def test_delete_retired_service_with_no_dependents_succeeds():
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client)
+
+    client.post(f"/api/v2/services/{created['id']}/retire")
+
+    resp = client.delete(f"/api/v2/services/{created['id']}")
+    assert resp.status_code == 204, resp.text
+    assert resp.content == b""
+    assert fake_db.services_v2.docs == []
+
+    event = fake_db.audit_v2.docs[-1]
+    assert event["action"] == "Service deleted"
+    assert event["object"] == "Application Service"
+    assert event["target"] == "Partner Kafka"
+    assert event["status"] == "Warning"
+
+
+def test_delete_active_service_is_refused_with_409():
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client)  # never retired
+
+    resp = client.delete(f"/api/v2/services/{created['id']}")
+    assert resp.status_code == 409, resp.text
+    assert "Retire the service first" in resp.json()["detail"]
+    # The record must survive a refused delete.
+    assert len(fake_db.services_v2.docs) == 1
+    assert [e["action"] for e in fake_db.audit_v2.docs] == ["Service created"]
+
+
+def test_delete_succeeds_even_when_flows_still_reference_the_service():
+    """Linked flows deliberately do NOT block deletion. The consequence is
+    pushed onto the flows instead -- see the two tests below."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client, name="Rapid7")
+    client.post(f"/api/v2/services/{created['id']}/retire")
+
+    fake_db.flows_v2.docs.append(
+        {"id": "flow-1", "name": "Vuln Ingest", "blocks": [{"id": "b1", "serviceId": created["id"], "config": {}}]}
+    )
+
+    resp = client.delete(f"/api/v2/services/{created['id']}")
+    assert resp.status_code == 204, resp.text
+    assert fake_db.services_v2.docs == []
+
+
+def test_delete_flags_a_deployed_dependent_flow_with_drift():
+    """A deployed flow keeps running on NiFi, so it is warned rather than
+    silently left inconsistent."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client, name="Rapid7")
+    client.post(f"/api/v2/services/{created['id']}/retire")
+
+    fake_db.flows_v2.docs.append(
+        {
+            "id": "flow-1",
+            "name": "Vuln Ingest",
+            "deployedAt": "2026-08-13T11:36:54.142Z",
+            "blocks": [{"id": "b1", "serviceId": created["id"], "config": {}}],
+        }
+    )
+
+    assert client.delete(f"/api/v2/services/{created['id']}").status_code == 204
+    flow = fake_db.flows_v2.docs[0]
+    assert "Rapid7" in flow["drift"]
+    assert "replacement service" in flow["drift"]
+
+
+def test_delete_leaves_an_undeployed_dependent_flow_unflagged():
+    """An undeployed flow needs no drift warning: validation already reports
+    "The selected service no longer exists." on its own."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client, name="Rapid7")
+    client.post(f"/api/v2/services/{created['id']}/retire")
+
+    fake_db.flows_v2.docs.append(
+        {
+            "id": "flow-1",
+            "name": "Draft Ingest",
+            "deployedAt": None,
+            "blocks": [{"id": "b1", "serviceId": created["id"], "config": {}}],
+        }
+    )
+
+    assert client.delete(f"/api/v2/services/{created['id']}").status_code == 204
+    assert fake_db.flows_v2.docs[0].get("drift") in (None, "")
+
+
+def test_delete_flags_a_sink_service_reference_too():
+    """A sink-only reference (config.sinkServiceId) counts exactly like a
+    direct block.serviceId reference."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client, name="Iceberg Sink")
+    client.post(f"/api/v2/services/{created['id']}/retire")
+
+    fake_db.flows_v2.docs.append(
+        {
+            "id": "flow-2",
+            "name": "Asset Sink",
+            "deployedAt": "2026-08-13T11:36:54.142Z",
+            "blocks": [{"id": "b1", "config": {"sinkServiceId": created["id"]}}],
+        }
+    )
+
+    assert client.delete(f"/api/v2/services/{created['id']}").status_code == 204
+    assert "Iceberg Sink" in fake_db.flows_v2.docs[0]["drift"]
+
+
+def test_delete_audit_records_how_many_flows_were_affected():
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client, name="Rapid7")
+    client.post(f"/api/v2/services/{created['id']}/retire")
+    fake_db.flows_v2.docs.extend(
+        [
+            {"id": "f1", "name": "A", "deployedAt": "x", "blocks": [{"id": "b", "serviceId": created["id"], "config": {}}]},
+            {"id": "f2", "name": "B", "deployedAt": None, "blocks": [{"id": "b", "serviceId": created["id"], "config": {}}]},
+        ]
+    )
+
+    client.delete(f"/api/v2/services/{created['id']}")
+    event = fake_db.audit_v2.docs[-1]
+    assert event["action"] == "Service deleted"
+    assert "2 linked flow(s), 1 deployed and flagged" in event["details"]
+
+
+def test_delete_still_requires_retirement_even_with_linked_flows():
+    """Removing the dependency guard must not weaken the retire guard."""
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = _make_service(client, name="Rapid7")  # never retired
+    fake_db.flows_v2.docs.append(
+        {"id": "flow-1", "name": "Vuln Ingest", "blocks": [{"id": "b1", "serviceId": created["id"], "config": {}}]}
+    )
+
+    resp = client.delete(f"/api/v2/services/{created['id']}")
+    assert resp.status_code == 409
+    assert "Retire the service first" in resp.json()["detail"]
+    assert len(fake_db.services_v2.docs) == 1
+
+
+def test_delete_unknown_service_404():
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    resp = client.delete("/api/v2/services/does-not-exist")
+    assert resp.status_code == 404
+
+
 # ------------------------------------------------------------------ test: http
 
 

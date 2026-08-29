@@ -91,6 +91,25 @@ def _redact_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return snap
 
 
+async def _linked_flow_docs(db: AsyncIOMotorDatabase, service_id: str) -> List[Dict[str, Any]]:
+    """Flows referencing this service, with the fields the delete path needs to
+    tell deployed from undeployed. `_service_dependents` below returns names
+    only, which is all retire needs; deletion has to act per flow."""
+    flows = await db[COLLECTIONS.flows].find(
+        {}, {"_id": 0, "id": 1, "name": 1, "blocks": 1, "deployedAt": 1}
+    ).to_list(10000)
+    linked: List[Dict[str, Any]] = []
+    for flow in flows:
+        blocks = flow.get("blocks") or []
+        if any(
+            (block.get("serviceId") == service_id)
+            or ((block.get("config") or {}).get("sinkServiceId") == service_id)
+            for block in blocks
+        ):
+            linked.append(flow)
+    return linked
+
+
 async def _service_dependents(db: AsyncIOMotorDatabase, service_id: str) -> List[str]:
     """Flow names referencing this service, mirroring api.ts's
     `serviceDependents`: `f.blocks.some(b => b.serviceId === id ||
@@ -282,6 +301,73 @@ async def reinstate_service(service_id: str, db: AsyncIOMotorDatabase = Depends(
 
     updated = {**doc, "retired": False, "updatedAt": now}
     return AppService(**updated).redact()
+
+
+@router.delete("/{service_id}", status_code=204, summary="Delete a retired Application Service (v2)")
+async def delete_service(service_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Hard-delete, deliberately gated behind retirement.
+
+    Retirement (above) stays the primary destructive action -- it is
+    reversible and keeps the record. This is the second stage: the final
+    cleanup of a service that is retired AND genuinely unused. Both
+    conditions are re-checked here rather than trusted from the UI, because
+    a flow can start referencing the service between the moment the button
+    renders and the moment it is clicked.
+    """
+    doc = await db[COLLECTIONS.services].find_one({"id": service_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    if not doc.get("retired"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot delete '{doc.get('name', '')}' while it is active. "
+                "Retire the service first -- retirement is reversible, deletion is not."
+            ),
+        )
+
+    # Linked flows no longer BLOCK the delete -- the consequence is pushed onto
+    # the flows instead. An undeployed flow needs nothing extra: validation
+    # already reports "The selected service no longer exists." A deployed flow
+    # keeps running (its NiFi process group is untouched and holds its own
+    # copy of the config), so it gets an explicit drift warning telling the
+    # user the running deployment now differs from the saved definition.
+    linked = await _linked_flow_docs(db, service_id)
+    deployed = [f for f in linked if f.get("deployedAt")]
+
+    await db[COLLECTIONS.services].delete_one({"id": service_id})
+
+    name = doc.get("name", "")
+    for flow in deployed:
+        await db[COLLECTIONS.flows].update_one(
+            {"id": flow.get("id")},
+            {
+                "$set": {
+                    "drift": (
+                        f'Application service "{name}" was deleted. The running deployment '
+                        "still uses it, but the saved definition no longer resolves -- select a "
+                        "replacement service on the affected block before the next deploy."
+                    ),
+                    "updatedAt": now_iso(),
+                }
+            },
+        )
+
+    details = "Permanent -- the service record and its revision history are gone"
+    if linked:
+        details += (
+            f"; {len(linked)} linked flow(s), {len(deployed)} deployed and flagged"
+        )
+    await audit(
+        db,
+        "Service deleted",
+        name,
+        status="Warning",
+        details=details,
+        object="Application Service",
+    )
+    return None
 
 
 @router.post("/{service_id}/test", summary="Live-test an Application Service (v2)")

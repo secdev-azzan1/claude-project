@@ -1329,6 +1329,52 @@ function HttpSettings({
         )}
       </div>
 
+      {(cfg.responseFormat as string) === "json" && (
+        <div className="grid gap-1.5 rounded-md border p-2.5">
+          <label className="flex items-center gap-1.5 text-xs">
+            <Switch
+              checked={Boolean((cfg.columnar as { enabled?: boolean } | undefined)?.enabled)}
+              disabled={locked}
+              onCheckedChange={(c) =>
+                onPatchConfig(block.id, { columnar: { ...(cfg.columnar as object), enabled: c } })
+              }
+            />
+            Column-oriented response
+          </label>
+          <p className="text-xs text-muted-foreground">
+            For APIs that return rows as bare arrays instead of objects (e.g. {"{"}"data": [[v0, v1, ...], ...]{"}"}).
+            Name each column in order and the app turns rows into records before splitting.
+          </p>
+          {Boolean((cfg.columnar as { enabled?: boolean } | undefined)?.enabled) && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-40 font-mono text-xs"
+                value={(cfg.columnar as { rowsField?: string } | undefined)?.rowsField ?? "data"}
+                disabled={locked}
+                placeholder="data (rows field)"
+                onChange={(e) =>
+                  onPatchConfig(block.id, { columnar: { ...(cfg.columnar as object), rowsField: e.target.value } })
+                }
+              />
+              <Input
+                className="w-96 font-mono text-xs"
+                value={((cfg.columnar as { columns?: string[] } | undefined)?.columns ?? []).join(", ")}
+                disabled={locked}
+                placeholder="name, ipAddress, status (columns, in order)"
+                onChange={(e) =>
+                  onPatchConfig(block.id, {
+                    columnar: {
+                      ...(cfg.columnar as object),
+                      columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                    },
+                  })
+                }
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Everything below is optional: it stays folded away until asked for. */}
       <Accordion key={block.id} type="single" collapsible defaultValue={advancedSummary ? "advanced" : undefined} className="rounded-md border">
         <AccordionItem value="advanced" className="border-b-0">
@@ -1373,6 +1419,17 @@ function HttpSettings({
                     placeholder='{"records": ${records}}'
                     onChange={(e) => onPatchConfig(block.id, { bodyTemplate: e.target.value })}
                   />
+                  {(pagination.type === "page" || pagination.type === "offset") && (
+                    <p className="text-xs text-muted-foreground">
+                      Pagination fields (
+                      <span className="font-mono">
+                        {pagination.type === "offset"
+                          ? `${pagination.fields?.offsetParam || "offset"}, ${pagination.fields?.limitParam || "limit"}`
+                          : `${pagination.fields?.pageParam || "page"}, ${pagination.fields?.sizeParam || "size"}`}
+                      </span>
+                      ) are added to this body automatically — you don't need to include them.
+                    </p>
+                  )}
                 </div>
                 <div className="grid gap-1.5">
                   <Label>Chain continues with (R3)</Label>

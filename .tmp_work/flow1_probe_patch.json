@@ -1,0 +1,2175 @@
+{
+  "id": "flow-vipjvz",
+  "name": "FortiSIEM Device Inventory",
+  "description": "organization -> device -> 8 device-detail children (raw)",
+  "state": "Stopped",
+  "enabled": true,
+  "cron": "*/5 * * * *",
+  "blocks": [
+    {
+      "id": "b-org",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-org",
+      "parentId": null,
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/config/Domain",
+        "responseFormat": "json",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$.result.domains.domain[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-org_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "org_name",
+            "path": "$.name"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-org-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-org-write",
+      "parentId": "b-org",
+      "branch": null,
+      "serviceId": null,
+      "entity": "organization",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-organization-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-organization-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-organization-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "organization"
+          }
+        },
+        {
+          "id": "t-meta-organization-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-organization-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:organization:${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-organization-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-organization-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/config/Domain"
+          }
+        },
+        {
+          "id": "t-meta-organization-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-organization-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-organization-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-organization-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-organization",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.organization__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-device",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-device",
+      "parentId": "b-org",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/devices?organization=${org_name}",
+        "responseFormat": "json",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$.device[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-access_ip",
+          "kind": "extract",
+          "config": {
+            "attribute": "access_ip",
+            "path": "$.accessIp"
+          }
+        },
+        {
+          "id": "t1-extract-natural_id",
+          "kind": "extract",
+          "config": {
+            "attribute": "natural_id",
+            "path": "$.naturalId"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-device-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-device-write",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": null,
+      "entity": "device",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-device-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-device-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-device-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "device"
+          }
+        },
+        {
+          "id": "t-meta-device-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${access_ip}"
+          }
+        },
+        {
+          "id": "t-meta-device-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:device:${natural_id}_${access_ip}"
+          }
+        },
+        {
+          "id": "t-meta-device-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-device-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/devices"
+          }
+        },
+        {
+          "id": "t-meta-device-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-device-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-device-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-device-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-device",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.device__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-interface",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-interface",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "json",
+        "split": false,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$"
+      },
+      "transforms": [],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-interface-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-interface-write",
+      "parentId": "b-interface",
+      "branch": null,
+      "serviceId": null,
+      "entity": "interface",
+      "config": {},
+      "transforms": [],
+      "topicOverride": "bronze.fortisiem.interface__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-processor",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-processor",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].processors.processor[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-cpu_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "cpu_name",
+            "path": "$.name"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-processor-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-processor-write",
+      "parentId": "b-processor",
+      "branch": null,
+      "serviceId": null,
+      "entity": "processor",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-processor-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-processor-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-processor-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "processor"
+          }
+        },
+        {
+          "id": "t-meta-processor-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${cpu_name}"
+          }
+        },
+        {
+          "id": "t-meta-processor-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:processor:${natural_id}_${cpu_name}"
+          }
+        },
+        {
+          "id": "t-meta-processor-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-processor-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-processor-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-processor-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-processor-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-processor-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-processor",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.processor__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-storage",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-storage",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].storages.storage[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-storage_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "storage_name",
+            "path": "$.name"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-storage-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-storage-write",
+      "parentId": "b-storage",
+      "branch": null,
+      "serviceId": null,
+      "entity": "storage",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-storage-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-storage-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-storage-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "storage"
+          }
+        },
+        {
+          "id": "t-meta-storage-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${storage_name}"
+          }
+        },
+        {
+          "id": "t-meta-storage-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:storage:${natural_id}_${storage_name}"
+          }
+        },
+        {
+          "id": "t-meta-storage-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-storage-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-storage-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-storage-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-storage-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-storage-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-storage",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.storage__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-installed-software",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-installed-software",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].applications.application[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-app_natural_id",
+          "kind": "extract",
+          "config": {
+            "attribute": "app_natural_id",
+            "path": "$.naturalId"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-installed-software-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-installed-software-write",
+      "parentId": "b-installed-software",
+      "branch": null,
+      "serviceId": null,
+      "entity": "installed_software",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-installed_software-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "installed_software"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${app_natural_id}"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:installed_software:${natural_id}_${app_natural_id}"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-installed_software-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-installed_software-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-installed_software",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.installed_software__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-software-service",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-software-service",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].softwareServices.softwareservice[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-svc_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "svc_name",
+            "path": "$.name"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-software-service-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-software-service-write",
+      "parentId": "b-software-service",
+      "branch": null,
+      "serviceId": null,
+      "entity": "software_service",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-software_service-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-software_service-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-software_service-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "software_service"
+          }
+        },
+        {
+          "id": "t-meta-software_service-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${svc_name}"
+          }
+        },
+        {
+          "id": "t-meta-software_service-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:software_service:${natural_id}_${svc_name}"
+          }
+        },
+        {
+          "id": "t-meta-software_service-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-software_service-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-software_service-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-software_service-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-software_service-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-software_service-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-software_service",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.software_service__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-software-patch",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-software-patch",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].softwarePatches.softwarepatch[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-patch_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "patch_name",
+            "path": "$.name"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-software-patch-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-software-patch-write",
+      "parentId": "b-software-patch",
+      "branch": null,
+      "serviceId": null,
+      "entity": "software_patch",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-software_patch-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "software_patch"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${patch_name}"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:software_patch:${natural_id}_${patch_name}"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-software_patch-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-software_patch-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-software_patch",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.software_patch__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-device-custom-property",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-device-custom-property",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].properties.customproperty[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-prop_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "prop_name",
+            "path": "$.propertyName"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-device-custom-property-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-device-custom-property-write",
+      "parentId": "b-device-custom-property",
+      "branch": null,
+      "serviceId": null,
+      "entity": "device_custom_property",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-device_custom_property-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "device_custom_property"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${prop_name}"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:device_custom_property:${natural_id}_${prop_name}"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-device_custom_property-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-device_custom_property",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.device_custom_property__raw",
+      "testResult": null
+    },
+    {
+      "id": "b-device-business-service-membership",
+      "adapter": "http",
+      "mode": "read",
+      "name": "b-device-business-service-membership",
+      "parentId": "b-device",
+      "branch": null,
+      "serviceId": "svc-m4zt4o",
+      "entity": null,
+      "config": {
+        "method": "GET",
+        "path": "/phoenix/rest/cmdbDeviceInfo/device?organization=${org_name}&ip=${access_ip}&loadDepend=true",
+        "responseFormat": "xml",
+        "split": true,
+        "pagination": {
+          "type": "none",
+          "fields": {}
+        },
+        "proxyId": null,
+        "recordPath": "$[0].appGroupName[*]"
+      },
+      "transforms": [
+        {
+          "id": "t0-extract-group_name",
+          "kind": "extract",
+          "config": {
+            "attribute": "group_name",
+            "path": "$"
+          }
+        }
+      ],
+      "topicOverride": null,
+      "testResult": null
+    },
+    {
+      "id": "b-device-business-service-membership-write",
+      "adapter": "kafka",
+      "mode": "write",
+      "name": "b-device-business-service-membership-write",
+      "parentId": "b-device-business-service-membership",
+      "branch": null,
+      "serviceId": null,
+      "entity": "device_business_service_membership",
+      "config": {},
+      "transforms": [
+        {
+          "id": "t-meta-device_business_service_membership-source_platform",
+          "kind": "add_field",
+          "config": {
+            "field": "source_platform",
+            "value": "fortisiem"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-customer_tenant_organization",
+          "kind": "add_field",
+          "config": {
+            "field": "customer_tenant_organization",
+            "value": "${org_name}"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-source_object_type",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_type",
+            "value": "device_business_service_membership"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-source_object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "source_object_id",
+            "value": "${natural_id}_${group_name}"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-object_id",
+          "kind": "add_field",
+          "config": {
+            "field": "object_id",
+            "value": "fortisiem:${org_name}:device_business_service_membership:${natural_id}_${group_name}"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-cursor_window",
+          "kind": "add_field",
+          "config": {
+            "field": "cursor_window",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-api_endpoint_export_query_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "api_endpoint_export_query_identity",
+            "value": "/phoenix/rest/cmdbDeviceInfo/device"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-ingest_ts",
+          "kind": "add_field",
+          "config": {
+            "field": "ingest_ts",
+            "value": "${now():toNumber()}"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-extraction_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "extraction_timestamp",
+            "value": "${now():format(\"yyyy-MM-dd'T'HH:mm:ss.SSSXXX\")}"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-ingestion_run_batch_identity",
+          "kind": "add_field",
+          "config": {
+            "field": "ingestion_run_batch_identity",
+            "value": "${org_name}-${now():toNumber()}-${uuid}"
+          }
+        },
+        {
+          "id": "t-meta-device_business_service_membership-source_event_update_timestamp",
+          "kind": "add_field",
+          "config": {
+            "field": "source_event_update_timestamp",
+            "value": ""
+          }
+        },
+        {
+          "id": "t-dedup-device_business_service_membership",
+          "kind": "dedup",
+          "config": {
+            "identityFields": [
+              "object_id"
+            ],
+            "excludedFields": [
+              "extraction_timestamp",
+              "ingestion_run_batch_identity",
+              "cursor_window"
+            ],
+            "windowHours": 24
+          }
+        }
+      ],
+      "topicOverride": "bronze.fortisiem.device_business_service_membership__raw",
+      "testResult": null
+    }
+  ],
+  "topics": [
+    {
+      "id": "t-org",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.organization__raw",
+      "sealed": false,
+      "writerBlockId": "b-org-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-device",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.device__raw",
+      "sealed": false,
+      "writerBlockId": "b-device-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-interface",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.interface__raw",
+      "sealed": false,
+      "writerBlockId": "b-interface-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-processor",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.processor__raw",
+      "sealed": false,
+      "writerBlockId": "b-processor-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-storage",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.storage__raw",
+      "sealed": false,
+      "writerBlockId": "b-storage-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-installed_software",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.installed_software__raw",
+      "sealed": false,
+      "writerBlockId": "b-installed-software-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-software_service",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.software_service__raw",
+      "sealed": false,
+      "writerBlockId": "b-software-service-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-software_patch",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.software_patch__raw",
+      "sealed": false,
+      "writerBlockId": "b-software-patch-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-device_custom_property",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.device_custom_property__raw",
+      "sealed": false,
+      "writerBlockId": "b-device-custom-property-write",
+      "backlogEstimate": null
+    },
+    {
+      "id": "t-device_business_service_membership",
+      "kind": "materialized",
+      "name": "bronze.fortisiem.device_business_service_membership__raw",
+      "sealed": false,
+      "writerBlockId": "b-device-business-service-membership-write",
+      "backlogEstimate": null
+    }
+  ],
+  "variables": [],
+  "servicePins": {
+    "svc-m4zt4o": 1
+  },
+  "drift": null,
+  "deployedAt": "2026-08-28T11:13:15.815Z",
+  "lastRunAt": "2026-08-28T11:13:28.254Z",
+  "createdAt": "2026-08-28T11:09:58.422Z",
+  "updatedAt": "2026-08-28T11:27:36.719Z",
+  "runtimeScopeMap": {
+    "b-org": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_org__http",
+      "processGroupId": "481077ba-01a0-1000-70f3-6e5383d6b16c",
+      "components": {
+        "cs_xml_reader": "481087c7-01a0-1000-fb38-17a41bc20f62",
+        "cs_json_reader": "4810880c-01a0-1000-2f45-e560c0b18933",
+        "cs_json_writer": "4810884f-01a0-1000-0510-c87174f7be3d",
+        "cs_kafka_conn": "48108890-01a0-1000-7e58-cdf5da3c5bf9",
+        "trigger": "4811b763-01a0-1000-785f-54d06a1c4f6d",
+        "init": "4811b7a1-01a0-1000-1d03-6656d465e32b",
+        "fetch": "4811b7ef-01a0-1000-2cbb-44cfba7655b6",
+        "convert": "4811b82e-01a0-1000-8a4c-501c62051bdc",
+        "split": "4811b86b-01a0-1000-2193-6c8577033993",
+        "t0__extract": "4811b8ac-01a0-1000-4248-46241204ad8d",
+        "dlq__meta": "4811b8e8-01a0-1000-6ef2-c9f4d88bf35e",
+        "dlq__publish": "4811b940-01a0-1000-4cc8-9014631d465e",
+        "outputPort:b-org-write": "481210e8-01a0-1000-c8ec-15dca203feb5",
+        "outputPort:b-device": "48121179-01a0-1000-d942-626cbbaa65ec"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-org-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_org_write__kafka",
+      "processGroupId": "48107883-01a0-1000-dec9-2d254a36a742",
+      "components": {
+        "cs_json_reader": "48109647-01a0-1000-5fb3-02772903dfe4",
+        "cs_json_writer": "48109689-01a0-1000-a1cf-ca4aef414b6e",
+        "cs_redis_pool": "481096d0-01a0-1000-ce8c-4701edae5d27",
+        "cs_redis_cache": "4810970e-01a0-1000-4d61-b42c605068d0",
+        "cs_kafka_conn": "4810974d-01a0-1000-8739-eefac8d0f322",
+        "t0__add_field": "4811b9af-01a0-1000-48a4-ed0e07cb5975",
+        "t1__add_field": "4811b9ea-01a0-1000-0cee-1b07d61d3b24",
+        "t2__add_field": "4811ba50-01a0-1000-cd1a-6c26cb4f13f8",
+        "t3__add_field": "4811ba8b-01a0-1000-b947-0ff2c1fc6fd4",
+        "t4__add_field": "4811bacb-01a0-1000-ff46-679f012e20cc",
+        "t5__add_field": "4811bb0e-01a0-1000-9a62-c39ed79a9de1",
+        "t6__add_field": "4811bb48-01a0-1000-f0e9-513bc95c55bd",
+        "t7__add_field": "4811bba5-01a0-1000-6587-2b904a39ce0e",
+        "t8__add_field": "4811bbe0-01a0-1000-5225-2290c9ffd378",
+        "t9__add_field": "4811bc2b-01a0-1000-526a-c93275f401bc",
+        "t10__add_field": "4811bc65-01a0-1000-e9f6-c01e05723083",
+        "dedupe__hash": "4811bccd-01a0-1000-6f96-2b4474762ec1",
+        "dedupe__detect": "4811bd45-01a0-1000-8cf3-6641c7f9e8e2",
+        "publish": "4811bd7e-01a0-1000-20e3-bc8d638d0d0b",
+        "dlq__meta": "4811bdb9-01a0-1000-703c-877a3610cd5a",
+        "dlq__publish": "4811be09-01a0-1000-5a07-cf5fbeef89fb",
+        "inputPort": "481211bc-01a0-1000-71a3-5c0d9fa1aab8"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.organization__raw"
+      ]
+    },
+    "b-device": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_device__http",
+      "processGroupId": "48107946-01a0-1000-db8e-4611b2488036",
+      "components": {
+        "cs_xml_reader": "4810a623-01a0-1000-ac2b-a299ebc20eae",
+        "cs_json_reader": "4810a678-01a0-1000-7592-e92019c28925",
+        "cs_json_writer": "4810a6bb-01a0-1000-6282-7a85e3aad082",
+        "cs_kafka_conn": "4810a703-01a0-1000-53fd-34a88f0c2dbd",
+        "extract_path_fields__check_0": "4811be48-01a0-1000-33f7-c20374c8e75d",
+        "extract_path_fields": "4811bea2-01a0-1000-d4f1-7c3b83cc83f7",
+        "extract_path_fields__merge_0": "4811bf22-01a0-1000-41fe-e1846a9bcddd",
+        "init": "4811bf5d-01a0-1000-4db7-be9c1186931f",
+        "fetch": "4811bfed-01a0-1000-b3f2-b2f2f143cacf",
+        "convert": "4811c05f-01a0-1000-8b6e-174ddfb3e21d",
+        "split": "4811c09c-01a0-1000-eb57-50d93b4a6f0d",
+        "t0__extract": "4811c0fb-01a0-1000-7ff9-04887a107d4c",
+        "t1__extract": "4811c138-01a0-1000-4562-797aee3f7741",
+        "dlq__meta": "4811c18d-01a0-1000-edb0-40c2cdb2d4ae",
+        "dlq__publish": "4811c1c8-01a0-1000-9efc-6c2b9b1babbd",
+        "inputPort": "481211f8-01a0-1000-fdee-3dae2f83be11",
+        "outputPort:b-device-write": "48121238-01a0-1000-341a-aaa185c0b619",
+        "outputPort:b-interface": "48121277-01a0-1000-11ac-a9fc4866196b",
+        "outputPort:b-processor": "481212b6-01a0-1000-93cb-0c19a8b5b13e",
+        "outputPort:b-storage": "4812138c-01a0-1000-5505-3936592d8b9b",
+        "outputPort:b-installed-software": "481213cd-01a0-1000-cd09-e2d2e3aa9461",
+        "outputPort:b-software-service": "4812142b-01a0-1000-3731-0fa71eac4364",
+        "outputPort:b-software-patch": "48121477-01a0-1000-c5c5-ba52eb5b8ca5",
+        "outputPort:b-device-custom-property": "481214c2-01a0-1000-d778-89825b34c755",
+        "outputPort:b-device-business-service-membership": "48121504-01a0-1000-c982-3e5d47d888f0"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-device-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_device_write__kafka",
+      "processGroupId": "48107a26-01a0-1000-d508-a2c0815053a0",
+      "components": {
+        "cs_json_reader": "4810b481-01a0-1000-f8ea-257b5f3d215a",
+        "cs_json_writer": "4810b4cc-01a0-1000-06cb-1f8052c12efd",
+        "cs_redis_pool": "4810b50b-01a0-1000-6e28-04c76b1800f1",
+        "cs_redis_cache": "4810b560-01a0-1000-fa5c-012e207d55d6",
+        "cs_kafka_conn": "4810b59c-01a0-1000-4bf4-bd30779b05a4",
+        "t0__add_field": "4811c20f-01a0-1000-72e3-5310f499e192",
+        "t1__add_field": "4811c24f-01a0-1000-4c68-e4aa873052da",
+        "t2__add_field": "4811c2bc-01a0-1000-340b-f1f1b1e25cac",
+        "t3__add_field": "4811c2f9-01a0-1000-e679-65f9f1b4aec1",
+        "t4__add_field": "4811c365-01a0-1000-c67f-3c897bbab503",
+        "t5__add_field": "4811c3a0-01a0-1000-77a1-81a4c22a9c00",
+        "t6__add_field": "4811c3f2-01a0-1000-26e1-fcb1eb2b275d",
+        "t7__add_field": "4811c428-01a0-1000-6830-f784cf6d8514",
+        "t8__add_field": "4811c466-01a0-1000-6f52-24f44a401b1f",
+        "t9__add_field": "4811c4a1-01a0-1000-cff8-92bb22ebdf1a",
+        "t10__add_field": "4811c4dc-01a0-1000-8d3e-922e3a6080e0",
+        "dedupe__hash": "4811c551-01a0-1000-3ca9-294015aa5090",
+        "dedupe__detect": "4811c5c0-01a0-1000-9c4e-7c789164e99f",
+        "publish": "4811c5fe-01a0-1000-2a90-22db3a6820d5",
+        "dlq__meta": "4811c659-01a0-1000-d9e5-69dc98756f48",
+        "dlq__publish": "4811c6a6-01a0-1000-5ab3-ebade18367fe",
+        "inputPort": "4812154e-01a0-1000-70f7-076d478bd93f"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.device__raw"
+      ]
+    },
+    "b-interface": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_interface__http",
+      "processGroupId": "48107b05-01a0-1000-3cd3-4074849fd846",
+      "components": {
+        "cs_xml_reader": "4810c51f-01a0-1000-cb2f-40d14499c12e",
+        "cs_json_reader": "4810c562-01a0-1000-0f79-d485f3ba9989",
+        "cs_json_writer": "4810c5a2-01a0-1000-e67e-c838176be483",
+        "cs_kafka_conn": "4810c5df-01a0-1000-7bf8-b5d44e15faf4",
+        "extract_path_fields__check_0": "4811c6e6-01a0-1000-73bd-9d4d4865754d",
+        "extract_path_fields__extract_0": "4811c72a-01a0-1000-b6b1-a001770d5902",
+        "extract_path_fields__merge_0": "4811c7a4-01a0-1000-0803-0e5a0e99b0a2",
+        "extract_path_fields__check_1": "4811c7df-01a0-1000-cb80-22c6bb31c1ed",
+        "extract_path_fields__extract_1": "4811c831-01a0-1000-20a0-908c3110f480",
+        "extract_path_fields__merge_1": "4811c86a-01a0-1000-b664-a051c26999b1",
+        "init": "4811c8be-01a0-1000-74a5-7f2b879195f5",
+        "fetch": "4811c8f8-01a0-1000-030f-8efd7d43f608",
+        "convert": "4811c936-01a0-1000-b74d-56df702ee73d",
+        "split": "4811c970-01a0-1000-3ada-df4e992ae6a4",
+        "t0__extract": "4811c9aa-01a0-1000-675a-52a81576fe0d",
+        "dlq__meta": "4811ca0b-01a0-1000-cad1-ff2f4f98b8b8",
+        "dlq__publish": "4811ca7b-01a0-1000-6d5e-0fe79b36fd21",
+        "inputPort": "48121597-01a0-1000-2799-8a433f0da680",
+        "outputPort:b-interface-write": "481215d6-01a0-1000-248e-009e3f677402"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-interface-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_interface_write__kafka",
+      "processGroupId": "48107bd3-01a0-1000-4e26-dffe10d0d39f",
+      "components": {
+        "cs_json_reader": "4810d38c-01a0-1000-452d-18946dcf141f",
+        "cs_json_writer": "4810d3ce-01a0-1000-190c-e9fed45bc62a",
+        "cs_redis_pool": "4810d411-01a0-1000-dce4-6182885b0bb1",
+        "cs_redis_cache": "4810d452-01a0-1000-27c6-b16520e037e7",
+        "cs_kafka_conn": "4810d492-01a0-1000-65de-b5054285f3eb",
+        "t0__add_field": "4811cab6-01a0-1000-b14a-2109d58ba830",
+        "t1__add_field": "4811cb1d-01a0-1000-372f-aa40ef953ede",
+        "t2__add_field": "4811cb5b-01a0-1000-3271-2cf9117237fe",
+        "t3__add_field": "4811cb93-01a0-1000-e499-816588994512",
+        "t4__add_field": "4811cbcb-01a0-1000-2a19-b08222c8e4fa",
+        "t5__add_field": "4811cc09-01a0-1000-cf72-90e03f05f28b",
+        "t6__add_field": "4811cc6f-01a0-1000-8d41-0e0faf56e5f8",
+        "t7__add_field": "4811cce2-01a0-1000-6c0e-c4e7ef5d06b7",
+        "t8__add_field": "4811cd1c-01a0-1000-54be-42c1f16f4a93",
+        "t9__add_field": "4811cd7f-01a0-1000-98f1-09ffd8032d14",
+        "t10__add_field": "4811cdba-01a0-1000-1322-30bfbab2dcf7",
+        "dedupe__hash": "4811cdf9-01a0-1000-99fc-05a0df50fea5",
+        "dedupe__detect": "4811ce69-01a0-1000-9820-2a800842fd78",
+        "publish": "4811ced6-01a0-1000-f784-e84d66880fc7",
+        "dlq__meta": "4811cf14-01a0-1000-a4ef-498677ac7f16",
+        "dlq__publish": "4811cf64-01a0-1000-d34b-f6a9615827a4",
+        "inputPort": "48121618-01a0-1000-3370-b9d5953810fa"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.interface__raw"
+      ]
+    },
+    "b-processor": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_processor__http",
+      "processGroupId": "48107c9e-01a0-1000-b90c-56c6087e14a9",
+      "components": {
+        "cs_xml_reader": "4810e35f-01a0-1000-5eee-a4c9def4e406",
+        "cs_json_reader": "4810e3a2-01a0-1000-00a2-eaaea87549af",
+        "cs_json_writer": "4810e3e3-01a0-1000-10fb-c11e737ea650",
+        "cs_kafka_conn": "4810e422-01a0-1000-b1de-2c8a31acd6a8",
+        "extract_path_fields__check_0": "4811cfa1-01a0-1000-ed84-5189b969aea5",
+        "extract_path_fields__extract_0": "4811cff4-01a0-1000-ac8f-15ca067f911c",
+        "extract_path_fields__merge_0": "4811d02d-01a0-1000-a438-97b7579c4a00",
+        "extract_path_fields__check_1": "4811d074-01a0-1000-de1c-ab153a33968f",
+        "extract_path_fields__extract_1": "4811d13d-01a0-1000-b5bd-42128b0956e5",
+        "extract_path_fields__merge_1": "4811d17c-01a0-1000-357e-103254f5ad8b",
+        "init": "4811d1ca-01a0-1000-7983-b3f9271b687c",
+        "fetch": "4811d208-01a0-1000-0164-a090dc47d53b",
+        "convert": "4811d25a-01a0-1000-9af0-825024da8573",
+        "split": "4811d292-01a0-1000-c2d3-7ef47b9b5d7e",
+        "t0__extract": "4811d2d0-01a0-1000-6c5e-8ce4ffeebb9d",
+        "dlq__meta": "4811d312-01a0-1000-4379-eab37298ec33",
+        "dlq__publish": "4811d350-01a0-1000-886c-009fd37c4f5d",
+        "inputPort": "4812165b-01a0-1000-4d3a-1f3a7bec2833",
+        "outputPort:b-processor-write": "48121699-01a0-1000-0730-8bab480e4963"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-processor-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_processor_write__kafka",
+      "processGroupId": "48107d58-01a0-1000-0252-313b9f33ccbc",
+      "components": {
+        "cs_json_reader": "4810f1db-01a0-1000-fd1e-1c6f84b30af3",
+        "cs_json_writer": "4810f21c-01a0-1000-25ce-319d966d4fe0",
+        "cs_redis_pool": "4810f25d-01a0-1000-36e3-753faf3c5bd3",
+        "cs_redis_cache": "4810f29a-01a0-1000-766d-b1e0e9dee16d",
+        "cs_kafka_conn": "4810f2e0-01a0-1000-6ac3-aa7325ce3a08",
+        "t0__add_field": "4811d3a4-01a0-1000-fa23-2d95ba28caaa",
+        "t1__add_field": "4811d3da-01a0-1000-8dde-ef86c7eea7ca",
+        "t2__add_field": "4811d42d-01a0-1000-1624-389608222fa7",
+        "t3__add_field": "4811d466-01a0-1000-4eb5-88eaa8f52fc2",
+        "t4__add_field": "4811d4c0-01a0-1000-5f4c-9e5d6c2f69b4",
+        "t5__add_field": "4811d4fa-01a0-1000-31eb-d89ebd48af13",
+        "t6__add_field": "4811d537-01a0-1000-8152-004f4ae25ed3",
+        "t7__add_field": "4811d571-01a0-1000-ee72-acb2ea76ffe6",
+        "t8__add_field": "4811d5ab-01a0-1000-b766-7a82b0237e78",
+        "t9__add_field": "4811d60b-01a0-1000-3e91-fa8238c6c9b4",
+        "t10__add_field": "4811d646-01a0-1000-7379-92f477e47e3d",
+        "dedupe__hash": "4811d698-01a0-1000-28fd-f9f67ce0e185",
+        "dedupe__detect": "4811d72a-01a0-1000-5b2b-6e6dcbd9e5e8",
+        "publish": "4811d7f7-01a0-1000-d731-7419b6a9f312",
+        "dlq__meta": "4811d865-01a0-1000-c98b-38baaa63abc2",
+        "dlq__publish": "4811d8a3-01a0-1000-92de-9651231c68dc",
+        "inputPort": "481216db-01a0-1000-0497-d7fb875f8f8d"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.processor__raw"
+      ]
+    },
+    "b-storage": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_storage__http",
+      "processGroupId": "48107e1a-01a0-1000-9667-bcb803655807",
+      "components": {
+        "cs_xml_reader": "481101b9-01a0-1000-89d3-50e5b7b7b6d6",
+        "cs_json_reader": "481101f6-01a0-1000-2ee3-e328100ddd1f",
+        "cs_json_writer": "48110232-01a0-1000-28c0-abf32569505b",
+        "cs_kafka_conn": "48110275-01a0-1000-78ac-58192126f209",
+        "extract_path_fields__check_0": "4811d8fe-01a0-1000-f278-e3f541d4b921",
+        "extract_path_fields__extract_0": "4811d941-01a0-1000-f7b7-694bd1919f15",
+        "extract_path_fields__merge_0": "4811d990-01a0-1000-c131-b3dd2914ed6c",
+        "extract_path_fields__check_1": "4811d9d4-01a0-1000-9fdb-af22503f8449",
+        "extract_path_fields__extract_1": "4811da11-01a0-1000-d235-4bee1fa71197",
+        "extract_path_fields__merge_1": "4811da4d-01a0-1000-61a6-32918fb8b83b",
+        "init": "4811dc2d-01a0-1000-6cce-b2aa7c70e2c1",
+        "fetch": "4811dc77-01a0-1000-1e2b-d08d1f6f779e",
+        "convert": "4811dcde-01a0-1000-0983-4b0db96ac9ff",
+        "split": "4811dd20-01a0-1000-a6c0-03aa1803edee",
+        "t0__extract": "4811dd7d-01a0-1000-95ca-b24707bdbca7",
+        "dlq__meta": "4811ddde-01a0-1000-5e89-82d1602918a2",
+        "dlq__publish": "4811de1a-01a0-1000-3c90-3026b2e9ef17",
+        "inputPort": "48121719-01a0-1000-ba6c-dd513d09509b",
+        "outputPort:b-storage-write": "4812175d-01a0-1000-e606-1ee862748125"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-storage-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_storage_write__kafka",
+      "processGroupId": "48107f33-01a0-1000-a1d8-de83d2b270a2",
+      "components": {
+        "cs_json_reader": "48110fc1-01a0-1000-254b-06e70017b44e",
+        "cs_json_writer": "48110ffd-01a0-1000-77d8-4440fdfd408a",
+        "cs_redis_pool": "48111041-01a0-1000-fd43-e794a427000e",
+        "cs_redis_cache": "4811107e-01a0-1000-faee-a552b94d10e8",
+        "cs_kafka_conn": "481110d4-01a0-1000-ffc0-57bd62b885f9",
+        "t0__add_field": "4811de7a-01a0-1000-9056-86edc0079ca8",
+        "t1__add_field": "4811deb5-01a0-1000-cc90-2cd4f7c8ff74",
+        "t2__add_field": "4811def1-01a0-1000-1d31-4fa950eacf09",
+        "t3__add_field": "4811df2b-01a0-1000-0814-780f240d86f5",
+        "t4__add_field": "4811df68-01a0-1000-b30f-2c8a38f22f3d",
+        "t5__add_field": "4811dfa8-01a0-1000-85e6-61474b676e18",
+        "t6__add_field": "4811dfe3-01a0-1000-1ff7-43dd62611f94",
+        "t7__add_field": "4811e01f-01a0-1000-5796-39a2999e8cb8",
+        "t8__add_field": "4811e05a-01a0-1000-b0fd-1960883eaa2d",
+        "t9__add_field": "4811e097-01a0-1000-2545-f98c2d69a7bb",
+        "t10__add_field": "4811e0d6-01a0-1000-0174-d89bbb0f4aab",
+        "dedupe__hash": "4811e110-01a0-1000-f4b5-caf5418a2b40",
+        "dedupe__detect": "4811e183-01a0-1000-b945-421945f4a0d5",
+        "publish": "4811e1d1-01a0-1000-bbba-0db15515a792",
+        "dlq__meta": "4811e20f-01a0-1000-1ff1-846b42d60e11",
+        "dlq__publish": "4811e24c-01a0-1000-5a6b-537917f9f954",
+        "inputPort": "481217c9-01a0-1000-47a6-c7246a8c6dc8"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.storage__raw"
+      ]
+    },
+    "b-installed-software": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_installed_software__http",
+      "processGroupId": "48108019-01a0-1000-8678-0a6f65f5afea",
+      "components": {
+        "cs_xml_reader": "48111f8c-01a0-1000-0ecc-913a2d106c51",
+        "cs_json_reader": "48111fcd-01a0-1000-5938-a57149149792",
+        "cs_json_writer": "4811200b-01a0-1000-88db-1cd95e8807ee",
+        "cs_kafka_conn": "4811204e-01a0-1000-7bb8-e843aaf31830",
+        "extract_path_fields__check_0": "4811e299-01a0-1000-ef6d-99a472837503",
+        "extract_path_fields__extract_0": "4811e2dd-01a0-1000-babd-d56d9f23f292",
+        "extract_path_fields__merge_0": "4811e317-01a0-1000-39a6-0a8d6b935b10",
+        "extract_path_fields__check_1": "4811e379-01a0-1000-f8fa-1bb2eb5834e5",
+        "extract_path_fields__extract_1": "4811e3b8-01a0-1000-bd30-03ab18e86de5",
+        "extract_path_fields__merge_1": "4811e3f3-01a0-1000-4c7b-57a2cbe5590d",
+        "init": "4811e434-01a0-1000-509f-763f8798842c",
+        "fetch": "4811e470-01a0-1000-34e5-f9591be4ef4e",
+        "convert": "4811e4b2-01a0-1000-c2a3-d0c061af7d79",
+        "split": "4811e4e8-01a0-1000-677e-505a38106e5e",
+        "t0__extract": "4811e52c-01a0-1000-e76d-4de66b8f8869",
+        "dlq__meta": "4811e56f-01a0-1000-8ed0-16bbd4716265",
+        "dlq__publish": "4811e5a9-01a0-1000-b347-60bc07ccc7c9",
+        "inputPort": "4812180d-01a0-1000-10af-ab11fa727b01",
+        "outputPort:b-installed-software-write": "48121857-01a0-1000-f3f8-bedf5a92936f"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-installed-software-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_installed_software_write__kafka",
+      "processGroupId": "481080ec-01a0-1000-cc03-26ed6a617ae8",
+      "components": {
+        "cs_json_reader": "48112dc6-01a0-1000-2ba8-2d2da223bc8a",
+        "cs_json_writer": "48112e24-01a0-1000-efb3-2e1e9986c310",
+        "cs_redis_pool": "48112e6a-01a0-1000-23cd-77df5521d42a",
+        "cs_redis_cache": "48112ea9-01a0-1000-6246-322dd549f46c",
+        "cs_kafka_conn": "48112ee5-01a0-1000-afc3-97ed1cec6036",
+        "t0__add_field": "4811e5ed-01a0-1000-75be-1f4047db5421",
+        "t1__add_field": "4811e627-01a0-1000-7d8e-cd6cb47050ea",
+        "t2__add_field": "4811e664-01a0-1000-78f7-b7013bfcef7f",
+        "t3__add_field": "4811e69d-01a0-1000-e248-167dffda1a7a",
+        "t4__add_field": "4811e6d9-01a0-1000-436a-ef57c5647fcd",
+        "t5__add_field": "4811e715-01a0-1000-f388-d265f3b5b159",
+        "t6__add_field": "4811e74d-01a0-1000-5f10-51707914eefb",
+        "t7__add_field": "4811e788-01a0-1000-9a05-f1f6268f3016",
+        "t8__add_field": "4811e7c3-01a0-1000-fc55-733750f3a05e",
+        "t9__add_field": "4811e7fa-01a0-1000-03a1-953be91d6fb7",
+        "t10__add_field": "4811e831-01a0-1000-9b55-22fc995d6549",
+        "dedupe__hash": "4811e874-01a0-1000-3c53-7822f9746c12",
+        "dedupe__detect": "4811e8e1-01a0-1000-9afd-45ce48086d62",
+        "publish": "4811e921-01a0-1000-143e-c8c19d4989bd",
+        "dlq__meta": "4811e95c-01a0-1000-754e-e47f26affebf",
+        "dlq__publish": "4811e999-01a0-1000-7b61-420526918970",
+        "inputPort": "481218a5-01a0-1000-b24a-e662d0c641f8"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.installed_software__raw"
+      ]
+    },
+    "b-software-service": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_software_service__http",
+      "processGroupId": "481081b0-01a0-1000-b65a-3bcfa3905a44",
+      "components": {
+        "cs_xml_reader": "48113dd8-01a0-1000-14e6-17dc9a12530d",
+        "cs_json_reader": "48113e32-01a0-1000-e2c8-c83722db16ed",
+        "cs_json_writer": "48113e75-01a0-1000-4471-c2bd5cf3b286",
+        "cs_kafka_conn": "48113eb2-01a0-1000-52a0-68fb7e504fd0",
+        "extract_path_fields__check_0": "4811e9d4-01a0-1000-7571-2e81415ff4be",
+        "extract_path_fields__extract_0": "4811eace-01a0-1000-8d3b-a71ae45351eb",
+        "extract_path_fields__merge_0": "4811eb06-01a0-1000-ac86-94f2dd660802",
+        "extract_path_fields__check_1": "4811eb6b-01a0-1000-0a27-8b76a610af46",
+        "extract_path_fields__extract_1": "4811eba9-01a0-1000-a483-7b2c875cab1b",
+        "extract_path_fields__merge_1": "4811ebe1-01a0-1000-8c8e-5be2909e8fba",
+        "init": "4811ec1a-01a0-1000-0c30-11dbc0d7363e",
+        "fetch": "4811ec55-01a0-1000-b405-03b24537a659",
+        "convert": "4811ec91-01a0-1000-9a9a-356bdb242105",
+        "split": "4811ecd4-01a0-1000-dea3-d582de335d8d",
+        "t0__extract": "4811ed11-01a0-1000-2b1a-782022bdddc4",
+        "dlq__meta": "4811ed77-01a0-1000-5b48-141a705bc10c",
+        "dlq__publish": "4811edb1-01a0-1000-c508-10ea81e1c958",
+        "inputPort": "481218e8-01a0-1000-e95e-bfc53e7e5b35",
+        "outputPort:b-software-service-write": "4812196b-01a0-1000-8ca6-e6889ab5e7a7"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-software-service-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_software_service_write__kafka",
+      "processGroupId": "48108270-01a0-1000-06d8-ff4b7aa9ff7e",
+      "components": {
+        "cs_json_reader": "48114c7f-01a0-1000-84d4-50387c087331",
+        "cs_json_writer": "48114cc6-01a0-1000-48d0-4e3bff878e76",
+        "cs_redis_pool": "48114d0a-01a0-1000-5c6c-d53c88a64165",
+        "cs_redis_cache": "48114d4b-01a0-1000-c2c4-6a8c3c11d2d4",
+        "cs_kafka_conn": "48114d8a-01a0-1000-d935-8611733a4ce1",
+        "t0__add_field": "4811edf9-01a0-1000-b2e3-1899df2d331b",
+        "t1__add_field": "4811ee33-01a0-1000-33c2-1f05a8b69dd3",
+        "t2__add_field": "4811ee7c-01a0-1000-c375-11710ce27ffc",
+        "t3__add_field": "4811eedf-01a0-1000-df33-59dc0047ddfd",
+        "t4__add_field": "4811ef1f-01a0-1000-fc4c-92ece0aae4e6",
+        "t5__add_field": "4811ef5e-01a0-1000-2b03-2c20c1572629",
+        "t6__add_field": "4811ef9a-01a0-1000-7c54-6ef549a6a3b8",
+        "t7__add_field": "4811efda-01a0-1000-eda2-7871e5e35a38",
+        "t8__add_field": "4811f013-01a0-1000-ba43-052c7857d921",
+        "t9__add_field": "4811f04d-01a0-1000-e75b-0175cc8a8c33",
+        "t10__add_field": "4811f085-01a0-1000-7ece-78f3d5f6312a",
+        "dedupe__hash": "4811f0be-01a0-1000-54aa-5212dab56604",
+        "dedupe__detect": "4811f129-01a0-1000-dca1-7d13ea3e3b79",
+        "publish": "4811f163-01a0-1000-80da-81ac28b0e898",
+        "dlq__meta": "4811f1a2-01a0-1000-6441-ebe90571c057",
+        "dlq__publish": "4811f1dc-01a0-1000-56c9-13fce3c82e3a",
+        "inputPort": "481219ae-01a0-1000-20a0-a43c53bf1641"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.software_service__raw"
+      ]
+    },
+    "b-software-patch": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_software_patch__http",
+      "processGroupId": "48108335-01a0-1000-63dc-f250323ac19a",
+      "components": {
+        "cs_xml_reader": "48115c47-01a0-1000-ca8c-20780e1c2b98",
+        "cs_json_reader": "48115c85-01a0-1000-6556-48981373ba16",
+        "cs_json_writer": "48115cc8-01a0-1000-402d-53b49647dda2",
+        "cs_kafka_conn": "48115d04-01a0-1000-7462-9848294ba115",
+        "extract_path_fields__check_0": "4811f229-01a0-1000-f3c2-0343121e953e",
+        "extract_path_fields__extract_0": "4811f34e-01a0-1000-80d5-5dedaa8ee9a7",
+        "extract_path_fields__merge_0": "4811f391-01a0-1000-eec7-781224628fda",
+        "extract_path_fields__check_1": "4811f3cd-01a0-1000-63fb-39f627dc9a14",
+        "extract_path_fields__extract_1": "4811f40c-01a0-1000-24bc-83617fb33116",
+        "extract_path_fields__merge_1": "4811f497-01a0-1000-acf9-e2cea69b8a56",
+        "init": "4811f531-01a0-1000-3eaf-5db81942c909",
+        "fetch": "4811f572-01a0-1000-7a42-3faf4531d8bc",
+        "convert": "4811f5b6-01a0-1000-a36d-6856755cf253",
+        "split": "4811f5f2-01a0-1000-3198-0b2966925701",
+        "t0__extract": "4811f631-01a0-1000-68d5-be51c2b1a594",
+        "dlq__meta": "4811f66a-01a0-1000-8071-c509bc74075d",
+        "dlq__publish": "4811f6ba-01a0-1000-eb77-a290b6c2138f",
+        "inputPort": "481219f2-01a0-1000-a48b-ceeeac2997ee",
+        "outputPort:b-software-patch-write": "48121a35-01a0-1000-7842-916edf433d8c"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-software-patch-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_software_patch_write__kafka",
+      "processGroupId": "481083fd-01a0-1000-6084-b4ffd47fe886",
+      "components": {
+        "cs_json_reader": "48116abc-01a0-1000-ab5e-304f1ff5be04",
+        "cs_json_writer": "48116afd-01a0-1000-18c8-e6c1c2994202",
+        "cs_redis_pool": "48116b3c-01a0-1000-25ae-cf5bf1c47f7e",
+        "cs_redis_cache": "48116b7a-01a0-1000-57f4-79adc16a9c94",
+        "cs_kafka_conn": "48116bba-01a0-1000-d1e2-f439b34f1e3e",
+        "t0__add_field": "4811f6f7-01a0-1000-7d94-ad1d68573bf1",
+        "t1__add_field": "4811f736-01a0-1000-e7b1-d53ded9fb5e3",
+        "t2__add_field": "4811f7bd-01a0-1000-69cf-0aea4bddb8e0",
+        "t3__add_field": "4811f7f6-01a0-1000-a170-1e69d26c9b75",
+        "t4__add_field": "4811f838-01a0-1000-d47b-a800b95abcc7",
+        "t5__add_field": "4811f87a-01a0-1000-e6c7-ad638aa06eae",
+        "t6__add_field": "4811f8f9-01a0-1000-8a55-82604d2050a3",
+        "t7__add_field": "4811f941-01a0-1000-0e39-c8eba0b2635f",
+        "t8__add_field": "4811f989-01a0-1000-09ae-508a953dab6a",
+        "t9__add_field": "4811fa01-01a0-1000-5064-730f28277aa0",
+        "t10__add_field": "4811fa3d-01a0-1000-9ec8-c8540756c86d",
+        "dedupe__hash": "4811fb33-01a0-1000-ac82-de8b1066fb06",
+        "dedupe__detect": "4811fba5-01a0-1000-a70e-3d49e6916e43",
+        "publish": "4811fbe4-01a0-1000-0084-7d18360a84b2",
+        "dlq__meta": "4811fc31-01a0-1000-f00f-933775c1b636",
+        "dlq__publish": "4811fc71-01a0-1000-b0af-52215affd5a9",
+        "inputPort": "48121a7b-01a0-1000-4185-b7dc7beb496a"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.software_patch__raw"
+      ]
+    },
+    "b-device-custom-property": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_device_custom_property__http",
+      "processGroupId": "481084bf-01a0-1000-1c1d-29fa523005c3",
+      "components": {
+        "cs_xml_reader": "48117a76-01a0-1000-622b-49a875f51102",
+        "cs_json_reader": "48117aba-01a0-1000-d559-9e53c6396c07",
+        "cs_json_writer": "48117af7-01a0-1000-0ce6-3ced36dc93ce",
+        "cs_kafka_conn": "48117b3c-01a0-1000-a3fb-05189ca0565c",
+        "extract_path_fields__check_0": "4811fcae-01a0-1000-7976-db30ce201abc",
+        "extract_path_fields__extract_0": "4811fd02-01a0-1000-73a5-bddcd3f44a51",
+        "extract_path_fields__merge_0": "4811fe5e-01a0-1000-ae5b-1dda83b13a37",
+        "extract_path_fields__check_1": "4811feb8-01a0-1000-6998-7953185c2299",
+        "extract_path_fields__extract_1": "4811ff03-01a0-1000-67ff-31e9ce95850d",
+        "extract_path_fields__merge_1": "4811ff3e-01a0-1000-a6cb-dbdc1b1167dd",
+        "init": "4811ff82-01a0-1000-f7d8-7b4c1fa9cd5d",
+        "fetch": "4811ffc0-01a0-1000-6fb3-7c1819c45026",
+        "convert": "48120002-01a0-1000-9def-1a2ce49ccc87",
+        "split": "48120049-01a0-1000-1f25-b757ca3ad7b1",
+        "t0__extract": "4812008c-01a0-1000-fc38-9b532168e43a",
+        "dlq__meta": "481200d1-01a0-1000-c452-3f2debb6b896",
+        "dlq__publish": "48120112-01a0-1000-7b35-52329cb01dc8",
+        "inputPort": "48121abd-01a0-1000-6e64-e6810f18353f",
+        "outputPort:b-device-custom-property-write": "48121b5a-01a0-1000-5437-d2ac9c6947fc"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-device-custom-property-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_device_custom_property_write__kafka",
+      "processGroupId": "4810857e-01a0-1000-143e-f34da4a3a43b",
+      "components": {
+        "cs_json_reader": "481188be-01a0-1000-738b-1c501ce19311",
+        "cs_json_writer": "481188ff-01a0-1000-66ea-230ca547e357",
+        "cs_redis_pool": "48118943-01a0-1000-4ed1-d963a95eca0c",
+        "cs_redis_cache": "48118982-01a0-1000-39dd-b3f57aba14fd",
+        "cs_kafka_conn": "481189be-01a0-1000-eef3-3a8c68620a25",
+        "t0__add_field": "48120158-01a0-1000-362a-d47b223ea71a",
+        "t1__add_field": "4812019e-01a0-1000-e88c-05e55a2bb3f0",
+        "t2__add_field": "481201e9-01a0-1000-d045-4d64f7c532d9",
+        "t3__add_field": "48120227-01a0-1000-257c-d216029b2d2e",
+        "t4__add_field": "481202c1-01a0-1000-fa90-ca5daa648fbf",
+        "t5__add_field": "48120309-01a0-1000-f9d2-434f463e25f1",
+        "t6__add_field": "48120341-01a0-1000-b201-d46ece3e929a",
+        "t7__add_field": "4812037f-01a0-1000-0990-17793284cd00",
+        "t8__add_field": "481203b9-01a0-1000-5405-980c3bff6838",
+        "t9__add_field": "481203f5-01a0-1000-6504-6d72820534e2",
+        "t10__add_field": "4812042f-01a0-1000-ba37-0b1b46fe93f6",
+        "dedupe__hash": "48120470-01a0-1000-89ae-2b627e206ed2",
+        "dedupe__detect": "481204e4-01a0-1000-3c8c-3073fdc66c86",
+        "publish": "4812061b-01a0-1000-ce64-9ecef3d5fbb9",
+        "dlq__meta": "48120664-01a0-1000-5655-ad405bbf1fbf",
+        "dlq__publish": "481206a2-01a0-1000-2084-18884604d398",
+        "inputPort": "48121b98-01a0-1000-9d0e-3daeab32ea47"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.device_custom_property__raw"
+      ]
+    },
+    "b-device-business-service-membership": {
+      "adapter": "http",
+      "engine": "nifi",
+      "groupName": "b_device_business_service_membership__http",
+      "processGroupId": "4810863c-01a0-1000-c522-1f905a1709ec",
+      "components": {
+        "cs_xml_reader": "481198d5-01a0-1000-19d2-aa0ec390e683",
+        "cs_json_reader": "48119912-01a0-1000-42b9-918dcab2e3b6",
+        "cs_json_writer": "48119950-01a0-1000-83e4-d220529e144b",
+        "cs_kafka_conn": "48119990-01a0-1000-8f02-b0592a596d57",
+        "extract_path_fields__check_0": "481206ed-01a0-1000-cbe0-91c43523f61c",
+        "extract_path_fields__extract_0": "48120750-01a0-1000-80f1-9e6b2747b77c",
+        "extract_path_fields__merge_0": "481207b5-01a0-1000-bde9-f715464ec47c",
+        "extract_path_fields__check_1": "48120819-01a0-1000-9b18-f86baf310045",
+        "extract_path_fields__extract_1": "48120881-01a0-1000-e212-a3ea97b565e2",
+        "extract_path_fields__merge_1": "481208e3-01a0-1000-f26e-9c11befcd616",
+        "init": "48120946-01a0-1000-8763-f480de608d3f",
+        "fetch": "48120989-01a0-1000-3e22-452a32628b88",
+        "convert": "48120a3f-01a0-1000-a3c6-69e4fddd8c52",
+        "split": "48120a7c-01a0-1000-e064-b3163dba971c",
+        "t0__extract": "48120aed-01a0-1000-0f4f-bb84c8861e6c",
+        "dlq__meta": "48120b32-01a0-1000-5084-9d6c338228ba",
+        "dlq__publish": "48120b73-01a0-1000-d65a-aad0d40957b7",
+        "inputPort": "48121c02-01a0-1000-4814-5579413c907a",
+        "outputPort:b-device-business-service-membership-write": "48121c40-01a0-1000-88d1-9a5788e71b3c"
+      },
+      "connectorNames": [],
+      "topics": []
+    },
+    "b-device-business-service-membership-write": {
+      "adapter": "kafka",
+      "engine": "nifi",
+      "groupName": "b_device_business_service_membership_write__kafka",
+      "processGroupId": "48108703-01a0-1000-e53f-5607d07f3771",
+      "components": {
+        "cs_json_reader": "4811a6e8-01a0-1000-52ae-c9de9f96eb9f",
+        "cs_json_writer": "4811a72c-01a0-1000-e983-f0b65b7ed0b2",
+        "cs_redis_pool": "4811a769-01a0-1000-53c5-c46723c932dc",
+        "cs_redis_cache": "4811a7a7-01a0-1000-14a5-09c76dd66ca6",
+        "cs_kafka_conn": "4811a7eb-01a0-1000-4661-2b449fe957e0",
+        "t0__add_field": "48120bb2-01a0-1000-76a0-b7dac6fd4a13",
+        "t1__add_field": "48120bee-01a0-1000-c40f-3dde1d30363f",
+        "t2__add_field": "48120c2a-01a0-1000-adec-54c6bca08d79",
+        "t3__add_field": "48120c64-01a0-1000-c2b0-2c33d698a167",
+        "t4__add_field": "48120cda-01a0-1000-4b2c-f2e4da5c2d55",
+        "t5__add_field": "48120d18-01a0-1000-20a9-29a8592e34f5",
+        "t6__add_field": "48120d62-01a0-1000-1351-6cc28d71b377",
+        "t7__add_field": "48120db0-01a0-1000-4767-c47f123dd7ef",
+        "t8__add_field": "48120df0-01a0-1000-bffd-f93c4be10a2e",
+        "t9__add_field": "48120e2c-01a0-1000-3835-2dcfd33c680d",
+        "t10__add_field": "48120e67-01a0-1000-ffc4-c3e4995c5592",
+        "dedupe__hash": "48120ea2-01a0-1000-26db-709457f33ca8",
+        "dedupe__detect": "48120fe5-01a0-1000-9e73-c620e5aba03f",
+        "publish": "48121020-01a0-1000-729d-2ae646cc103b",
+        "dlq__meta": "4812105d-01a0-1000-a711-b5b8d63e8404",
+        "dlq__publish": "4812109a-01a0-1000-8e7d-32beffca9cc2",
+        "inputPort": "48121c83-01a0-1000-8481-836143248e10"
+      },
+      "connectorNames": [],
+      "topics": [
+        "bronze.fortisiem.device_business_service_membership__raw"
+      ]
+    }
+  },
+  "nifiProcessGroupId": "481076f8-01a0-1000-ff43-bd4125ecf164",
+  "provenance": {
+    "kafka": {
+      "connectionId": "conn-5zledb"
+    },
+    "nifi": {
+      "connectionId": "conn-qa5isw",
+      "fingerprint": "657f40bd-019f-1000-4c4a-836ec84833cb"
+    },
+    "kafka_connect": {
+      "connectionId": "conn-7jvsut",
+      "fingerprint": "5L6g3nShT-eMCtK--X86sw"
+    },
+    "dedupConfigHashes": {
+      "b-org-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-device-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-interface-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-processor-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-storage-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-installed-software-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-software-service-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-software-patch-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-device-custom-property-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57",
+      "b-device-business-service-membership-write": "d1d3be68f44f01cbf6c900f16df9d6b37375f921c5e749f80fc5bd37734a1c57"
+    }
+  }
+}
