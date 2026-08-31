@@ -75,6 +75,40 @@ def make_flow(blocks=None, topics=None, name="Test Flow", **over) -> Flow:
     return Flow(**defaults)
 
 
+def test_incremental_jdbc_requires_a_watermark_column():
+    block = make_block(
+        id="jdbc-read",
+        adapter="jdbc",
+        mode="read",
+        name="Read table",
+        serviceId="db",
+        config={"table": "assets", "incremental": True},
+    )
+    service = AppService(id="db", type="database", name="Database", config={"dialect": "postgresql"})
+    messages = [issue.message for issue in validation.validate_block(make_flow([block]), block, [service], [])]
+    assert "Incremental reads require a watermark column." in messages
+
+
+def test_incremental_jdbc_accepts_watermark_and_optional_tie_breaker():
+    block = make_block(
+        id="jdbc-read",
+        adapter="jdbc",
+        mode="read",
+        name="Read table",
+        serviceId="db",
+        config={
+            "table": "assets",
+            "incremental": True,
+            "watermarkColumn": "updated_at",
+            "bookmarkTieBreaker": "id",
+            "initialPosition": "oldest",
+        },
+    )
+    service = AppService(id="db", type="database", name="Database", config={"dialect": "postgresql"})
+    messages = [issue.message for issue in validation.validate_block(make_flow([block]), block, [service], [])]
+    assert not any("watermark" in message.lower() or "initial position" in message.lower() for message in messages)
+
+
 # ==========================================================================
 # naming.py
 # ==========================================================================

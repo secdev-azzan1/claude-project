@@ -324,7 +324,20 @@ export function validateBlock(
     for (const refusal of gatewayRefusals(block, gateway, services)) at(refusal);
     for (const refusal of paginationRefusals(block)) at(refusal);
   }
-  if (block.adapter === "jdbc" && !(block.config.table as string)) at("Pick a table.");
+  if (block.adapter === "jdbc") {
+    if (!(block.config.table as string)) at("Pick a table.");
+    if (block.mode === "read" && block.config.incremental === true) {
+      const watermark = String(block.config.watermarkColumn ?? "").trim();
+      if (!watermark) at("Incremental reads require a watermark column.");
+      else if (!/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$/.test(watermark))
+        at("Watermark column must be a simple SQL identifier.");
+      const initialPosition = String(block.config.initialPosition ?? "oldest").trim().toLowerCase();
+      if (initialPosition !== "oldest" && initialPosition !== "new") at("Initial position must be either oldest or new.");
+      const tieBreaker = String(block.config.bookmarkTieBreaker ?? "").trim();
+      if (tieBreaker && !/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$/.test(tieBreaker))
+        at("Bookmark tie-breaker must be a simple SQL identifier.");
+    }
+  }
   if (block.adapter === "kafka" && block.mode === "read" && !block.parentId && !(block.config.topicName as string))
     at("Pick a topic to consume.");
   // The override is legal on the whole kafka family (R7), so the collision

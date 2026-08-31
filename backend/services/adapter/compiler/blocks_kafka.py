@@ -39,6 +39,7 @@ from services.adapter.naming import derive_topic_name
 
 from .dlq import ensure_kafka_connection_cs
 from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, TopicSpec, ensure_json_record_services
+from .jdbc_bookmarks import BookmarkSource, attach_bookmark_commit
 from .transforms import Tail
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -136,7 +137,8 @@ def compile_publish(
     add_param,
     topics_out,
     tail: Tail,
-) -> None:
+    bookmark_source: Optional[BookmarkSource] = None,
+) -> Optional[Tail]:
     if block.mode == "read":
         _compile_read_terminal(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
                                add_param=add_param, tail=tail)
@@ -172,10 +174,21 @@ def compile_publish(
     tail_key, tail_rel = tail
     builder.add_processor(
         ProcessorSpec(key="publish", name="publish", type="org.apache.nifi.kafka.processors.PublishKafka",
-                      properties=props, autoTerminate=["success"])
+                      properties=props, autoTerminate=[] if bookmark_source else ["success"])
     )
     builder.link(tail_key, "publish", [tail_rel] if tail_rel else [])
     builder.to_dlq("publish", "failure")
+    if bookmark_source:
+        return attach_bookmark_commit(
+            builder,
+            ctx=ctx,
+            flow_id=flow.id,
+            source=bookmark_source,
+            add_param=add_param,
+            tail=("publish", "success"),
+            key_prefix="egress",
+        )
+    return "publish", "success"
 
 
 def _compile_read_terminal(

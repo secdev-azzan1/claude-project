@@ -40,6 +40,7 @@ from .ir import (
     ScopeMapEntry,
     TopicSpec,
 )
+from .jdbc_bookmarks import attach_bookmark_commit, source_for_block
 from .transforms import build_chain, compile_cleanup
 
 
@@ -153,6 +154,7 @@ def _compile_block(
 
     output_port_needed = False
     tail_consumed_by_publish = False
+    bookmark_source = source_for_block(flow, block)
     if block.adapter == "kafka":
         # Fulfill the promised consume chain (read) or attach the publish
         # step (write). A write's publish consumes the tail; children (legal
@@ -162,14 +164,16 @@ def _compile_block(
             if block.mode == "write" else tail
         )
         blocks_kafka.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
-                                     add_param=add_param, topics_out=topics_out, tail=publish_tail)
+                                     add_param=add_param, topics_out=topics_out, tail=publish_tail,
+                                     bookmark_source=bookmark_source if block.mode == "write" else None)
         tail_consumed_by_publish = block.mode == "write"
 
     if terminal:
         publish_tail = compile_cleanup(builder, cleanup=chain.cleanup, tail=tail, key_prefix="egress__publish")
         blocks_kafka_kc.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
                                         add_param=add_param, topics_out=topics_out,
-                                        connectors_out=connectors_out, tail=publish_tail)
+                                        connectors_out=connectors_out, tail=publish_tail,
+                                        bookmark_source=bookmark_source)
     elif children:
         routing.wire_children(builder, flow=flow, parent=block, children=children, tail=tail,
                               cleanup=chain.cleanup, port_links=port_links)
@@ -178,7 +182,19 @@ def _compile_block(
         # Non-terminal, childless: nothing downstream consumes the finished
         # tail (placement-valid but structurally incomplete flow) — the
         # relationship auto-terminates rather than dangling unconnected.
-        builder.auto_terminate_tail(tail[0], tail[1])
+        if block.adapter in ("jdbc", "http") and block.mode == "write" and bookmark_source:
+            tail = attach_bookmark_commit(
+                builder,
+                ctx=ctx,
+                flow_id=flow.id,
+                source=bookmark_source,
+                add_param=add_param,
+                tail=tail,
+                key_prefix="jdbc_write",
+            )
+            builder.auto_terminate_tail(tail[0], tail[1])
+        else:
+            builder.auto_terminate_tail(tail[0], tail[1])
 
     dlq.build(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, add_param=add_param)
 

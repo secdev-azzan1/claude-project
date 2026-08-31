@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict
 from models.adapter import AppService, FlowBlock
 
 from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, ensure_json_record_services
+from .jdbc_bookmarks import add_incremental_source
 from ..jdbc import trino_jdbc_url, trino_table_parts
 from .transforms import Tail, cron_or_period
 
@@ -157,24 +158,14 @@ def _compile_read(
     builder: "BlockBuilder", *, flow: "Flow", block: FlowBlock, ctx: "CompileContext", flow_token: str,
     is_root: bool, add_param,
 ) -> Tail:
-    """compiler-spec §3.2: `QueryDatabaseTableRecord` (Database Connection
-    Pooling Service, Table Name, Columns to Return, Maximum-value Columns =
-    watermark when incremental, Initial Load Strategy per initialPosition,
-    Record Writer JsonRecordSetWriter, runOnPrimary, cron-on-root scheduling)
-    -> `SplitRecord` (1 record per split) so the rest of the compiler sees
-    the same per-record JSON shape http/kafka read produce.
+    """Compile a JDBC read.
 
-    `Initial Load Strategy` (allowed values "Start at Beginning"/"Start at
-    Current Maximum Values") is CONFIRMED to exist on the sibling
-    `AbstractDatabaseFetchProcessor` family (`QueryDatabaseTable`/
-    `GenerateTableFetch`, added NIFI-9760) but NOT independently confirmed
-    against `QueryDatabaseTableRecord` specifically for NiFi 2.9 — none of
-    the 5 reference flow exports use any jdbc processor at all. Included per
-    the task brief's explicit allowed-values list; flagged for live E2E.
-    `Database Type` (dialect-specific SQL quoting) is a real
-    QueryDatabaseTable(Record) property too, but is deliberately NOT set
-    here — its NiFi 2.9 allowed-value spelling for `trino` isn't confirmed
-    either, so it's left at the processor's own default rather than guessed.
+    Ordinary reads keep the existing ``QueryDatabaseTableRecord`` path.  An
+    incremental read is different: NiFi's processor-local state is not the
+    platform bookmark, so it uses the explicit Redis-backed source in
+    ``jdbc_bookmarks.py``.  That source reads one ordered row per scheduled
+    run, captures its watermark, and lets the terminal publisher commit the
+    cursor only after success.
     """
     service = _service_for(block, ctx)
     table_ref = _configured_table(block)
@@ -183,9 +174,23 @@ def _compile_read(
     _, writer_key = ensure_json_record_services(builder)
 
     columns = [c for c in (block.config.get("columns") or []) if isinstance(c, str) and c.strip()]
-    incremental = bool(block.config.get("incremental"))
-    watermark_column = str(block.config.get("watermarkColumn") or "").strip()
-    initial_position = str(block.config.get("initialPosition") or "oldest")
+    incremental = block.config.get("incremental") is True
+
+    if not is_root:
+        raise CompileError(f"jdbc read block {block.id!r} cannot be placed mid-chain")
+
+    period, strategy = cron_or_period(flow.cron)
+    if incremental:
+        return add_incremental_source(
+            builder,
+            flow=flow,
+            block=block,
+            ctx=ctx,
+            add_param=add_param,
+            db_pool=cs_pool,
+            table=table,
+            cron=(period, strategy),
+        )
 
     props: Dict[str, Any] = {
         "Database Connection Pooling Service": cs_pool,
@@ -194,17 +199,6 @@ def _compile_read(
     }
     if columns:
         props["Columns to Return"] = ", ".join(columns)
-    if incremental and watermark_column:
-        props["Maximum-value Columns"] = watermark_column
-        props["Initial Load Strategy"] = (
-            "Start at Current Maximum Values" if initial_position == "new" else "Start at Beginning"
-        )
-
-    if not is_root:
-        raise CompileError(f"jdbc read block {block.id!r} cannot be placed mid-chain")
-
-    period, strategy = cron_or_period(flow.cron)
-
     builder.add_processor(
         ProcessorSpec(key="query", name="query", type="org.apache.nifi.processors.standard.QueryDatabaseTableRecord",
                       properties=props, schedulingPeriod=period, schedulingStrategy=strategy, runOnPrimary=True)

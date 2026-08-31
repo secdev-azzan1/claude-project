@@ -1537,14 +1537,29 @@ function JdbcSettings({
             Incremental reads (watermark + bookmark)
           </label>
           {cfg.incremental === true && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
               <Input
                 className="h-8 w-44 font-mono text-xs"
                 value={(cfg.watermarkColumn as string) ?? ""}
                 disabled={locked}
-                placeholder="watermark column"
+                placeholder="watermark column *"
                 onChange={(e) => onPatchConfig(block.id, { watermarkColumn: e.target.value })}
               />
+              <Select
+                value={(cfg.watermarkType as string) ?? "timestamp"}
+                disabled={locked}
+                onValueChange={(v) => onPatchConfig(block.id, { watermarkType: v })}
+              >
+                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="timestamp">Timestamp</SelectItem>
+                  <SelectItem value="bigint">Big integer</SelectItem>
+                  <SelectItem value="integer">Integer</SelectItem>
+                  <SelectItem value="date">Date</SelectItem>
+                  <SelectItem value="varchar">Text</SelectItem>
+                </SelectContent>
+              </Select>
               <Select
                 value={(cfg.initialPosition as string) ?? "oldest"}
                 disabled={locked}
@@ -1558,6 +1573,17 @@ function JdbcSettings({
                   <SelectItem value="new">First run: only new rows</SelectItem>
                 </SelectContent>
               </Select>
+              </div>
+              <Input
+                className="h-8 w-52 font-mono text-xs"
+                value={(cfg.bookmarkTieBreaker as string) ?? ""}
+                disabled={locked}
+                placeholder="optional tie-breaker (e.g. id)"
+                onChange={(e) => onPatchConfig(block.id, { bookmarkTieBreaker: e.target.value })}
+              />
+              {!String(cfg.watermarkColumn ?? "").trim() && (
+                <p className="text-xs text-destructive">A watermark column is required for incremental reads.</p>
+              )}
               <p className="w-full text-xs text-muted-foreground">
                 Bookmarks live in Redis — if Redis is down, incremental runs fail rather than lose their place.
               </p>

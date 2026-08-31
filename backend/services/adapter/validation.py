@@ -134,6 +134,7 @@ def _unresolved_placeholders(flow: Flow, block: FlowBlock) -> List[str]:
 
 
 _CONNECTOR_CLASS_RE = re.compile(r"^[\w$]+(\.[\w$]+)+$", re.ASCII)
+_JDBC_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$")
 
 
 def _sink_config_refusals(block: FlowBlock) -> List[str]:
@@ -423,8 +424,22 @@ def validate_block(
             at(refusal)
         for refusal in _pagination_refusals(block):
             at(refusal)
-    if block.adapter == "jdbc" and not (block.config or {}).get("table"):
-        at("Pick a table.")
+    if block.adapter == "jdbc":
+        jdbc_config = block.config or {}
+        if not jdbc_config.get("table"):
+            at("Pick a table.")
+        if block.mode == "read" and jdbc_config.get("incremental") is True:
+            watermark = str(jdbc_config.get("watermarkColumn") or "").strip()
+            if not watermark:
+                at("Incremental reads require a watermark column.")
+            elif not _JDBC_IDENTIFIER_RE.fullmatch(watermark):
+                at("Watermark column must be a simple SQL identifier.")
+            initial_position = str(jdbc_config.get("initialPosition") or "oldest").strip().lower()
+            if initial_position not in {"oldest", "new"}:
+                at("Initial position must be either oldest or new.")
+            tie_breaker = str(jdbc_config.get("bookmarkTieBreaker") or "").strip()
+            if tie_breaker and not _JDBC_IDENTIFIER_RE.fullmatch(tie_breaker):
+                at("Bookmark tie-breaker must be a simple SQL identifier.")
     if block.adapter == "kafka" and block.mode == "read" and not block.parentId and not (block.config or {}).get("topicName"):
         at("Pick a topic to consume.")
     # The override is legal on the whole kafka family (R7), so the collision

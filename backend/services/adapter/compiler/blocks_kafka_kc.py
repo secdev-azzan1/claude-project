@@ -27,6 +27,7 @@ from services.adapter.naming import derive_topic_name, tokenize
 from . import connectors
 from .dlq import ensure_kafka_connection_cs
 from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, TopicSpec, apicurio_ccompat_url, ensure_json_record_services
+from .jdbc_bookmarks import BookmarkSource, attach_bookmark_commit
 from .transforms import Tail
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -65,6 +66,7 @@ def compile_publish(
     topics_out,
     connectors_out: "list[ConnectorSpec]",
     tail: Tail,
+    bookmark_source: BookmarkSource | None = None,
 ) -> None:
     if ctx.approved_schemas.get(block.id) is None:
         raise CompileError(
@@ -133,11 +135,22 @@ def compile_publish(
                 "Header Encoding": "UTF-8",
                 "max.request.size": "1 MB",
             },
-            autoTerminate=["success"],
+            autoTerminate=[] if bookmark_source else ["success"],
         )
     )
     builder.link(tail_key, "publish", [tail_rel])
     builder.to_dlq("publish", "failure")
+
+    if bookmark_source:
+        attach_bookmark_commit(
+            builder,
+            ctx=ctx,
+            flow_id=flow.id,
+            source=bookmark_source,
+            add_param=add_param,
+            tail=("publish", "success"),
+            key_prefix="egress",
+        )
 
     entity_token = tokenize(block.entity or block.name)
     connector = connectors.build_kafka_kc_connector(

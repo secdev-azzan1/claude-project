@@ -90,9 +90,17 @@ Chain inside the block PG (reference: nifi-reference-flows §9.1, DummyJson_Dedu
 Failure relationships (fetch non-2xx after retries, parse errors) → block DLQ path (§6).
 
 ### 3.2 jdbc
-- read: `QueryDatabaseTableRecord` (DBCPConnectionPool CS from database service; Table,
-  Columns, Maximum-value Columns = watermark when incremental; initial position honored),
-  runOnPrimary, trigger = cron scheduling on the processor itself when root.
+- read (non-incremental): `QueryDatabaseTableRecord` (DBCPConnectionPool CS from database
+  service; Table and Columns), runOnPrimary, trigger = cron scheduling on the processor
+  itself when root.
+- read (incremental): an explicit Redis-backed cursor pipeline. A cron-scheduled
+  `GenerateFlowFile` fetches `dmp:jdbc:bookmark:<flowId>:<blockId>` through
+  `FetchDistributedMapCache`, then `ExecuteSQLRecord` runs an ordered, parameterized
+  one-row query using the stored watermark. `SplitRecord` plus `EvaluateJsonPath`
+  captures the candidate watermark. The terminal publisher commits that candidate with
+  `PutDistributedMapCache` only after publish success; cache failures go to the block DLQ.
+  `initialPosition=oldest` starts at the first row; `new` snapshots the current maximum
+  and emits no rows. An optional tie-breaker handles equal watermark values.
 - write: `PutDatabaseRecord` (INSERT/UPDATE per `change_type` note — statement type from
   config; JsonTreeReader).
 - lookup: `LookupRecord` + `DatabaseRecordLookupService` (join field config).
@@ -182,10 +190,11 @@ leave everything STOPPED. On partial failure: best-effort delete created PG, sur
 Verbs: start = start PG (+ start connectors + cron enabled); pause = stop
 trigger/ingest processors only; resume = start them; stop = stop PG (queues retained);
 stop&clear = stop + drop all queued FlowFiles (audited counts); redeploy = stop+clear →
-delete PG → full deploy; undeploy = delete PG + delete connectors + empty owned data
-topics + keep DLQ + reset scope map (state Draft); delete = undeploy + delete DLQ + owned
-topics + flow doc. NiFi REST specifics (2.9): reuse alpha nifi_client (JWT, revision 409
-retry) and nifi_flow_manager start/stop helpers.
+delete PG → full deploy while preserving Redis JDBC bookmarks; undeploy = delete PG +
+delete connectors + empty owned data topics + keep DLQ + reset scope map (state Draft),
+also preserving those bookmarks; delete = undeploy + delete DLQ + owned topics + flow doc
+and delete the flow's Redis JDBC bookmark keys. NiFi REST specifics (2.9): reuse alpha
+nifi_client (JWT, revision 409 retry) and nifi_flow_manager start/stop helpers.
 
 ## 8. Preflight (deploy)
 

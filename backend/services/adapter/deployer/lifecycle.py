@@ -54,7 +54,7 @@ from services.adapter.naming import dlq_name
 from services.adapter.validation import GatewaySnapshot, deploy_preflight
 from services.connection_fingerprint import probe_kafka_connect_fingerprint, probe_nifi_fingerprint
 
-from . import connect_apply, nifi_apply, topics
+from . import bookmark_store, connect_apply, nifi_apply, topics
 
 logger = logging.getLogger(__name__)
 
@@ -969,6 +969,30 @@ async def delete(
         )
 
     connections = await _load_connections(db)
+
+    incremental_block_ids = [
+        block.id
+        for block in flow.blocks
+        if block.adapter == "jdbc" and block.mode == "read" and (block.config or {}).get("incremental") is True
+    ]
+    if incremental_block_ids:
+        redis_conn_doc = _active_connection(connections, "redis")
+        if not redis_conn_doc:
+            orphans.append({
+                "kind": "bookmark",
+                "ref": flow.id,
+                "reason": "No active Redis connection is configured; incremental bookmark keys were not removed.",
+            })
+        else:
+            bookmark_result = await bookmark_store.delete_flow_bookmarks(
+                redis_conn_doc.config or {}, flow.id, incremental_block_ids
+            )
+            if not bookmark_result.get("ok"):
+                orphans.append({
+                    "kind": "bookmark",
+                    "ref": flow.id,
+                    "reason": bookmark_result.get("error") or "Incremental bookmark cleanup failed.",
+                })
 
     if connector_names and not was_deployed:
         # `undeploy()` above already best-effort deletes connectors when it

@@ -124,6 +124,37 @@ def _kc_flow(flow_id: str = "flow-kc-1", **overrides):
     return flow
 
 
+def _incremental_jdbc_flow(flow_id: str = "flow-jdbc-delete", **overrides):
+    flow = {
+        "id": flow_id,
+        "name": "Incremental JDBC Flow",
+        "description": None,
+        "state": "Draft",
+        "enabled": True,
+        "cron": "*/5 * * * *",
+        "blocks": [
+            {
+                "id": "jdbc-read", "adapter": "jdbc", "mode": "read", "name": "Read Assets", "parentId": None,
+                "serviceId": "svc-db", "entity": None,
+                "config": {
+                    "table": "assets", "incremental": True,
+                    "watermarkColumn": "updated_at", "initialPosition": "oldest",
+                },
+                "transforms": [],
+            },
+            {
+                "id": "kafka-write", "adapter": "kafka", "mode": "write", "name": "Write Assets", "parentId": "jdbc-read",
+                "serviceId": None, "entity": "asset", "config": {}, "transforms": [],
+            },
+        ],
+        "topics": [], "variables": [], "servicePins": {},
+        "deployedAt": None, "nifiProcessGroupId": None, "runtimeScopeMap": None,
+        "lastRunAt": None, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z",
+    }
+    flow.update(overrides)
+    return flow
+
+
 def _seed_http_service(fake_db: FakeDB, service_id: str = "svc-1"):
     fake_db.services_v2.docs.append({
         "id": service_id, "type": "http", "name": "Test Service", "revision": 1, "retired": False,
@@ -697,6 +728,54 @@ async def test_delete_records_orphan_when_connector_delete_fails(monkeypatch):
     assert result["orphans"] == [{"kind": "connector", "ref": "kc_flow.b2.kafka_kc", "reason": "Connect unreachable"}]
     deleted_events = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deleted"]
     assert "connector" in deleted_events[0]["details"]
+
+
+@async_test
+async def test_delete_removes_incremental_bookmarks_but_undeploy_does_not(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, redis=True)
+    flow_doc = _incremental_jdbc_flow()
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+    bookmark_calls = []
+
+    async def fake_delete_bookmarks(config, flow_id, block_ids):
+        bookmark_calls.append((config, flow_id, list(block_ids)))
+        return {"ok": True, "deleted": 1}
+
+    monkeypatch.setattr(lifecycle.bookmark_store, "delete_flow_bookmarks", fake_delete_bookmarks)
+    result = await lifecycle.delete(fake_db, flow_doc)
+
+    assert result["ok"] is True
+    assert len(bookmark_calls) == 1
+    assert bookmark_calls[0][1:] == ("flow-jdbc-delete", ["jdbc-read"])
+
+    # The bookmark cleanup belongs to Delete, not Undeploy/redeploy.  A
+    # deployed copy is enough to exercise the undeploy path without touching
+    # a real NiFi instance.
+    deployed = _incremental_jdbc_flow(
+        "flow-jdbc-undeploy",
+        state="Stopped",
+        deployedAt="2026-08-01T00:00:00.000Z",
+        nifiProcessGroupId="pg-root",
+        runtimeScopeMap={"jdbc-read": {"topics": []}, "kafka-write": {"topics": []}},
+    )
+    undeploy_calls_before = len(bookmark_calls)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    async def fake_empty_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+    monkeypatch.setattr(topics, "empty_topic", fake_empty_topic)
+    await lifecycle.undeploy(fake_db, deployed)
+    assert len(bookmark_calls) == undeploy_calls_before
 
 
 @async_test

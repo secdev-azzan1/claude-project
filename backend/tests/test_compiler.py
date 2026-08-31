@@ -510,7 +510,10 @@ def jdbc_ctx() -> CompileContext:
             hasSecret=True,
         ),
     }
-    connections = {"kafka": make_connection(id="conn-kafka", type="kafka", name="K", config={"bootstrapServers": "kafka:9092"})}
+    connections = {
+        "kafka": make_connection(id="conn-kafka", type="kafka", name="K", config={"bootstrapServers": "kafka:9092"}),
+        "redis": make_connection(id="conn-redis", type="redis", name="Redis", config={"host": "redis", "port": 6379, "bookmarksDb": 1}),
+    }
     return CompileContext(services=services, connections=connections, gateway_proxies={}, approved_schemas={})
 
 
@@ -518,15 +521,33 @@ def test_jdbc_read_incremental_golden_checks():
     plan = compile_flow(jdbc_flow(), jdbc_ctx())
     group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
 
+    assert not any(p.type == "org.apache.nifi.processors.standard.QueryDatabaseTableRecord" for p in group.processors)
+    trigger = next(p for p in group.processors if p.key == "trigger")
+    assert trigger.type == "org.apache.nifi.processors.standard.GenerateFlowFile"
+    assert trigger.runOnPrimary is True
+    assert trigger.schedulingStrategy == "CRON_DRIVEN"
+    assert trigger.schedulingPeriod == "0 0 */2 * * ?"
+
     query = next(p for p in group.processors if p.key == "query")
-    assert query.type == "org.apache.nifi.processors.standard.QueryDatabaseTableRecord"
-    assert query.properties["Table Name"] == "cmdb_assets"
-    assert query.properties["Columns to Return"] == "id, hostname, updated_at"
-    assert query.properties["Maximum-value Columns"] == "updated_at"
-    assert query.properties["Initial Load Strategy"] == "Start at Beginning"
-    assert query.runOnPrimary is True
-    assert query.schedulingStrategy == "CRON_DRIVEN"  # cron on root
-    assert query.schedulingPeriod == "0 0 */2 * * ?"  # C1: Quartz needs `?` in DOW when DOM is unspecified
+    assert query.type == "org.apache.nifi.processors.standard.ExecuteSQLRecord"
+    assert query.properties["SQL select query"] == "${jdbc.query}"
+    assert query.properties["Max Rows Per FlowFile"] == "1"
+    query_seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
+    assert query_seed.properties["sql.args.1.type"] == "93"
+    assert query_seed.properties["sql.args.1.value"] == "${jdbc.bookmark.value}"
+    assert "WHERE updated_at > ?" in query_seed.properties["jdbc.query"]
+
+    fetch = next(p for p in group.processors if p.key == "bookmark_fetch")
+    assert fetch.type == "org.apache.nifi.processors.standard.FetchDistributedMapCache"
+    assert fetch.properties["Distributed Cache Service"] == "cs_jdbc_bookmark_cache"
+    assert fetch.properties["Put Cache Value In Attribute"] == "jdbc.bookmark.raw"
+
+    bookmark_cache = next(cs for cs in group.controllerServices if cs.key == "cs_jdbc_bookmark_cache")
+    assert bookmark_cache.type == "org.apache.nifi.redis.service.RedisDistributedMapCacheClientService"
+    bookmark_pool = next(cs for cs in group.controllerServices if cs.key == "cs_jdbc_bookmark_pool")
+    assert bookmark_pool.properties["Database Index"] == "1"
+    bookmark_param = next(p for p in plan.parameterContext.parameters if p.name == "jdbc_bookmark_key_b-read")
+    assert bookmark_param.value == "dmp:jdbc:bookmark:flow-jdbc:b-read"
 
     pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
     assert pool.type == "org.apache.nifi.dbcp.DBCPConnectionPool"
@@ -545,13 +566,17 @@ def test_jdbc_read_incremental_golden_checks():
     split = next(p for p in group.processors if p.key == "split")
     assert split.type == "org.apache.nifi.processors.standard.SplitRecord"
     assert split.properties["Records Per Split"] == "1"
-    # C3: QueryDatabaseTableRecord has exactly one relationship (`success`) —
-    # there is NO `failure` to wire to the DLQ; query errors are run
-    # failures surfacing as bulletins. The DLQ path starts at `split`.
     dlq_from_query = [c for c in group.connections if c.from_ == "query" and c.to == "dlq"]
-    assert dlq_from_query == []
+    assert dlq_from_query and dlq_from_query[0].relationships == ["failure"]
     dlq_from_split = [c for c in group.connections if c.from_ == "split" and c.to == "dlq"]
     assert dlq_from_split and dlq_from_split[0].relationships == ["failure"]
+
+
+def test_jdbc_incremental_requires_redis_at_compile_time():
+    ctx = jdbc_ctx()
+    del ctx.connections["redis"]
+    with pytest.raises(CompileError, match="requires an active Redis connection"):
+        compile_flow(jdbc_flow(), ctx)
 
 
 def test_jdbc_write():
@@ -564,16 +589,44 @@ def test_jdbc_write():
     assert write.properties["Table Name"] == "assets_mirror"
     assert write.properties["Database Connection Pooling Service"] == "cs_db_pool"
 
-    # M6: `retry` needs a disposition — auto-terminated (failure covers DLQ).
-    # (`success` is additionally auto-terminated here because this fixture's
-    # write block is childless — the tail has nothing downstream.)
+    commit = next(p for p in group.processors if p.key == "jdbc_write__bookmark_commit")
+    payload = next(p for p in group.processors if p.key == "jdbc_write__bookmark_payload")
+    assert commit.type == "org.apache.nifi.processors.standard.PutDistributedMapCache"
+    assert commit.properties["Distributed Cache Service"] == "cs_jdbc_bookmark_cache"
+    assert "success" in commit.autoTerminate
+    assert any(c.from_ == "write" and c.to == payload.key and c.relationships == ["success"] for c in group.connections)
+    assert any(c.from_ == payload.key and c.to == commit.key and c.relationships == ["success"] for c in group.connections)
+
     assert "retry" in write.autoTerminate
     dlq_from_write = [c for c in group.connections if c.from_ == "write" and c.to == "dlq"]
     assert dlq_from_write and dlq_from_write[0].relationships == ["failure"]
-
-    # b-write is wired as b-read's child (jdbc is never forced terminal).
     port_link = next((pl for pl in plan.rootGroup.connections if pl.toBlockId == "b-write"), None)
     assert port_link is not None and port_link.fromBlockId == "b-read"
+
+
+def test_jdbc_incremental_new_position_snapshots_without_publishing():
+    flow = jdbc_flow()
+    flow.blocks[0].config["initialPosition"] = "new"
+    plan = compile_flow(flow, jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    initial = next(p for p in group.processors if p.key == "bookmark_initial_query")
+    assert initial.type == "org.apache.nifi.processors.standard.ExecuteSQLRecord"
+    assert initial.properties["SQL select query"] == "${jdbc.query}"
+    seed = next(p for p in group.processors if p.key == "bookmark_initial_seed")
+    assert "updated_at IS NOT NULL" in seed.properties["jdbc.query"]
+    assert "ORDER BY updated_at DESC LIMIT 1" in seed.properties["jdbc.query"]
+    assert not any(c.from_ == "bookmark_initial_query" and c.to == "outputPort:b-write" for c in group.connections)
+
+
+def test_jdbc_incremental_tie_breaker_uses_compound_cursor():
+    flow = jdbc_flow()
+    flow.blocks[0].config.update({"bookmarkTieBreaker": "id", "bookmarkTieBreakerType": "bigint"})
+    plan = compile_flow(flow, jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
+    assert "(updated_at > ?) OR (updated_at = ? AND id > ?)" in seed.properties["jdbc.query"]
+    assert seed.properties["sql.args.3.type"] == "-5"
 
 
 def test_jdbc_lookup_respects_join_field():
@@ -747,6 +800,26 @@ def test_jdbc_trino_passwordless_service_omits_empty_password_property():
 
     assert "Password" not in pool.properties
     assert not any(p.name == "svc_svc-trino_db_password" for p in plan.parameterContext.parameters)
+
+
+def test_jdbc_trino_incremental_uses_qualified_table_and_redis_bookmark():
+    flow = trino_flow()
+    flow.blocks[0].config.update({
+        "incremental": True,
+        "watermarkColumn": "updated_at",
+        "initialPosition": "oldest",
+    })
+    ctx = trino_ctx()
+    ctx.connections["redis"] = make_connection(
+        id="conn-redis", type="redis", name="Redis", config={"host": "redis", "port": 6379, "bookmarksDb": 1}
+    )
+
+    plan = compile_flow(flow, ctx)
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    query_seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
+
+    assert "FROM gold.asset.asset__xref" in query_seed.properties["jdbc.query"]
+    assert any(cs.key == "cs_jdbc_bookmark_cache" for cs in group.controllerServices)
 
 
 # --------------------------------------------------------------------------
