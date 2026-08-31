@@ -559,16 +559,24 @@ def _compile_dedup(
     )
 
     tail_key, tail_rel = tail
+    hash_properties = {
+        "Script Body": GROOVY_HASH_SCRIPT,
+        "Failure Strategy": "rollback",
+        "SRC": src,
+        "IDENTITY_FIELDS": ",".join(identity_fields),
+    }
+    # NiFi rejects an explicitly configured dynamic property whose value is
+    # empty.  EXCLUDES is optional, and the Groovy script already treats a
+    # missing property as an empty list, so omit it when the user configured
+    # no excluded fields.  This is especially important for the normal
+    # `excludedFields: []` form emitted by the flow builder.
+    if excludes:
+        hash_properties["EXCLUDES"] = ",".join(excludes)
+
     builder.add_processor(
         ProcessorSpec(
             key=hash_key, name=hash_key, type="org.apache.nifi.processors.groovyx.ExecuteGroovyScript",
-            properties={
-                "Script Body": GROOVY_HASH_SCRIPT,
-                "Failure Strategy": "rollback",
-                "SRC": src,
-                "EXCLUDES": ",".join(excludes),
-                "IDENTITY_FIELDS": ",".join(identity_fields),
-            },
+            properties=hash_properties,
         )
     )
     builder.link(tail_key, hash_key, [tail_rel])

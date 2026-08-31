@@ -48,6 +48,7 @@ export interface ServiceForm {
   proxyId: string;
   // database
   dialect: JdbcDialect;
+  dbUrl: string;
   host: string;
   port: string;
   database: string;
@@ -96,6 +97,7 @@ export const emptyForm = (): ServiceForm => ({
   tokenTemplate: "",
   proxyId: "",
   dialect: "postgresql",
+  dbUrl: "",
   host: "",
   port: "5432",
   database: "",
@@ -142,6 +144,9 @@ export function formFromService(svc: AppService): ServiceForm {
     tokenTemplate: str(c.tokenTemplate),
     proxyId: str(c.proxyId),
     dialect: (str(c.dialect, "postgresql") as JdbcDialect) || "postgresql",
+    dbUrl: str(c.url || c.endpoint) || (str(c.dialect).toLowerCase() === "trino" && str(c.host)
+      ? `http://${str(c.host)}${c.port ? `:${numStr(c.port)}` : ""}`
+      : ""),
     host: str(c.host),
     port: numStr(c.port, "5432"),
     database: str(c.database),
@@ -209,16 +214,23 @@ export function buildConfig(type: ServiceType, f: ServiceForm): Record<string, u
       cfg.proxyId = f.proxyId || null;
       return cfg;
     }
-    case "database":
-      return {
+    case "database": {
+      const cfg: Record<string, unknown> = {
         dialect: f.dialect,
-        host: f.host.trim(),
-        port: Number.parseInt(f.port, 10) || 0,
-        database: f.database.trim(),
         username: f.dbUsername.trim(),
         driverLocations: f.driverLocations.trim(),
         capabilities: [...(f.capRead ? ["read"] : []), ...(f.capWrite ? ["write"] : [])],
       };
+      if (f.dialect === "trino") {
+        cfg.url = f.dbUrl.trim();
+      } else {
+        cfg.host = f.host.trim();
+        cfg.port = Number.parseInt(f.port, 10) || 0;
+        cfg.database = f.database.trim();
+      }
+      if (f.dbPassword.trim()) cfg.password = f.dbPassword.trim();
+      return cfg;
+    }
     case "external_kafka":
       return {
         bootstrapServers: f.bootstrapServers.trim(),
@@ -257,7 +269,8 @@ export function saveBlockReason(type: ServiceType | null, f: ServiceForm): strin
   if (!type) return "Pick a service type first.";
   if (!f.name.trim()) return "Name the service.";
   if (type === "http" && !f.baseUrl.trim()) return "Base URL is required.";
-  if (type === "database" && (!f.host.trim() || !f.database.trim())) return "Host and database are required.";
+  if (type === "database" && f.dialect === "trino" && !f.dbUrl.trim() && !f.host.trim()) return "Trino coordinator URL is required.";
+  if (type === "database" && f.dialect !== "trino" && (!f.host.trim() || !f.database.trim())) return "Host and database are required.";
   if (type === "database" && !f.capRead && !f.capWrite) return "Select at least one capability.";
   if (type === "external_kafka" && !f.bootstrapServers.trim()) return "Bootstrap servers are required.";
   if (type === "sink_destination" && f.sinkKind === "opensearch" && !f.sinkUrl.trim()) return "OpenSearch URL is required.";
@@ -489,11 +502,28 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-[1fr_110px] gap-3">
-                    <TextField label="Host" mono value={form.host} onChange={(host) => setForm((p) => ({ ...p, host }))} />
-                    <TextField label="Port" mono value={form.port} onChange={(port) => setForm((p) => ({ ...p, port }))} />
-                  </div>
-                  <TextField label="Database" mono value={form.database} onChange={(database) => setForm((p) => ({ ...p, database }))} />
+                  {form.dialect === "trino" ? (
+                    <>
+                      <TextField
+                        label="Coordinator URL"
+                        mono
+                        value={form.dbUrl}
+                        placeholder="https://trino.datapasc.com"
+                        onChange={(dbUrl) => setForm((p) => ({ ...p, dbUrl }))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use the URL NiFi can reach. HTTPS is carried into the JDBC connection automatically.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-[1fr_110px] gap-3">
+                        <TextField label="Host" mono value={form.host} onChange={(host) => setForm((p) => ({ ...p, host }))} />
+                        <TextField label="Port" mono value={form.port} onChange={(port) => setForm((p) => ({ ...p, port }))} />
+                      </div>
+                      <TextField label="Database" mono value={form.database} onChange={(database) => setForm((p) => ({ ...p, database }))} />
+                    </>
+                  )}
                   <TextField label="Username" value={form.dbUsername} onChange={(dbUsername) => setForm((p) => ({ ...p, dbUsername }))} />
                   <SecretField label="Password" value={form.dbPassword} editing={!!editing} onChange={(dbPassword) => setForm((p) => ({ ...p, dbPassword }))} />
                   <div className="grid gap-1.5">

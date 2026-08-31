@@ -24,6 +24,24 @@ afterEach(() => {
 });
 
 describe("ServiceFormFields iceberg catalog helpers", () => {
+  it("builds a URL-based Trino database service without requiring a database name", () => {
+    const form = {
+      ...emptyForm(),
+      dialect: "trino" as const,
+      dbUrl: "https://trino.datapasc.com",
+      dbUsername: "admin",
+      driverLocations: "/opt/nifi/trino-jdbc.jar",
+    };
+
+    expect(buildConfig("database", form)).toEqual({
+      dialect: "trino",
+      url: "https://trino.datapasc.com",
+      username: "admin",
+      driverLocations: "/opt/nifi/trino-jdbc.jar",
+      capabilities: ["read"],
+    });
+  });
+
   it("renders the S3 access key as a password input", () => {
     const client = queryClient();
     render(

@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional
 from models.adapter import AppService, ApprovedSchema, BranchInfo, Flow, FlowBlock, GatewayProxy
 
 from .legality import flow_has_trigger, hosts_transforms, root_block
+from .jdbc import trino_table_parts
 from .naming import derive_topic_name, is_valid_cron, override_matches_derived, topic_name_collision
 
 
@@ -391,6 +392,12 @@ def validate_block(
             at("The selected service no longer exists.")
         elif svc.retired:
             at(f'Service "{svc.name}" is retired — action required: select a replacement.')
+
+    if block.adapter == "jdbc" and block.serviceId and svc and not svc.retired and str(svc.config.get("dialect") or "").lower() == "trino":
+        try:
+            trino_table_parts((block.config or {}).get("table") or block.entity)
+        except ValueError as exc:
+            at(str(exc).capitalize() + ".")
 
     if _is_write(block) and not (block.entity or "").strip():
         at("No write without an entity, ever — set the entity label.")

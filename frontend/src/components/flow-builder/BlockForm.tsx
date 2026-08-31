@@ -509,7 +509,9 @@ branch: {block.branch.name}
                 onPatchConfig={onPatchConfig}
               />
             )}
-            {block.adapter === "jdbc" && <JdbcSettings block={block} locked={locked} onPatchConfig={onPatchConfig} />}
+            {block.adapter === "jdbc" && (
+              <JdbcSettings block={block} service={selectedService} locked={locked} onPatchConfig={onPatchConfig} />
+            )}
             {block.adapter === "kafka" && block.mode === "read" && (
               <KafkaReadSettings flow={flow} block={block} locked={locked} onPatchConfig={onPatchConfig} />
             )}
@@ -1460,33 +1462,51 @@ function HttpSettings({
 
 function JdbcSettings({
   block,
+  service,
   locked,
   onPatchConfig,
 }: {
   block: FlowBlock;
+  service?: AppService;
   locked: boolean;
   onPatchConfig: (blockId: string, patch: Record<string, unknown>) => void;
 }) {
   const cfg = block.config;
   const columns = (cfg.columns as string[]) ?? [];
   const MOCK_TABLES = ["cmdb_assets", "vulnerability_findings", "user_directory", "network_zones"];
+  const isTrino = service?.config.dialect === "trino";
   return (
     <div className="space-y-3">
       <div className="grid gap-1.5">
         <Label>Table</Label>
-        <Select value={(cfg.table as string) ?? ""} disabled={locked} onValueChange={(v) => onPatchConfig(block.id, { table: v })}>
-          <SelectTrigger className="max-w-xs">
-            <SelectValue placeholder="Pick a table from the service's catalog" />
-          </SelectTrigger>
-          <SelectContent>
-            {MOCK_TABLES.map((t) => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">No custom SQL — everything is generated from picked tables and columns.</p>
+        {isTrino ? (
+          <>
+            <Input
+              className="font-mono text-xs"
+              value={(cfg.table as string) ?? ""}
+              disabled={locked}
+              placeholder="gold.cmdb.asset_groups"
+              onChange={(e) => onPatchConfig(block.id, { table: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Trino tables must use <span className="font-mono">catalog.schema.table</span>. The catalog and schema select the lakehouse; each row is emitted as one record.
+            </p>
+          </>
+        ) : (
+          <Select value={(cfg.table as string) ?? ""} disabled={locked} onValueChange={(v) => onPatchConfig(block.id, { table: v })}>
+            <SelectTrigger className="max-w-xs">
+              <SelectValue placeholder="Pick a table from the service's catalog" />
+            </SelectTrigger>
+            <SelectContent>
+              {MOCK_TABLES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {!isTrino && <p className="text-xs text-muted-foreground">No custom SQL — everything is generated from picked tables and columns.</p>}
       </div>
       <div className="grid gap-1.5">
         <Label>Columns</Label>

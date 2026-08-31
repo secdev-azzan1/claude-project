@@ -32,6 +32,7 @@ from bson import ObjectId
 from db import get_db
 from routers.v2 import connections as connections_v2
 from services.adapter import seed as seed_module
+from services import nifi_service_readiness
 from tests.resilience.conftest import FaultInjectingCollection
 
 
@@ -55,6 +56,7 @@ class FakeDB:
         self.services_v2 = FaultInjectingCollection()
         self.schemas_v2 = FaultInjectingCollection()
         self.audit_v2 = FaultInjectingCollection()
+        self.nifi_global_services = FaultInjectingCollection()
 
     def __getitem__(self, name):
         return getattr(self, name)
@@ -463,6 +465,155 @@ def test_dispatch_nifi(monkeypatch):
         stored = next(d for d in fake_db.connections_v2.docs if d["id"] == conn["id"])
         assert stored["health"] == "Healthy"
         assert stored["lastTestedAt"]
+    finally:
+        _clear_overrides()
+
+
+# ------------------------------------------------------- NiFi service readiness
+
+
+def _platform_connection_docs():
+    return [
+        {"id": "nifi-1", "type": "nifi", "name": "Primary NiFi", "active": True,
+         "config": {"url": "https://nifi.example.com", "authMode": "bearer", "token": "nifi-token"}},
+        {"id": "kafka-1", "type": "kafka", "name": "Kafka", "active": True,
+         "config": {"bootstrapServers": "kafka.internal:9092", "securityProtocol": "PLAINTEXT"}},
+        {"id": "registry-1", "type": "apicurio", "name": "Apicurio", "active": True,
+         "config": {"url": "https://registry.example.com", "authMode": "none"}},
+        {"id": "redis-1", "type": "redis", "name": "Redis", "active": True,
+         "config": {"host": "redis.internal", "port": 6379, "dedupDb": 0}},
+    ]
+
+
+def test_nifi_readiness_creates_only_platform_services_and_is_idempotent(monkeypatch):
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.extend(_platform_connection_docs())
+    client = _make_client(fake_db)
+    created_ids = {}
+    update_calls = []
+
+    async def fake_root(url, **auth):
+        return "root-1"
+
+    async def fake_list(endpoint, root_id, auth):
+        return [
+            {"component": {"id": service_id, "name": name, "type": spec["type"], "parentGroupId": root_id}}
+            for spec in nifi_service_readiness.PLATFORM_SERVICE_SPECS
+            for name, service_id in [(spec["name"], created_ids.get(spec["kind"], f"missing-{spec['kind']}"))]
+            if spec["kind"] in created_ids
+        ]
+
+    async def fake_create(endpoint, root_id, auth, spec):
+        service_id = f"cs-{spec['kind']}"
+        created_ids[spec["kind"]] = service_id
+        return service_id
+
+    async def fake_config(endpoint, service_id, **auth):
+        kind = service_id.removeprefix("cs-")
+        spec = next(s for s in nifi_service_readiness.PLATFORM_SERVICE_SPECS if s["kind"] == kind)
+        dep = next(d for d in _platform_connection_docs() if d["type"] == spec["dependency"])
+        return {"ok": True, "id": service_id, "name": spec["name"], "type": spec["type"], "state": "ENABLED",
+                "properties": nifi_service_readiness._desired_properties(kind, dep), "validation_errors": [], "revision": 1}
+
+    async def fake_update(endpoint, service_id, properties, **auth):
+        update_calls.append(service_id)
+        return {"ok": True, "state": "ENABLED"}
+
+    monkeypatch.setattr(nifi_service_readiness, "get_nifi_root_process_group_id", fake_root)
+    monkeypatch.setattr(nifi_service_readiness, "_list_root_services", fake_list)
+    monkeypatch.setattr(nifi_service_readiness, "_create_service", fake_create)
+    monkeypatch.setattr(nifi_service_readiness, "get_controller_service_config", fake_config)
+    monkeypatch.setattr(nifi_service_readiness, "update_controller_service_config", fake_update)
+
+    try:
+        first = client.post("/api/v2/connections/nifi-1/nifi-services/readiness")
+        assert first.status_code == 200, first.text
+        first_body = first.json()
+        assert first_body["ok"] is True
+        assert first_body["summary"]["created"] == 3
+        assert first_body["summary"]["failed"] == 0
+        assert first_body["flowScopedServicesUntouched"] is True
+        assert len(fake_db.nifi_global_services.docs) == 3
+
+        update_calls.clear()
+        second = client.post("/api/v2/connections/nifi-1/nifi-services/readiness")
+        assert second.status_code == 200, second.text
+        second_body = second.json()
+        assert second_body["summary"]["healthy"] == 3
+        assert second_body["summary"]["created"] == 0
+        assert update_calls == []
+    finally:
+        _clear_overrides()
+
+
+def test_nifi_readiness_repairs_drift_and_reports_missing_dependency(monkeypatch):
+    fake_db = FakeDB()
+    docs = _platform_connection_docs()
+    fake_db.connections_v2.docs.extend(docs[:3])  # Redis is intentionally not configured.
+    client = _make_client(fake_db)
+    update_calls = []
+
+    async def fake_root(url, **auth):
+        return "root-1"
+
+    async def fake_list(endpoint, root_id, auth):
+        kafka = next(s for s in nifi_service_readiness.PLATFORM_SERVICE_SPECS if s["kind"] == "kafka")
+        registry = next(s for s in nifi_service_readiness.PLATFORM_SERVICE_SPECS if s["kind"] == "schema_registry")
+        return [
+            {"component": {"id": "cs-kafka", "name": kafka["name"], "type": kafka["type"], "parentGroupId": root_id}},
+            {"component": {"id": "cs-registry", "name": registry["name"], "type": registry["type"], "parentGroupId": root_id}},
+        ]
+
+    async def fake_config(endpoint, service_id, **auth):
+        spec = next(s for s in nifi_service_readiness.PLATFORM_SERVICE_SPECS if service_id.endswith(s["kind"]) or (service_id == "cs-kafka" and s["kind"] == "kafka") or (service_id == "cs-registry" and s["kind"] == "schema_registry"))
+        return {"ok": True, "id": service_id, "state": "DISABLED", "properties": {"bootstrap.servers": "old:9092"}, "validation_errors": ["old target"], "revision": 3, "type": spec["type"]}
+
+    async def fake_update(endpoint, service_id, properties, **auth):
+        update_calls.append((service_id, properties))
+        return {"ok": True, "state": "ENABLED"}
+
+    async def fake_create(endpoint, root_id, auth, spec):
+        return "cs-redis"
+
+    async def fake_wait(endpoint, service_id, auth, timeout=12.0):
+        spec_kind = "redis" if service_id == "cs-redis" else ("kafka" if service_id == "cs-kafka" else "schema_registry")
+        spec = next(s for s in nifi_service_readiness.PLATFORM_SERVICE_SPECS if s["kind"] == spec_kind)
+        return {"ok": True, "state": "ENABLED", "validation_errors": [], "properties": {}, "type": spec["type"]}
+
+    async def fake_set_state(endpoint, service_id, state, auth):
+        assert state == "ENABLED"
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_service_readiness, "get_nifi_root_process_group_id", fake_root)
+    monkeypatch.setattr(nifi_service_readiness, "_list_root_services", fake_list)
+    monkeypatch.setattr(nifi_service_readiness, "_create_service", fake_create)
+    monkeypatch.setattr(nifi_service_readiness, "get_controller_service_config", fake_config)
+    monkeypatch.setattr(nifi_service_readiness, "update_controller_service_config", fake_update)
+    monkeypatch.setattr(nifi_service_readiness, "_wait_enabled", fake_wait)
+    monkeypatch.setattr(nifi_service_readiness, "_set_state", fake_set_state)
+
+    try:
+        resp = client.post("/api/v2/connections/nifi-1/nifi-services/readiness")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        by_kind = {item["kind"]: item for item in body["services"]}
+        assert by_kind["kafka"]["status"] == "repaired"
+        assert by_kind["schema_registry"]["status"] == "repaired"
+        assert by_kind["redis"]["status"] == "blocked"
+        assert body["ok"] is False
+        assert len(update_calls) == 2
+    finally:
+        _clear_overrides()
+
+
+def test_nifi_readiness_rejects_non_nifi_connection():
+    fake_db = FakeDB()
+    fake_db.connections_v2.docs.append({"id": "kafka-1", "type": "kafka", "name": "Kafka", "active": True, "config": {}})
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/connections/kafka-1/nifi-services/readiness")
+        assert resp.status_code == 400
+        assert "Apache NiFi" in resp.json()["detail"]
     finally:
         _clear_overrides()
 

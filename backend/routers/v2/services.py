@@ -59,6 +59,7 @@ from db import get_db
 from models.adapter import AppService
 from models.adapter._secrets import SECRET_CONFIG_KEYS, redact_config
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
+from services.adapter.jdbc import trino_endpoint
 from services.http_tls import tls_verify_enabled
 from services.iceberg_catalog_client import test_iceberg_connection
 
@@ -166,9 +167,16 @@ def _validate_service(service_type: Optional[str], name: str, config: Dict[str, 
             _require(bool(str(config.get("tokenPath") or "").strip()), "Token JSONPath is required for session token auth.")
             _require(bool(str(config.get("tokenHeader") or "").strip()), "Token header is required for session token auth.")
     elif service_type == "database":
-        host_ok = bool(str(config.get("host") or "").strip())
-        database_ok = bool(str(config.get("database") or "").strip())
-        _require(host_ok and database_ok, "Host and database are required.")
+        dialect = str(config.get("dialect") or "").strip().lower()
+        if dialect == "trino":
+            try:
+                trino_endpoint(config)
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        else:
+            host_ok = bool(str(config.get("host") or "").strip())
+            database_ok = bool(str(config.get("database") or "").strip())
+            _require(host_ok and database_ok, "Host and database are required.")
         caps = config.get("capabilities") or []
         _require(bool(caps), "Select at least one capability.")
     elif service_type == "external_kafka":
@@ -608,18 +616,13 @@ async def _test_http_oauth2(base_url: str, config: Dict[str, Any]) -> Dict[str, 
 
 async def _test_database(config: Dict[str, Any]) -> Dict[str, Any]:
     dialect = str(config.get("dialect") or "").strip().lower()
-    host = str(config.get("host") or "").strip()
-    if not host:
-        return {"ok": False, "health": "Failed", "message": "No host configured."}
-
-    raw_port = config.get("port")
-    try:
-        port = int(raw_port) if raw_port else _DB_DEFAULT_PORTS.get(dialect, 5432)
-    except (TypeError, ValueError):
-        port = _DB_DEFAULT_PORTS.get(dialect, 5432)
 
     if dialect == "trino":
-        url = f"http://{host}:{port}/v1/info"
+        try:
+            endpoint = trino_endpoint(config)
+        except ValueError as exc:
+            return {"ok": False, "health": "Failed", "message": str(exc)}
+        url = f"{endpoint.http_scheme}://{endpoint.host}:{endpoint.port}/v1/info"
         try:
             async with httpx.AsyncClient(verify=tls_verify_enabled(), timeout=HTTP_TIMEOUT_SECONDS) as client:
                 resp = await client.get(url)
@@ -630,6 +633,15 @@ async def _test_database(config: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "health": "Failed", "message": f"Connection to Trino coordinator timed out after {HTTP_TIMEOUT_SECONDS:.0f}s."}
         except httpx.HTTPError as exc:
             return {"ok": False, "health": "Failed", "message": f"Cannot reach Trino coordinator at {url}: {exc}"[:300]}
+
+    host = str(config.get("host") or "").strip()
+    if not host:
+        return {"ok": False, "health": "Failed", "message": "No host configured."}
+    raw_port = config.get("port")
+    try:
+        port = int(raw_port) if raw_port else _DB_DEFAULT_PORTS.get(dialect, 5432)
+    except (TypeError, ValueError):
+        port = _DB_DEFAULT_PORTS.get(dialect, 5432)
 
     # postgresql / mysql (mariadb) -- TCP reachability probe only. A full
     # driver login (asyncpg / aiomysql) is out of scope for this probe.

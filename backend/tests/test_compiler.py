@@ -252,8 +252,10 @@ def test_dedup_processor_shape_and_ordering():
     assert dlq_from_detect[0].relationships == ["failure"]
 
     # Only the configured exclusions participate.  The compiler must not add
-    # hidden platform metadata exclusions behind the user's back.
-    assert hash_p.properties["EXCLUDES"] == ""
+    # hidden platform metadata exclusions behind the user's back.  An empty
+    # optional EXCLUDES property is omitted because NiFi rejects blank dynamic
+    # properties; the Groovy script treats a missing property as no excludes.
+    assert "EXCLUDES" not in hash_p.properties
     assert hash_p.properties["SRC"] == "golden_flow__b-sink"  # <flowToken>__<blockId>
 
     redis_cache = next(cs for cs in group.controllerServices if cs.key == "cs_redis_cache")
@@ -261,6 +263,17 @@ def test_dedup_processor_shape_and_ordering():
     assert redis_cache.properties["TTL"] == "24 hours"
     redis_pool = next(cs for cs in group.controllerServices if cs.key == "cs_redis_pool")
     assert redis_pool.type == "org.apache.nifi.redis.service.RedisConnectionPoolService"
+
+
+def test_dedup_preserves_configured_exclusions():
+    flow = golden_flow()
+    flow.blocks[1].transforms[0].config["excludedFields"] = ["updatedAt"]
+
+    plan = compile_flow(flow, golden_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-sink")
+    hash_p = next(p for p in group.processors if p.key == "dedupe__hash")
+
+    assert hash_p.properties["EXCLUDES"] == "updatedAt"
 
 
 # --------------------------------------------------------------------------
@@ -657,10 +670,8 @@ def test_compile_flow_rejects_non_root_jdbc_read():
 
 def trino_flow() -> Flow:
     """Root jdbc read against a Trino lakehouse service -- exercises the
-    dialect-conditional URL branch (`_ensure_db_pool`) confirmed against
-    `Publish3.json`'s live `TrinoJDBC` DBCPConnectionPool
-    (docs/orchestration/analysis/user-reference-flows-2.md §5.2/§7):
-    `jdbc:trino://trino:8080` with NO trailing `/{database}`."""
+    catalog/schema-aware URL branch (`_ensure_db_pool`) for a fully-qualified
+    Trino table."""
     return Flow(
         id="flow-trino", name="Trino Flow", cron="0 */2 * * *", state="Draft", enabled=True,
         createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
@@ -675,7 +686,7 @@ def trino_flow() -> Flow:
 
 
 def trino_ctx(*, driver_locations: str | None = None) -> CompileContext:
-    config = {"dialect": "trino", "host": "trino", "port": 8080, "database": "gold",
+    config = {"dialect": "trino", "url": "https://trino.datapasc.com",
               "username": "admin", "password": "s3cret"}
     if driver_locations is not None:
         config["driverLocations"] = driver_locations
@@ -686,13 +697,9 @@ def trino_ctx(*, driver_locations: str | None = None) -> CompileContext:
     return CompileContext(services=services, connections=connections, gateway_proxies={}, approved_schemas={})
 
 
-def test_jdbc_trino_pool_url_omits_database_suffix_and_driver_locations_unset():
-    """Trino's JDBC URL has NO trailing /{database} even though the service
-    config has a non-blank `database` -- the omission is unconditional for
-    the dialect, per the confirmed reference URL `jdbc:trino://trino:8080`.
-    With no `driverLocations` configured, the property is left unset (NiFi
-    may still resolve the driver via a globally-installed jar) rather than
-    a path being invented."""
+def test_jdbc_trino_pool_uses_url_tls_and_table_catalog_schema():
+    """Trino's coordinator URL and the block's fully-qualified table determine
+    the JDBC URL; the processor itself receives the leaf table."""
     plan = compile_flow(trino_flow(), trino_ctx())
     group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
 
@@ -702,7 +709,9 @@ def test_jdbc_trino_pool_url_omits_database_suffix_and_driver_locations_unset():
     assert "Database Driver Locations" not in pool.properties
 
     url_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-trino_db_url")
-    assert url_param.value == "jdbc:trino://trino:8080"
+    assert url_param.value == "jdbc:trino://trino.datapasc.com:443/gold/asset?SSL=true"
+    query = next(p for p in group.processors if p.key == "query")
+    assert query.properties["Table Name"] == "asset__xref"
 
 
 def test_jdbc_trino_pool_sets_driver_locations_when_configured():
@@ -717,9 +726,27 @@ def test_jdbc_trino_pool_sets_driver_locations_when_configured():
 
     pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
     assert pool.properties["Database Driver Locations"] == jar_path
-    # URL suffix omission holds regardless of driverLocations being set.
+    # Catalog/schema and TLS remain part of the URL when driverLocations is set.
     url_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-trino_db_url")
-    assert url_param.value == "jdbc:trino://trino:8080"
+    assert url_param.value == "jdbc:trino://trino.datapasc.com:443/gold/asset?SSL=true"
+
+
+def test_jdbc_trino_rejects_unqualified_table():
+    flow = trino_flow()
+    flow.blocks[0].config["table"] = "asset__xref"
+    with pytest.raises(CompileError, match="catalog.schema.table"):
+        compile_flow(flow, trino_ctx())
+
+
+def test_jdbc_trino_passwordless_service_omits_empty_password_property():
+    ctx = trino_ctx()
+    ctx.services["svc-trino"].config.pop("password")
+    plan = compile_flow(trino_flow(), ctx)
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    pool = next(cs for cs in group.controllerServices if cs.key == "cs_db_pool")
+
+    assert "Password" not in pool.properties
+    assert not any(p.name == "svc_svc-trino_db_password" for p in plan.parameterContext.parameters)
 
 
 # --------------------------------------------------------------------------

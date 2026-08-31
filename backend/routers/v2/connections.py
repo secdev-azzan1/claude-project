@@ -46,6 +46,7 @@ from models.adapter._secrets import SECRET_CONFIG_KEYS
 from services import apicurio_client, apisix_client, kafka_client, kafka_connect_client, nifi_client
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
 from services.adapter import nifi_repoint
+from services import nifi_service_readiness
 from services.adapter.validation import block_proxy_id
 
 router = APIRouter(prefix="/api/v2/connections", tags=["connections-v2"])
@@ -570,6 +571,26 @@ async def activate_connection_v2(conn_id: str, db: AsyncIOMotorDatabase = Depend
     )
     updated = await db[COLLECTIONS.connections].find_one({"id": conn_id}, {"_id": 0})
     return _to_response(updated)
+
+
+@router.post("/{conn_id}/nifi-services/readiness", summary="Check and repair NiFi platform controller services")
+async def nifi_service_readiness_v2(conn_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Reconcile Kafka, Apicurio-compatible registry, and Redis root services.
+
+    This is intentionally separate from `/repoint`: it does not activate a
+    connection, migrate flows, copy process groups, or touch flow-scoped
+    controller services.
+    """
+    result = await nifi_service_readiness.reconcile_platform_services(db, conn_id)
+    await audit(
+        db,
+        action="NiFi platform services checked" if result.get("ok") else "NiFi platform services need attention",
+        target=result.get("connectionName") or conn_id,
+        object="NiFi Platform Services",
+        status="Success" if result.get("ok") else "Warning",
+        details=result.get("message"),
+    )
+    return result
 
 
 class RepointRequest(BaseModel):

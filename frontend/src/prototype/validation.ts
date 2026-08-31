@@ -298,6 +298,13 @@ export function validateBlock(
   }
 
   if (isWrite(block) && !block.entity?.trim()) at("No write without an entity, ever — set the entity label.");
+  const selectedService = block.serviceId ? services.find((s) => s.id === block.serviceId) : undefined;
+  if (block.adapter === "jdbc" && selectedService?.config.dialect === "trino") {
+    const table = String(block.config.table ?? block.entity ?? "").trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(table))
+      at("Trino table must be written as catalog.schema.table using simple identifiers.");
+  }
+
   // kc is a write in spec terms but not in `isWrite()` terms: widening that
   // predicate would leak kc into service-type mapping, transform hosting and
   // legality. The entity requirement is therefore its own targeted check.

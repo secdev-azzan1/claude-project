@@ -848,6 +848,33 @@ export interface RepointResult {
   finalizationWarnings?: string[];
 }
 
+export interface NifiPlatformServiceResult {
+  kind: string;
+  name: string;
+  type: string;
+  status: "healthy" | "created" | "repaired" | "failed" | "blocked";
+  serviceId?: string;
+  state?: string;
+  changedProperties?: string[];
+  validationErrors?: string[];
+  message?: string;
+}
+
+export interface NifiServiceReadinessResult {
+  ok: boolean;
+  connectionId: string;
+  connectionName: string;
+  rootProcessGroupId: string;
+  services: NifiPlatformServiceResult[];
+  summary: Record<string, number>;
+  flowScopedServicesUntouched: boolean;
+  message: string;
+}
+
+export async function checkNifiPlatformServices(connectionId: string): Promise<NifiServiceReadinessResult> {
+  return request<NifiServiceReadinessResult>(`/api/v2/connections/${connectionId}/nifi-services/readiness`, { method: "POST" });
+}
+
 export async function repointConnection(id: string, mode: "adopt" | "migrate", onStep: (steps: RepointStep[]) => void): Promise<RepointResult> {
   const activeLabel = mode === "adopt"
     ? "Verifying that both cards identify the same NiFi"

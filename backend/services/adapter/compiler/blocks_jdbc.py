@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict
 from models.adapter import AppService, FlowBlock
 
 from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, ensure_json_record_services
+from ..jdbc import trino_jdbc_url, trino_table_parts
 from .transforms import Tail, cron_or_period
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -58,14 +59,25 @@ def _service_for(block: FlowBlock, ctx: "CompileContext") -> AppService:
     return svc
 
 
-def _table_name(block: FlowBlock) -> str:
+def _configured_table(block: FlowBlock) -> str:
     table = str(block.config.get("table") or block.entity or "").strip()
     if not table:
         raise CompileError(f"jdbc block {block.id!r} has no table configured")
     return table
 
 
-def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, add_param) -> str:
+def _table_name(block: FlowBlock, *, service: AppService | None = None) -> str:
+    table = _configured_table(block)
+    if service and str(service.config.get("dialect") or "postgresql").lower() == "trino":
+        try:
+            _, _, leaf_table = trino_table_parts(table)
+        except ValueError as exc:
+            raise CompileError(f"jdbc block {block.id!r}: {exc}") from exc
+        return leaf_table
+    return table
+
+
+def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, table: str | None, add_param) -> str:
     """Add (once per group) the shared `DBCPConnectionPool` CS built from the
     block's database service — dialect -> JDBC URL scheme + driver class
     (postgresql/mysql/trino per `JdbcDialect` in models/adapter/service.py),
@@ -80,12 +92,11 @@ def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, add_param) 
     §5.2/§7).
 
     URL shape is dialect-conditional: `postgresql`/`mysql` keep the standard
-    trailing `/{database}` path segment, but `trino` does NOT — the
-    reference's live URL is `jdbc:trino://trino:8080` with no path at all;
-    Trino resolves catalog/schema per-query (`FROM <catalog>.<schema>.
-    <table>`), not via the connection URL. Appending an unused `/{database}`
-    segment there risks an invalid or mismatched URL, so it's omitted
-    unconditionally for trino (not just when `database` happens to be blank).
+    trailing `/{database}` path segment. Trino uses the selected block's
+    `catalog.schema.table` reference to build
+    `jdbc:trino://host:port/catalog/schema`; HTTPS endpoints add `SSL=true`.
+    The processor receives the leaf table while the connection selects the
+    correct Trino catalog and schema.
 
     `Database Driver Locations` (a JAR path list) is required on a real NiFi
     instance for drivers it doesn't bundle, like Trino's — the reference sets
@@ -107,21 +118,29 @@ def _ensure_db_pool(builder: "BlockBuilder", *, service: AppService, add_param) 
     port = service.config.get("port", "")
     database = service.config.get("database", "")
     if dialect == "trino":
-        url = f"jdbc:trino://{host}:{port}"
+        if not table:
+            raise CompileError(f"Trino service {sid!r} needs a fully-qualified table")
+        try:
+            url = trino_jdbc_url(service.config, table)
+        except ValueError as exc:
+            raise CompileError(f"Trino service {sid!r}: {exc}") from exc
     else:
         url = f"jdbc:{dialect}://{host}:{port}/{database}"
 
     add_param(f"svc_{sid}_db_url", url, False)
     add_param(f"svc_{sid}_db_user", str(service.config.get("username", "")), False)
-    add_param(f"svc_{sid}_db_password", service.config.get("password"), True)
+    password = service.config.get("password")
+    if password:
+        add_param(f"svc_{sid}_db_password", password, True)
 
     if not builder.has_cs(cs_key):
         properties: Dict[str, Any] = {
             "Database Connection URL": f"#{{svc_{sid}_db_url}}",
             "Database Driver Class Name": driver,
             "Database User": f"#{{svc_{sid}_db_user}}",
-            "Password": f"#{{svc_{sid}_db_password}}",
         }
+        if password:
+            properties["Password"] = f"#{{svc_{sid}_db_password}}"
         driver_locations = str(service.config.get("driverLocations") or "").strip()
         if driver_locations:
             properties["Database Driver Locations"] = driver_locations
@@ -158,8 +177,9 @@ def _compile_read(
     either, so it's left at the processor's own default rather than guessed.
     """
     service = _service_for(block, ctx)
-    table = _table_name(block)
-    cs_pool = _ensure_db_pool(builder, service=service, add_param=add_param)
+    table_ref = _configured_table(block)
+    table = _table_name(block, service=service)
+    cs_pool = _ensure_db_pool(builder, service=service, table=table_ref, add_param=add_param)
     _, writer_key = ensure_json_record_services(builder)
 
     columns = [c for c in (block.config.get("columns") or []) if isinstance(c, str) and c.strip()]
@@ -228,8 +248,9 @@ def _compile_write(
     if is_root:
         raise CompileError(f"jdbc write block {block.id!r} cannot be a flow root")
     service = _service_for(block, ctx)
-    table = _table_name(block)
-    cs_pool = _ensure_db_pool(builder, service=service, add_param=add_param)
+    table_ref = _configured_table(block)
+    table = _table_name(block, service=service)
+    cs_pool = _ensure_db_pool(builder, service=service, table=table_ref, add_param=add_param)
     reader_key, _ = ensure_json_record_services(builder)
 
     statement_type = str(block.config.get("statementType") or "INSERT").upper()
@@ -283,8 +304,9 @@ def _compile_lookup(
     if is_root:
         raise CompileError(f"jdbc lookup block {block.id!r} cannot be a flow root")
     service = _service_for(block, ctx)
-    table = _table_name(block)
-    cs_pool = _ensure_db_pool(builder, service=service, add_param=add_param)
+    table_ref = _configured_table(block)
+    table = _table_name(block, service=service)
+    cs_pool = _ensure_db_pool(builder, service=service, table=table_ref, add_param=add_param)
     join_field = str(block.config.get("lookupJoinField") or "id")
 
     cs_lookup_key = "cs_db_lookup"

@@ -63,6 +63,7 @@ import { toast } from "sonner";
 import { timeAgo } from "@/lib/api";
 import {
   activateConnection,
+  checkNifiPlatformServices,
   connectionDependents,
   deleteConnection,
   listConnections,
@@ -735,6 +736,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
   const [deleting, setDeleting] = useState(false);
   const [redisConfirm, setRedisConfirm] = useState<PlatformConnection | null>(null);
   const [repointTarget, setRepointTarget] = useState<PlatformConnection | null>(null);
+  const [checkingNifiId, setCheckingNifiId] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["connections"] });
 
@@ -792,6 +794,29 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
       return;
     }
     void doActivate(conn);
+  };
+
+  const checkNifiServices = async (conn: PlatformConnection) => {
+    setCheckingNifiId(conn.id);
+    try {
+      const result = await checkNifiPlatformServices(conn.id);
+      const summary = result.summary ?? {};
+      if (result.ok) {
+        toast.success(`${conn.name}: NiFi platform services are ready`, {
+          description: `${summary.created ?? 0} created, ${summary.repaired ?? 0} repaired, ${summary.healthy ?? 0} already healthy. Flow-specific services were left unchanged.`,
+        });
+      } else {
+        const attention = result.services.filter((service) => service.status === "failed" || service.status === "blocked");
+        toast.error(`${conn.name}: platform-service readiness needs attention`, {
+          description: attention.map((service) => `${service.name}: ${service.message ?? service.status}`).join(" "),
+        });
+      }
+    } catch (err) {
+      toast.error(`NiFi service check failed: ${(err as Error).message}`);
+    } finally {
+      setCheckingNifiId(null);
+      invalidate();
+    }
   };
 
   // ── Add / Edit ────────────────────────────────────────────────────────────
@@ -984,6 +1009,18 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
                             <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
                               <Pencil className="h-3.5 w-3.5" /> Edit
                             </Button>
+                            {c.type === "nifi" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void checkNifiServices(c)}
+                                disabled={checkingNifiId === c.id || !c.active}
+                                title={!c.active ? "Activate this NiFi connection before checking its platform services." : "Verify and repair Kafka, Apicurio, and Redis services in NiFi."}
+                              >
+                                {checkingNifiId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                {checkingNifiId === c.id ? "Checking..." : "Check NiFi services"}
+                              </Button>
+                            )}
                             <Button size="sm" variant="outline" onClick={() => setRepointTarget(c)}>
                               <ArrowLeftRight className="h-3.5 w-3.5" /> Repoint
                             </Button>

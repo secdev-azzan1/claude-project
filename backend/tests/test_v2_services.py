@@ -285,6 +285,10 @@ def test_private_flag_passes_through():
             {"type": "database", "name": "X", "config": {"host": "h", "database": "d", "capabilities": []}},
             "Select at least one capability",
         ),
+        (
+            {"type": "database", "name": "X", "config": {"dialect": "trino", "url": "ftp://trino", "capabilities": ["read"]}},
+            "must use http or https",
+        ),
         ({"type": "external_kafka", "name": "X", "config": {}}, "Bootstrap servers are required"),
         (
             {"type": "sink_destination", "name": "X", "config": {"kind": "opensearch"}},
@@ -759,6 +763,31 @@ def test_database_test_trino_uses_http_info_endpoint(monkeypatch):
     assert resp.json()["health"] == "Healthy"
     method, url, kw = calls[0]
     assert url == "http://trino.internal:8080/v1/info"
+
+
+def test_database_test_trino_accepts_https_url(monkeypatch):
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created_response = client.post(
+        "/api/v2/services/",
+        json={
+            "type": "database",
+            "name": "Remote Trino",
+            "config": {
+                "dialect": "trino",
+                "url": "https://trino.datapasc.com",
+                "username": "admin",
+                "capabilities": ["read"],
+            },
+        },
+    )
+    assert created_response.status_code == 200, created_response.text
+    calls = patch_httpx(monkeypatch, {"GET": FakeResponse(200)})
+
+    resp = client.post(f"/api/v2/services/{created_response.json()['id']}/test")
+    assert resp.json()["health"] == "Healthy"
+    method, url, kw = calls[0]
+    assert url == "https://trino.datapasc.com:443/v1/info"
 
 
 def test_database_test_postgresql_tcp_probe_success(monkeypatch):
