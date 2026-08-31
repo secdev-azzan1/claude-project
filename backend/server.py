@@ -302,6 +302,10 @@ async def ensure_indexes():
         (db.iceberg_sinks, [("flow_id", ASCENDING), ("stream_id", ASCENDING)], {"unique": True, "name": "uniq_iceberg_sink_flow_stream"}),
         (db.iceberg_sinks, [("connector_name", ASCENDING)], {"unique": True, "name": "uniq_iceberg_sink_connector"}),
         (db.iceberg_sinks, [("flow_id", ASCENDING)], {"name": "idx_iceberg_sinks_flow_id"}),
+        (db.kafka_connect_syncs_v2, [("id", ASCENDING)], {"unique": True, "name": "uniq_kafka_connect_sync_id"}),
+        (db.kafka_connect_syncs_v2, [("connector_name", ASCENDING)], {"unique": True, "name": "uniq_kafka_connect_sync_connector"}),
+        (db.kafka_connect_syncs_v2, [("linked_flow_id", ASCENDING)], {"name": "idx_kafka_connect_sync_flow"}),
+        (db.bulk_queue_leases_v2, [("id", ASCENDING)], {"unique": True, "name": "uniq_bulk_queue_lease_id"}),
     ]
     for coll, keys, options in index_specs:
         try:

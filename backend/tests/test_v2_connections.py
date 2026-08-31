@@ -19,12 +19,15 @@ import sys
 from functools import wraps
 from pathlib import Path
 
+import pytest
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from bson import ObjectId
 
 from db import get_db
 from routers.v2 import connections as connections_v2
@@ -55,6 +58,22 @@ class FakeDB:
 
     def __getitem__(self, name):
         return getattr(self, name)
+
+
+class InsertMutatingCollection(FaultInjectingCollection):
+    """Model PyMongo's insert_one behavior of attaching an ObjectId to the
+    mapping passed by the caller."""
+
+    async def insert_one(self, document):
+        result = await super().insert_one(document)
+        document["_id"] = ObjectId()
+        return result
+
+
+class MongoLikeDB(FakeDB):
+    def __init__(self):
+        super().__init__()
+        self.connections_v2 = InsertMutatingCollection()
 
 
 def _make_client(fake_db: FakeDB) -> TestClient:
@@ -130,6 +149,53 @@ def test_create_first_of_type_auto_activates_and_redacts_secret():
         )
         assert resp2.status_code == 201
         assert resp2.json()["active"] is False
+    finally:
+        _clear_overrides()
+
+
+def test_create_response_survives_mongo_insert_id_mutation():
+    fake_db = MongoLikeDB()
+    client = _make_client(fake_db)
+    try:
+        resp = client.post(
+            "/api/v2/connections/",
+            json={
+                "type": "nifi",
+                "name": "Mongo-like NiFi",
+                "config": {"url": "https://nifi.example.com", "authMode": "bearer", "token": "token"},
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["name"] == "Mongo-like NiFi"
+        assert "_id" not in body
+    finally:
+        _clear_overrides()
+
+
+@pytest.mark.parametrize(
+    ("connection_type", "config"),
+    [
+        ("nifi", {"url": "https://nifi.example.com", "authMode": "bearer", "token": "token"}),
+        ("kafka", {"bootstrapServers": "kafka.example.com:9092", "mode": "native", "securityProtocol": "PLAINTEXT"}),
+        ("apicurio", {"url": "https://registry.example.com", "authMode": "none"}),
+        ("kafka_connect", {"url": "https://connect.example.com"}),
+        ("redis", {"host": "redis.example.com", "port": 6379, "dedupDb": 0, "bookmarksDb": 1}),
+        ("apisix", {"adminUrl": "https://apisix-admin.example.com", "runtimeUrl": "https://apisix.example.com"}),
+    ],
+)
+def test_all_platform_connection_types_return_clean_create_responses(connection_type, config):
+    fake_db = MongoLikeDB()
+    client = _make_client(fake_db)
+    try:
+        resp = client.post(
+            "/api/v2/connections/",
+            json={"type": connection_type, "name": f"Mongo-like {connection_type}", "config": config},
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["type"] == connection_type
+        assert "_id" not in body
     finally:
         _clear_overrides()
 
@@ -538,7 +604,7 @@ def test_dispatch_redis_indirect_verification():
 # ------------------------------------------------------------------------ repoint
 
 
-def test_repoint_adopt_transfers_active_flag():
+def test_repoint_adopt_uses_identity_safe_service(monkeypatch):
     fake_db = FakeDB()
     client = _make_client(fake_db)
     try:
@@ -549,9 +615,16 @@ def test_repoint_adopt_transfers_active_flag():
             "/api/v2/connections/", json={"type": "nifi", "name": "B", "config": {"url": "https://b", "authMode": "bearer", "token": "t2"}}
         ).json()
 
+        async def fake_adopt(db, target):
+            await db.connections_v2.update_one({"id": a["id"]}, {"$set": {"active": False}})
+            await db.connections_v2.update_one({"id": target["id"]}, {"$set": {"active": True}})
+            return {"mode": "adopt", "flowCount": 0}
+
+        monkeypatch.setattr(connections_v2.nifi_repoint, "adopt", fake_adopt)
         resp = client.post(f"/api/v2/connections/{b['id']}/repoint", json={"mode": "adopt"})
         assert resp.status_code == 200
-        assert resp.json()["active"] is True
+        assert resp.json()["connection"]["active"] is True
+        assert resp.json()["result"]["mode"] == "adopt"
 
         stored_a = next(d for d in fake_db.connections_v2.docs if d["id"] == a["id"])
         assert stored_a["active"] is False
@@ -559,17 +632,27 @@ def test_repoint_adopt_transfers_active_flag():
         _clear_overrides()
 
 
-def test_repoint_migrate_and_reset_return_501():
+def test_repoint_migrate_dispatches_and_reset_is_not_an_api_mode(monkeypatch):
     fake_db = FakeDB()
     client = _make_client(fake_db)
     try:
-        a = client.post(
+        client.post(
             "/api/v2/connections/", json={"type": "nifi", "name": "A", "config": {"url": "https://a", "authMode": "bearer", "token": "t"}}
         ).json()
-        for mode in ("migrate", "reset"):
-            resp = client.post(f"/api/v2/connections/{a['id']}/repoint", json={"mode": mode})
-            assert resp.status_code == 501
-            assert "deployment engine" in resp.json()["detail"]
+        b = client.post(
+            "/api/v2/connections/", json={"type": "nifi", "name": "B", "config": {"url": "https://b", "authMode": "bearer", "token": "t2"}}
+        ).json()
+
+        async def fake_migrate(_db, target):
+            return {"mode": "migrate", "targetConnectionId": target["id"], "flowCount": 2}
+
+        monkeypatch.setattr(connections_v2.nifi_repoint, "migrate", fake_migrate)
+        migrated = client.post(f"/api/v2/connections/{b['id']}/repoint", json={"mode": "migrate"})
+        assert migrated.status_code == 200
+        assert migrated.json()["result"]["flowCount"] == 2
+
+        reset = client.post(f"/api/v2/connections/{b['id']}/repoint", json={"mode": "reset"})
+        assert reset.status_code == 422
     finally:
         _clear_overrides()
 

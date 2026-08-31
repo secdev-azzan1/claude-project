@@ -40,7 +40,7 @@ from .ir import (
     ScopeMapEntry,
     TopicSpec,
 )
-from .transforms import build_chain
+from .transforms import build_chain, compile_cleanup
 
 
 def compile_flow(flow: Flow, ctx: CompileContext) -> DeploymentPlan:
@@ -148,7 +148,8 @@ def _compile_block(
     else:  # pragma: no cover - FlowBlock.adapter is a Literal; defensive only
         raise CompileError(f"Unknown adapter {block.adapter!r} on block {block.id}")
 
-    tail = build_chain(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, tail=tail, add_param=add_param)
+    chain = build_chain(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token, tail=tail, add_param=add_param)
+    tail = chain.tail
 
     output_port_needed = False
     tail_consumed_by_publish = False
@@ -156,16 +157,22 @@ def _compile_block(
         # Fulfill the promised consume chain (read) or attach the publish
         # step (write). A write's publish consumes the tail; children (legal
         # per R3) additionally fan out from the same tail below.
+        publish_tail = (
+            compile_cleanup(builder, cleanup=chain.cleanup, tail=tail, key_prefix="egress__publish")
+            if block.mode == "write" else tail
+        )
         blocks_kafka.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
-                                     add_param=add_param, topics_out=topics_out, tail=tail)
+                                     add_param=add_param, topics_out=topics_out, tail=publish_tail)
         tail_consumed_by_publish = block.mode == "write"
 
     if terminal:
+        publish_tail = compile_cleanup(builder, cleanup=chain.cleanup, tail=tail, key_prefix="egress__publish")
         blocks_kafka_kc.compile_publish(builder, flow=flow, block=block, ctx=ctx, flow_token=flow_token,
                                         add_param=add_param, topics_out=topics_out,
-                                        connectors_out=connectors_out, tail=tail)
+                                        connectors_out=connectors_out, tail=publish_tail)
     elif children:
-        routing.wire_children(builder, flow=flow, parent=block, children=children, tail=tail, port_links=port_links)
+        routing.wire_children(builder, flow=flow, parent=block, children=children, tail=tail,
+                              cleanup=chain.cleanup, port_links=port_links)
         output_port_needed = True
     elif not tail_consumed_by_publish:
         # Non-terminal, childless: nothing downstream consumes the finished

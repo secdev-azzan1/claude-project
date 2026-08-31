@@ -18,7 +18,7 @@ leaves a readable record rather than a job that silently vanished;
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -58,9 +58,10 @@ class BulkJobItem(BaseModel):
     """One flow's slot in the run. `status` starts "pending" and only ever
     moves forward, so the UI can render a stable per-row indicator."""
 
+    id: str = Field(default_factory=lambda: new_id("bulk-item"))
     flow_id: str
     flow_name: str
-    status: str = "pending"  # pending | running | succeeded | failed | skipped
+    status: str = "pending"  # pending | running | succeeded | failed | skipped | cancelled
     error: Optional[str] = None
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
@@ -98,6 +99,9 @@ class BulkJob(BaseModel):
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
     finished_at: Optional[str] = None
+    # Optional controls for a flow deletion.  Kept on the durable job so a
+    # queued delete has exactly the same intent after a refresh or restart.
+    delete_options: Dict[str, bool] = Field(default_factory=dict)
 
     def to_response(self) -> Dict[str, Any]:
         """camelCase view for the frontend, matching the rest of the v2 API."""
@@ -114,12 +118,17 @@ class BulkJob(BaseModel):
             "cancelRequested": self.cancel_requested,
             "items": [
                 {
+                    "id": item.id,
                     "flowId": item.flow_id,
                     "flowName": item.flow_name,
                     "status": item.status,
                     "error": item.error,
                     "startedAt": item.started_at,
                     "finishedAt": item.finished_at,
+                    "cancellable": (
+                        item.status == "pending"
+                        and self.status in ("queued", "running")
+                    ),
                 }
                 for item in self.items
             ],
@@ -133,5 +142,24 @@ class BulkJob(BaseModel):
 def bulk_job_to_response(doc: Dict[str, Any]) -> Dict[str, Any]:
     """Response view straight from a raw Mongo doc, without a full model
     round-trip. Used on the read paths, which are polled once a second and
-    should stay cheap."""
-    return BulkJob(**doc).to_response()
+    should stay cheap. Older recovery writes used datetime values for some
+    timestamps, so normalize those before validating the current model."""
+    normalized = dict(doc)
+
+    def timestamp(value: Any) -> Any:
+        if not isinstance(value, datetime):
+            return value
+        value = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    for key in ("created_at", "updated_at", "finished_at"):
+        normalized[key] = timestamp(normalized.get(key))
+    normalized["items"] = [
+        {
+            **item,
+            "started_at": timestamp(item.get("started_at")),
+            "finished_at": timestamp(item.get("finished_at")),
+        }
+        for item in (normalized.get("items") or [])
+    ]
+    return BulkJob(**normalized).to_response()

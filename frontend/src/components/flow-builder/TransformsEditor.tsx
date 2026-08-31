@@ -5,7 +5,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { AddBlockMenu } from "./AddBlockMenu";
 import { computeAddMenu, type AddMenuEntry } from "@/prototype/legality";
 import { uid } from "@/prototype/store";
@@ -42,6 +44,10 @@ const KIND_HINT: Partial<Record<TransformKind, string>> = {};
 // Dedup is not offered here — it has its own always-visible panel below the
 // list (see DedupPanel) so it doesn't hide as a terse dropdown item.
 const ADDABLE: TransformKind[] = ["extract", "add_field", "remove_field", "set_from_attribute", "rename", "coerce"];
+
+function supportsRetention(kind: TransformKind): boolean {
+  return kind === "extract" || kind === "add_field" || kind === "set_from_attribute" || kind === "rename";
+}
 
 function defaultConfig(kind: TransformKind): Record<string, unknown> {
   switch (kind) {
@@ -190,7 +196,31 @@ export function TransformsEditor({ flow, block, locked, onChange, onGoToBranches
                 </Select>
               </>
             )}
+            {supportsRetention(rule.kind) && (
+              <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                <Label
+                  htmlFor={`retention-${rule.id}`}
+                  className="cursor-help"
+                  title="The key remains available to transforms, deduplication, and routing in this block, then is deleted before output."
+                >
+                  Remove after this block
+                </Label>
+                <Switch
+                  id={`retention-${rule.id}`}
+                  checked={String(rule.config.retention ?? "flow") === "block"}
+                  disabled={locked}
+                  onCheckedChange={(checked) =>
+                    setRule(rule.id, { config: { retention: checked ? "block" : "flow" } })
+                  }
+                />
+              </div>
+            )}
           </div>
+          {supportsRetention(rule.kind) && String(rule.config.retention ?? "flow") === "block" && (
+            <p className="mt-2 text-2xs text-muted-foreground">
+              Available through this block, including deduplication and routing; removed before the next block or destination.
+            </p>
+          )}
         </div>
       ))}
 

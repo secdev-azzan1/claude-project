@@ -222,8 +222,12 @@ def _build_query(pagination: Dict[str, Any], *, key_value_query_param: Optional[
         parts.append(f"{size_param}=${{page_size}}")
     elif ptype == "cursor":
         parts.append(f"{fields.get('cursorParam', 'cursor')}=${{cursor}}")
-        if "sizeValue" in fields or "sizeParam" in fields:
-            size_param = fields.get("sizeParam", "limit")
+        # PaginationFields.tsx persists cursor-specific names so cursor and
+        # page settings can never overwrite each other.  Keep the older
+        # generic aliases readable for already-saved/imported flows.
+        size_value = fields.get("cursorSizeValue", fields.get("sizeValue"))
+        if str(size_value or "").strip():
+            size_param = fields.get("cursorSizeParam", fields.get("sizeParam", "limit"))
             parts.append(f"{size_param}=${{page_size}}")
     if key_value_query_param:
         name, param_ref = key_value_query_param
@@ -243,19 +247,85 @@ def _pagination_init_props(ptype: str, pagination: Dict[str, Any]) -> Dict[str, 
     if ptype == "offset":
         props["offset"] = "0"
         props["limit"] = str(fields.get("limitValue", "100"))
-        props["page_count"] = "0"
+        props["page_count"] = "1"
     elif ptype == "page":
         props["page"] = str(fields.get("firstPage", "1"))
         props["page_size"] = str(fields.get("sizeValue", "100"))
-        props["page_count"] = "0"
+        props["page_count"] = "1"
     elif ptype == "cursor":
         props["cursor"] = ""
-        props["page_count"] = "0"
-        if "sizeValue" in fields or "sizeParam" in fields:
-            props["page_size"] = str(fields.get("sizeValue", "100"))
+        props["page_count"] = "1"
+        size_value = fields.get("cursorSizeValue", fields.get("sizeValue"))
+        if str(size_value or "").strip():
+            props["page_size"] = str(size_value)
     elif ptype == "next_url":
-        props["page_count"] = "0"
+        props["page_count"] = "1"
     return props
+
+
+def _field_text(fields: Dict[str, Any], key: str, *aliases: str, default: str = "") -> str:
+    """Return the first non-blank UI field or backwards-compatible alias."""
+    for candidate in (key, *aliases):
+        value = fields.get(candidate)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return default
+
+
+def _response_header_expr(name: str) -> str:
+    """Read an InvokeHTTP response header without depending on casing/version.
+
+    NiFi's Response FlowFile carries response headers under their header name;
+    some InvokeHTTP versions/configurations additionally prefix copies with
+    ``invokehttp.response.header.``.  The fallback chain accepts both shapes
+    and both the configured and lower-case spelling.
+    """
+    header = str(name or "").strip()
+    lower = header.lower()
+    candidates = [header]
+    if lower != header:
+        candidates.append(lower)
+    candidates.extend([f"invokehttp.response.header.{header}", f"invokehttp.response.header.{lower}"])
+    expression = "${'" + candidates[0] + "'"
+    for candidate in candidates[1:]:
+        expression += ":replaceEmpty(${'" + candidate + "'})"
+    return expression + "}"
+
+
+def _response_header_attr_names(name: str) -> List[str]:
+    """Attribute aliases that can hold one InvokeHTTP response header.
+
+    Response FlowFiles inherit request attributes, so a header omitted by a
+    later response can otherwise retain the value from the previous response.
+    The pagination loop clears these aliases after consuming the current value.
+    """
+    header = str(name or "").strip()
+    lower = header.lower()
+    return list(dict.fromkeys((header, lower, f"invokehttp.response.header.{header}",
+                               f"invokehttp.response.header.{lower}")))
+
+
+def _link_next_expr(header_name: str, rel: str) -> str:
+    """Extract one RFC 5988/8288 relation URL, returning blank when absent."""
+    relation = re.escape(str(rel or "next").strip() or "next")
+    header_expr = _response_header_expr(header_name)
+    subject = header_expr[2:-1]
+    marker = f'rel=["\\\']?{relation}["\\\']?'
+    pattern = f'(?s).*<([^>]*)>;[^,]*{marker}.*'
+    return "${" + subject + f":find('{marker}'):ifElse(${{{subject}:replaceAll('{pattern}','$1')}}, '')}}"
+
+
+def _optional_max_pages(fields: Dict[str, Any]) -> Optional[int]:
+    value = fields.get("maxPages")
+    if value is None or not str(value).strip():
+        return None
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError) as exc:
+        raise CompileError("Pagination maximum pages must be a positive whole number") from exc
+    if parsed <= 0:
+        raise CompileError("Pagination maximum pages must be a positive whole number")
+    return parsed
 
 
 def _probe_path(record_path: str) -> str:
@@ -544,10 +614,6 @@ def compile_read(
     else:
         _apply_auth(builder, service=service, props=invoke_props, add_param=add_param,
                     api_key_query_handled=key_value_query_param is not None)
-    if ptype == "cursor" and (pagination.get("fields") or {}).get("cursorSource") == "header":
-        invoke_props["Response Header Request Attributes Enabled"] = "true"
-        invoke_props["Response Header Request Attributes Pattern"] = (pagination["fields"].get("cursorHeaderName", "cursor"))
-
     builder.add_processor(
         ProcessorSpec(key="fetch", name="fetch", type="org.apache.nifi.processors.standard.InvokeHTTP",
                       properties=invoke_props, autoTerminate=list(_INVOKE_HTTP_AUTOTERMINATE))
@@ -713,41 +779,54 @@ def _build_pagination(
     to restore `mime.type` — see `_compile_write`'s call site for why the loop
     would otherwise poison the next request's Content-Type."""
     fields = pagination.get("fields", {}) or {}
-    max_pages = fields.get("maxPages")
+    max_pages = _optional_max_pages(fields)
+    response_header_names: List[str] = []
 
-    if ptype == "offset" or ptype == "page":
+    if ptype in ("offset", "page"):
+        page_size = _field_text(
+            fields, "limitValue" if ptype == "offset" else "sizeValue", default="100"
+        )
         next_props = (
-            {"offset": "${offset:toNumber():plus(" + str(fields.get("limitValue", 100)) + ")}"}
+            {"offset": "${offset:toNumber():plus(" + page_size + ")}"}
             if ptype == "offset" else {"page": "${page:toNumber():plus(1)}"}
         )
         stop_key = "offsetStop" if ptype == "offset" else "stop"
-        if fields.get(stop_key, "empty_response") == "total_count":
-            # Total-count stop: continue while (pages fetched so far) * page
-            # size hasn't reached the API-reported total yet. Reuses the
-            # `page_count` counter every pagination style already increments
-            # once per loop (`next_props["page_count"]` below) — no new
-            # counter attribute needed. A missing total (path/header not
-            # found -> attribute left unset by "Path Not Found Behavior:
-            # ignore") fails safe via the standard NiFi isEmpty->ifElse
-            # default idiom, which never calls :toNumber() on the possibly-
-            # empty raw value, so it stops instead of throwing or looping
-            # forever.
+        stop = str(fields.get(stop_key, "empty_response") or "empty_response")
+        if stop == "total_count":
+            # Total-count stop: page uses pages-fetched * size; offset uses
+            # current offset + size. Missing metadata continues only until the
+            # required maxPages safety bound, exposing a bad path/header.
             prefix = "offsetTotalCount" if ptype == "offset" else "totalCount"
             source = fields.get(f"{prefix}Source", "body")
-            page_size = fields.get("limitValue" if ptype == "offset" else "sizeValue", 100)
             if source == "header":
                 page_meta_type = _UPDATE_ATTRIBUTE
-                header_name = fields.get(f"{prefix}Header", "X-Total-Count")
-                page_meta_props = {"total_count": "${invokehttp.response.header." + str(header_name) + "}"}
+                header_name = _field_text(fields, f"{prefix}Header", default="X-Total-Count")
+                page_meta_props = {"total_count": _response_header_expr(header_name)}
+                response_header_names = _response_header_attr_names(header_name)
             else:
                 page_meta_type = _EVALUATE_JSON_PATH
                 page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
                                     "Path Not Found Behavior": "ignore",
-                                    "total_count": fields.get(f"{prefix}Path", "$.totalCount")}
-            cond = (
-                "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
-                ":gt(${page_count:toNumber():plus(1):multiply(" + str(page_size) + ")})}"
+                                    "total_count": _field_text(fields, f"{prefix}Path", default="$.meta.total")}
+            total_comparison = (
+                "${offset:toNumber():plus(" + page_size + "):lt(${total_count:toNumber()})}"
+                if ptype == "offset"
+                else "${page_count:toNumber():multiply(" + page_size + "):lt(${total_count:toNumber()})}"
             )
+            cond = "${total_count:isEmpty():or(" + total_comparison + ")}"
+        elif stop == "has_more":
+            source = fields.get("hasMoreSource", "body")
+            if source == "header":
+                page_meta_type = _UPDATE_ATTRIBUTE
+                header_name = _field_text(fields, "hasMoreHeader", default="X-Has-More")
+                page_meta_props = {"has_more_flag": _response_header_expr(header_name)}
+                response_header_names = _response_header_attr_names(header_name)
+            else:
+                page_meta_type = _EVALUATE_JSON_PATH
+                page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
+                                   "Path Not Found Behavior": "ignore",
+                                   "has_more_flag": _field_text(fields, "hasMorePath", default="$.meta.hasMore")}
+            cond = "${has_more_flag:equals('false'):not()}"
         else:
             page_meta_type = _EVALUATE_JSON_PATH
             page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "json",
@@ -759,21 +838,34 @@ def _build_pagination(
             page_meta_type = _EVALUATE_JSON_PATH
             page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
                                 "Path Not Found Behavior": "ignore",
-                                "next_cursor": fields.get("cursorPath", "$.nextCursor")}
+                                "next_cursor": _field_text(fields, "cursorPath", default="$.nextCursor")}
         else:
-            # Best-effort attribute reference for header-sourced cursors:
-            # InvokeHTTP's "Response Header Request Attributes Pattern" (set
-            # on `fetch`) promotes the matching response header to
-            # `invokehttp.response.header.<name>`.
             page_meta_type = _UPDATE_ATTRIBUTE
-            header_name = fields.get("cursorHeaderName", "cursor")
-            page_meta_props = {"next_cursor": "${invokehttp.response.header." + str(header_name) + "}"}
+            header_name = _field_text(fields, "cursorHeader", "cursorHeaderName", default="X-Next-Cursor")
+            page_meta_props = {"next_cursor": _response_header_expr(header_name)}
+            response_header_names = _response_header_attr_names(header_name)
         cond = "${next_cursor:trim():isEmpty():not()}"
         next_props = {"cursor": "${next_cursor}"}
     elif ptype == "next_url":
-        page_meta_type = _EVALUATE_JSON_PATH
-        page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
-                            "Path Not Found Behavior": "ignore", "next_url": fields.get("urlPath", "$.next")}
+        source = fields.get("nextUrlSource")
+        if not source:
+            source = "body" if fields.get("urlPath") else "link_header"
+        if source == "body":
+            page_meta_type = _EVALUATE_JSON_PATH
+            page_meta_props = {"Destination": "flowfile-attribute", "Return Type": "scalar",
+                               "Path Not Found Behavior": "ignore",
+                               "next_url": _field_text(fields, "nextUrlPath", "urlPath", default="$.next")}
+        elif source == "header":
+            page_meta_type = _UPDATE_ATTRIBUTE
+            header_name = _field_text(fields, "nextUrlHeader", default="X-Next-Url")
+            page_meta_props = {"next_url": _response_header_expr(header_name)}
+            response_header_names = _response_header_attr_names(header_name)
+        else:
+            page_meta_type = _UPDATE_ATTRIBUTE
+            page_meta_props = {
+                "next_url": _link_next_expr("Link", _field_text(fields, "linkRel", default="next"))
+            }
+            response_header_names = _response_header_attr_names("Link")
         cond = "${next_url:trim():isEmpty():not()}"
         next_props = {"request.url": "${next_url}"}
     else:  # pragma: no cover - guarded by caller
@@ -793,7 +885,7 @@ def _build_pagination(
         # UpdateAttribute has no "failure" relationship to route to DLQ.
         builder.link("page_meta", "has_more", ["success"])
 
-    if max_pages:
+    if max_pages is not None:
         cond = "${" + cond[2:-1] + ":and(${page_count:toNumber():lt(" + str(max_pages) + ")})}"
     builder.add_processor(
         ProcessorSpec(key="has_more", name="has_more", type="org.apache.nifi.processors.standard.RouteOnAttribute",
@@ -802,6 +894,11 @@ def _build_pagination(
     )
 
     next_props["page_count"] = "${page_count:toNumber():plus(1)}"
+    # Consume response headers at the loop boundary. UpdateAttribute evaluates
+    # every expression against the incoming attributes, so canonical values
+    # above are copied before these old response aliases are blanked.
+    for header_attr in response_header_names:
+        next_props[header_attr] = ""
     if extra_next_props:
         next_props.update(extra_next_props)
     builder.add_processor(
@@ -1121,10 +1218,6 @@ def _compile_write(
         invoke_props[header] = _session_header_value(service)
     else:
         _apply_auth(builder, service=service, props=invoke_props, add_param=add_param)
-    if ptype == "cursor" and (pagination.get("fields") or {}).get("cursorSource") == "header":
-        invoke_props["Response Header Request Attributes Enabled"] = "true"
-        invoke_props["Response Header Request Attributes Pattern"] = (pagination["fields"].get("cursorHeaderName", "cursor"))
-
     unused_relationship = "Response" if write_forwards != "response" else "Original"
     builder.add_processor(
         ProcessorSpec(key="write", name="write", type="org.apache.nifi.processors.standard.InvokeHTTP",

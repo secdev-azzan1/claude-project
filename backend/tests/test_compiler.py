@@ -251,8 +251,9 @@ def test_dedup_processor_shape_and_ordering():
     assert len(dlq_from_detect) == 1
     assert dlq_from_detect[0].relationships == ["failure"]
 
-    excludes = hash_p.properties["EXCLUDES"].split(",")
-    assert {"ingest_id", "ingest_ts", "op"} <= set(excludes)
+    # Only the configured exclusions participate.  The compiler must not add
+    # hidden platform metadata exclusions behind the user's back.
+    assert hash_p.properties["EXCLUDES"] == ""
     assert hash_p.properties["SRC"] == "golden_flow__b-sink"  # <flowToken>__<blockId>
 
     redis_cache = next(cs for cs in group.controllerServices if cs.key == "cs_redis_cache")
@@ -911,7 +912,7 @@ def test_http_write_offset_pagination_seeds_counters_and_loops_to_render_body():
     init = next(p for p in group.processors if p.key == "init")
     assert init.properties["offset"] == "0"
     assert init.properties["limit"] == "500"
-    assert init.properties["page_count"] == "0"
+    assert init.properties["page_count"] == "1"
 
     # the user's own body is untouched apart from the two auto-appended
     # pagination fields -- no hand-typed ${offset}/${limit} in the fixture.
@@ -940,7 +941,7 @@ def test_http_write_page_pagination_auto_fills_body_and_loops_to_render_body():
     init = next(p for p in group.processors if p.key == "init")
     assert init.properties["page"] == "1"
     assert init.properties["page_size"] == "250"
-    assert init.properties["page_count"] == "0"
+    assert init.properties["page_count"] == "1"
 
     render = next(p for p in group.processors if p.key == "render_body")
     assert render.properties["Replacement Value"] == '{"target": "USER", "page": ${page}, "size": ${page_size}}'
@@ -985,8 +986,7 @@ def test_http_write_offset_pagination_total_count_stop_from_body_path():
 
     has_more = next(p for p in group.processors if p.key == "has_more")
     assert has_more.properties["continue"] == (
-        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
-        ":gt(${page_count:toNumber():plus(1):multiply(500)})}"
+        "${total_count:isEmpty():or(${offset:toNumber():plus(500):lt(${total_count:toNumber()})})}"
     )
 
 
@@ -1000,12 +1000,15 @@ def test_http_write_offset_pagination_total_count_stop_from_header():
 
     page_meta = next(p for p in group.processors if p.key == "page_meta")
     assert page_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
-    assert page_meta.properties["total_count"] == "${invokehttp.response.header.X-Total-Count}"
+    assert page_meta.properties["total_count"] == (
+        "${'X-Total-Count':replaceEmpty(${'x-total-count'})"
+        ":replaceEmpty(${'invokehttp.response.header.X-Total-Count'})"
+        ":replaceEmpty(${'invokehttp.response.header.x-total-count'})}"
+    )
 
     has_more = next(p for p in group.processors if p.key == "has_more")
     assert has_more.properties["continue"] == (
-        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
-        ":gt(${page_count:toNumber():plus(1):multiply(500)})}"
+        "${total_count:isEmpty():or(${offset:toNumber():plus(500):lt(${total_count:toNumber()})})}"
     )
 
 
@@ -1023,8 +1026,7 @@ def test_http_write_page_pagination_total_count_stop_from_body_path():
 
     has_more = next(p for p in group.processors if p.key == "has_more")
     assert has_more.properties["continue"] == (
-        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
-        ":gt(${page_count:toNumber():plus(1):multiply(250)})}"
+        "${total_count:isEmpty():or(${page_count:toNumber():multiply(250):lt(${total_count:toNumber()})})}"
     )
 
 
@@ -1038,12 +1040,15 @@ def test_http_write_page_pagination_total_count_stop_from_header():
 
     page_meta = next(p for p in group.processors if p.key == "page_meta")
     assert page_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
-    assert page_meta.properties["total_count"] == "${invokehttp.response.header.X-Total-Count}"
+    assert page_meta.properties["total_count"] == (
+        "${'X-Total-Count':replaceEmpty(${'x-total-count'})"
+        ":replaceEmpty(${'invokehttp.response.header.X-Total-Count'})"
+        ":replaceEmpty(${'invokehttp.response.header.x-total-count'})}"
+    )
 
     has_more = next(p for p in group.processors if p.key == "has_more")
     assert has_more.properties["continue"] == (
-        "${total_count:isEmpty():ifElse('0', ${total_count}):toNumber()"
-        ":gt(${page_count:toNumber():plus(1):multiply(250)})}"
+        "${total_count:isEmpty():or(${page_count:toNumber():multiply(250):lt(${total_count:toNumber()})})}"
     )
 
 
@@ -1689,6 +1694,123 @@ def test_pagination_next_url_keeps_request_url_attribute():
     assert nxt.properties["request.url"] == "${next_url}"
 
 
+def test_pagination_cursor_uses_ui_page_size_field_names():
+    plan = compile_flow(_paginated_read_flow({
+        "type": "cursor",
+        "fields": {
+            "cursorParam": "after",
+            "cursorSizeParam": "limit",
+            "cursorSizeValue": "5",
+            "cursorSource": "body",
+            "cursorPath": "$.cursor",
+            "maxPages": "2",
+        },
+    }), http_svc_ctx())
+    group = _read_group(plan)
+    fetch = next(p for p in group.processors if p.key == "fetch")
+    init = next(p for p in group.processors if p.key == "init")
+    has_more = next(p for p in group.processors if p.key == "has_more")
+    assert fetch.properties["HTTP URL"].endswith("?after=${cursor}&limit=${page_size}")
+    assert init.properties["page_size"] == "5"
+    assert init.properties["page_count"] == "1"
+    assert has_more.properties["continue"] == (
+        "${next_cursor:trim():isEmpty():not():and(${page_count:toNumber():lt(2)})}"
+    )
+
+
+def test_pagination_has_more_body_flag_is_compiled_for_page():
+    plan = compile_flow(_paginated_read_flow({
+        "type": "page",
+        "fields": {
+            "pageParam": "page", "sizeParam": "pagesize", "sizeValue": "100",
+            "stop": "has_more", "hasMoreSource": "body", "hasMorePath": "$.has_more",
+            "maxPages": "10",
+        },
+    }), http_svc_ctx())
+    group = _read_group(plan)
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    has_more = next(p for p in group.processors if p.key == "has_more")
+    assert page_meta.properties["has_more_flag"] == "$.has_more"
+    assert has_more.properties["continue"] == (
+        "${has_more_flag:equals('false'):not():and(${page_count:toNumber():lt(10)})}"
+    )
+
+
+def test_pagination_has_more_header_flag_is_compiled_for_offset():
+    plan = compile_flow(_paginated_read_flow({
+        "type": "offset",
+        "fields": {
+            "limitValue": "25", "offsetStop": "has_more", "hasMoreSource": "header",
+            "hasMoreHeader": "X-Has-More", "maxPages": "4",
+        },
+    }), http_svc_ctx())
+    group = _read_group(plan)
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    next_page = next(p for p in group.processors if p.key == "next")
+    assert page_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert "X-Has-More" in page_meta.properties["has_more_flag"]
+    assert next_page.properties["X-Has-More"] == ""
+    assert next_page.properties["invokehttp.response.header.x-has-more"] == ""
+
+
+def test_pagination_cursor_header_uses_ui_header_field_name():
+    plan = compile_flow(_paginated_read_flow({
+        "type": "cursor",
+        "fields": {"cursorParam": "cursor", "cursorSource": "header", "cursorHeader": "X-Cursor"},
+    }), http_svc_ctx())
+    group = _read_group(plan)
+    page_meta = next(p for p in group.processors if p.key == "page_meta")
+    next_page = next(p for p in group.processors if p.key == "next")
+    assert page_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert "X-Cursor" in page_meta.properties["next_cursor"]
+    assert next_page.properties["X-Cursor"] == ""
+
+
+def test_pagination_next_url_uses_ui_body_path():
+    plan = compile_flow(_paginated_read_flow({
+        "type": "next_url",
+        "fields": {"nextUrlSource": "body", "nextUrlPath": "$.paging.next"},
+    }), http_svc_ctx())
+    page_meta = next(p for p in _read_group(plan).processors if p.key == "page_meta")
+    assert page_meta.properties["next_url"] == "$.paging.next"
+
+
+def test_pagination_next_url_raw_header_and_link_header_compile():
+    raw_plan = compile_flow(_paginated_read_flow({
+        "type": "next_url",
+        "fields": {"nextUrlSource": "header", "nextUrlHeader": "X-Next-Url"},
+    }), http_svc_ctx())
+    raw_group = _read_group(raw_plan)
+    raw_meta = next(p for p in raw_group.processors if p.key == "page_meta")
+    raw_next = next(p for p in raw_group.processors if p.key == "next")
+    assert raw_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert "X-Next-Url" in raw_meta.properties["next_url"]
+    assert raw_next.properties["X-Next-Url"] == ""
+    assert raw_next.properties["invokehttp.response.header.x-next-url"] == ""
+
+    link_plan = compile_flow(_paginated_read_flow({
+        "type": "next_url",
+        "fields": {"nextUrlSource": "link_header", "linkRel": "next", "maxPages": "4"},
+    }), http_svc_ctx())
+    link_group = _read_group(link_plan)
+    link_meta = next(p for p in link_group.processors if p.key == "page_meta")
+    link_route = next(p for p in link_group.processors if p.key == "has_more")
+    link_next = next(p for p in link_group.processors if p.key == "next")
+    assert link_meta.type == "org.apache.nifi.processors.attributes.UpdateAttribute"
+    assert "rel=" in link_meta.properties["next_url"]
+    assert "replaceAll" in link_meta.properties["next_url"]
+    assert link_route.properties["continue"].endswith(":and(${page_count:toNumber():lt(4)})}")
+    assert link_next.properties["Link"] == ""
+    assert link_next.properties["invokehttp.response.header.link"] == ""
+
+
+def test_pagination_invalid_max_pages_is_refused_by_compiler():
+    with pytest.raises(CompileError, match="maximum pages"):
+        compile_flow(_paginated_read_flow({
+            "type": "next_url", "fields": {"nextUrlSource": "body", "maxPages": "0"},
+        }), http_svc_ctx())
+
+
 # --------------------------------------------------------------------------
 # 14. M4 — extract `default` materialized via UpdateAttribute
 # --------------------------------------------------------------------------
@@ -1785,7 +1907,7 @@ def _dedup_rule() -> TransformRule:
                          config={"identityFields": ["id"], "excludedFields": [], "windowHours": 24})
 
 
-def test_dedup_on_unsplit_http_read_refused():
+def test_dedup_on_unsplit_http_collection_read_refused():
     from services.adapter.validation import validate_flow
 
     flow = Flow(
@@ -1794,7 +1916,7 @@ def test_dedup_on_unsplit_http_read_refused():
         blocks=[
             FlowBlock(
                 id="b-read", adapter="http", mode="read", name="Read", parentId=None, serviceId="svc-http",
-                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$",
+                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$.items[*]",
                         "split": False, "pagination": {"type": "none", "fields": {}}},
                 transforms=[_dedup_rule()],
             ),
@@ -1812,14 +1934,14 @@ def test_dedup_on_unsplit_http_read_refused():
         compile_flow(flow, ctx)
 
 
-def test_dedup_downstream_of_unsplit_read_also_refused():
+def test_dedup_downstream_of_unsplit_collection_read_also_refused():
     flow = Flow(
         id="flow-nosplit2", name="NoSplit Flow 2", cron="0 * * * *", state="Draft", enabled=True,
         createdAt="2026-01-01T00:00:00.000Z", updatedAt="2026-01-01T00:00:00.000Z",
         blocks=[
             FlowBlock(
                 id="b-read", adapter="http", mode="read", name="Read", parentId=None, serviceId="svc-http",
-                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$",
+                config={"method": "GET", "path": "/items", "responseFormat": "json", "recordPath": "$.items[*]",
                         "split": False, "pagination": {"type": "none", "fields": {}}},
             ),
             FlowBlock(id="b-write", adapter="kafka", mode="write", name="Out", parentId="b-read", entity="e",
@@ -1839,6 +1961,50 @@ def test_dedup_on_split_http_read_allowed():
     plan = compile_flow(flow, ctx)  # split=True -> fine
     group = _read_group(plan)
     assert any(p.key == "dedupe__detect" for p in group.processors)
+
+
+def test_dedup_on_unsplit_root_object_http_read_allowed():
+    flow = _single_read_flow_with_transforms([_dedup_rule()])
+    flow.blocks[0].config.update({"recordPath": "$", "split": False})
+    ctx = http_svc_ctx()
+    ctx.connections["redis"] = make_connection(id="conn-redis", type="redis", name="R",
+                                               config={"host": "redis", "port": 6379})
+    plan = compile_flow(flow, ctx)
+    assert any(p.key == "dedupe__detect" for p in _read_group(plan).processors)
+
+
+def test_temporary_parent_values_are_removed_after_branch_routing():
+    flow = routing_flow()
+    flow.blocks[0].transforms = [
+        TransformRule(id="t-attr", kind="extract", config={"attribute": "route_hint", "path": "$.route_hint", "retention": "block"}),
+        TransformRule(id="t-field", kind="add_field", config={"field": "temporary_helper", "value": "${route_hint}", "retention": "block"}),
+    ]
+    plan = compile_flow(flow, routing_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    assert {p.key for p in group.processors} >= {
+        "egress__b_any__remove_record_fields",
+        "egress__b_any__remove_attributes",
+        "egress__b_uncond__remove_record_fields",
+        "egress__b_uncond__remove_attributes",
+    }
+    any_route = next(p for p in group.processors if p.key == "route__any_branch")
+    any_cleanup = next(p for p in group.processors if p.key == "egress__b_any__remove_record_fields")
+    assert any(c.from_ == any_route.key and c.to == any_cleanup.key and c.relationships == ["matched"] for c in group.connections)
+
+
+def test_temporary_terminal_values_are_removed_after_dedup_before_publish():
+    flow = golden_flow()
+    sink = next(b for b in flow.blocks if b.id == "b-sink")
+    sink.transforms.insert(0, TransformRule(
+        id="t-temp", kind="add_field", config={"field": "temporary_helper", "value": "internal", "retention": "block"}
+    ))
+    plan = compile_flow(flow, golden_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-sink")
+    keys = [p.key for p in group.processors]
+    assert keys.index("dedupe__detect") < keys.index("egress__publish__remove_record_fields") < keys.index("publish")
+    cleanup = next(p for p in group.processors if p.key == "egress__publish__remove_record_fields")
+    assert cleanup.type == "org.apache.nifi.processors.standard.RemoveRecordField"
+    assert cleanup.properties["field_to_remove_1"] == "/temporary_helper"
 
 
 # --------------------------------------------------------------------------

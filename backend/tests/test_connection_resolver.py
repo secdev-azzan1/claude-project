@@ -52,8 +52,12 @@ class FakeCollection:
 
 
 class FakeDB:
-    def __init__(self, docs):
+    def __init__(self, docs, v2_docs=None):
         self.connections = FakeCollection(docs)
+        self.connections_v2 = FakeCollection(v2_docs or [])
+
+    def __getitem__(self, name):
+        return getattr(self, name)
 
 
 @async_test
@@ -78,3 +82,35 @@ async def test_resolve_connection_accepts_v2_active_flag():
     assert resolved["is_active"] is True
     assert db.connections.docs[0]["active"] is True
     assert db.connections.docs[0]["is_active"] is True
+
+
+@async_test
+async def test_resolve_connection_falls_back_to_v2_kafka_connect_url():
+    db = FakeDB(
+        [],
+        [
+            {
+                "id": "kc-v2",
+                "type": "kafka_connect",
+                "name": "Kafka Connect v2",
+                "active": True,
+                "config": {"url": "https://connect.example.test"},
+            }
+        ],
+    )
+
+    resolved = await resolve_connection(db, "kafka_connect")
+
+    assert resolved == {
+        "id": "kc-v2",
+        "type": "kafka_connect",
+        "name": "Kafka Connect v2",
+        "active": True,
+        "config": {"url": "https://connect.example.test"},
+        "endpoint": "https://connect.example.test",
+        "auth_type": "NONE",
+        "username": None,
+        "password": None,
+        "token": None,
+        "is_active": True,
+    }

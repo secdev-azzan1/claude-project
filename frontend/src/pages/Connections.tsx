@@ -57,6 +57,7 @@ import {
   RefreshCw,
   Trash2,
   Workflow,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { timeAgo } from "@/lib/api";
@@ -559,12 +560,11 @@ function ConnectionFormFields({
 
 // ─── Repoint dialog ──────────────────────────────────────────────────────────
 
-type RepointMode = "adopt" | "migrate" | "reset";
+type RepointMode = "adopt" | "migrate";
 
 const REPOINT_MODES: { value: RepointMode; label: string; explanation: string }[] = [
-  { value: "adopt", label: "Adopt", explanation: "Assume the resources already exist on the new endpoint — verify and take ownership." },
-  { value: "migrate", label: "Migrate", explanation: "Re-create the managed resources on the new endpoint, then switch dependents over." },
-  { value: "reset", label: "Reset", explanation: "Point here and rebuild platform state from scratch — dependents must redeploy." },
+  { value: "migrate", label: "Migrate and verify", explanation: "Rebuild every managed flow and its Kafka, schema-registry, and Redis controller services; switch only after all target components validate." },
+  { value: "adopt", label: "Adopt the same NiFi", explanation: "Use only when both connection cards point to the exact same physical NiFi. No resources are copied." },
 ];
 
 function RepointDialog({
@@ -578,23 +578,34 @@ function RepointDialog({
   onClose: () => void;
   onCompleted: () => void;
 }) {
-  const [mode, setMode] = useState<RepointMode>("adopt");
+  const [mode, setMode] = useState<RepointMode>("migrate");
   const [steps, setSteps] = useState<RepointStep[] | null>(null);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resultSummary, setResultSummary] = useState<string | null>(null);
 
   const currentActive = connections.find((c) => c.type === conn.type && c.active);
   const dependents = currentActive ? connectionDependents(currentActive) : [];
 
   const start = async () => {
     setRunning(true);
+    setError(null);
     try {
-      await repointConnection(conn.id, mode, (s) => setSteps(s));
+      const result = await repointConnection(conn.id, mode, (s) => setSteps(s));
+      const serviceCount = result.controllerServices?.length ?? 0;
+      setResultSummary(
+        mode === "migrate"
+          ? `${result.flowCount} flow(s) and ${serviceCount} flow-scoped controller service(s) verified on the target.${result.rollbackRetained ? " Source runtime retained for rollback." : ""}`
+          : `${result.flowCount} deployed flow(s) verified on the same NiFi instance.`,
+      );
       toast.success(`Repoint complete — "${conn.name}" is now the active ${TYPE_META[conn.type].label} connection.`);
       setDone(true);
       onCompleted();
     } catch (err) {
-      toast.error(`Repoint failed: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      setError(message);
+      toast.error(`Repoint failed: ${message}`);
     } finally {
       setRunning(false);
     }
@@ -650,6 +661,8 @@ function RepointDialog({
               <li key={s.label} className="flex items-center gap-2 text-sm">
                 {s.status === "done" ? (
                   <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+                ) : s.status === "failed" ? (
+                  <XCircle className="h-4 w-4 text-destructive shrink-0" />
                 ) : s.status === "active" ? (
                   <Loader2 className="h-4 w-4 animate-spin text-info shrink-0" />
                 ) : (
@@ -659,6 +672,19 @@ function RepointDialog({
               </li>
             ))}
           </ul>
+        )}
+
+        {error && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <div className="font-medium">Migration did not switch connections</div>
+            <div className="mt-1 text-xs">{error}</div>
+          </div>
+        )}
+
+        {resultSummary && (
+          <div className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+            {resultSummary}
+          </div>
         )}
 
         <DialogFooter>
@@ -671,7 +697,7 @@ function RepointDialog({
               </Button>
               <Button onClick={start} disabled={running} title={running ? "A repoint is in progress." : undefined}>
                 {running && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                Start repoint
+                {mode === "migrate" ? "Migrate and verify" : "Verify and adopt"}
               </Button>
             </>
           )}

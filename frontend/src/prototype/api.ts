@@ -49,7 +49,6 @@ import type {
   TopicMessage,
 } from "./types";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const nowIso = () => new Date().toISOString();
 
 function uid(prefix: string): string {
@@ -836,30 +835,39 @@ export async function deleteConnection(id: string): Promise<void> {
 
 export interface RepointStep {
   label: string;
-  status: "done" | "active" | "pending";
+  status: "done" | "active" | "pending" | "failed";
 }
 
-export async function repointConnection(id: string, mode: "adopt" | "migrate" | "reset", onStep: (steps: RepointStep[]) => void): Promise<void> {
-  const labels = [
-    "Fingerprint identity check",
-    mode === "adopt" ? "Adopting existing resources" : mode === "migrate" ? "Re-creating managed resources" : "Resetting platform state",
-    "Verifying dependents",
-    "Recording audit trail",
-  ];
-  const report = (activeIdx: number) =>
-    onStep(labels.map((label, idx) => ({ label, status: idx < activeIdx ? "done" : idx === activeIdx ? "active" : "pending" } as RepointStep)));
+export interface RepointResult {
+  mode: "adopt" | "migrate";
+  flowCount: number;
+  controllerServices?: Array<{ name?: string; type?: string; state?: string; validationStatus?: string }>;
+  flows?: Array<{ processGroupId: string; processors?: number; controllerServiceCount?: number; invalid?: number }>;
+  rollbackRetained?: boolean;
+  sourceRuntimeMissing?: string[];
+  finalizationWarnings?: string[];
+}
 
-  report(0);
-  await sleep(250);
-  report(1);
-  // adopt succeeds today; migrate/reset 501 ("deployment engine pending") —
-  // request() turns that into the friendly pending-engine message.
-  await request(`/api/v2/connections/${id}/repoint`, { method: "POST", body: { mode } });
-  report(2);
-  await sleep(250);
-  report(3);
-  await sleep(250);
-  report(4);
+export async function repointConnection(id: string, mode: "adopt" | "migrate", onStep: (steps: RepointStep[]) => void): Promise<RepointResult> {
+  const activeLabel = mode === "adopt"
+    ? "Verifying that both cards identify the same NiFi"
+    : "Staging and validating flows, parameters, and controller services";
+  onStep([{ label: activeLabel, status: "active" }]);
+  try {
+    const response = await request<{ result: RepointResult }>(`/api/v2/connections/${id}/repoint`, {
+      method: "POST",
+      body: { mode },
+    });
+    onStep([
+      { label: activeLabel, status: "done" },
+      { label: "Verified target runtime and switched the active connection", status: "done" },
+      { label: "Recorded the migration audit trail", status: "done" },
+    ]);
+    return response.result;
+  } catch (error) {
+    onStep([{ label: activeLabel, status: "failed" }]);
+    throw error;
+  }
 }
 
 export async function getGatewayResources(): Promise<GatewayResources> {

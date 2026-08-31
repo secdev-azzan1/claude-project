@@ -44,6 +44,7 @@ class FakeDB:
         self.runtimes_v2 = FaultInjectingCollection()
         self.audit_v2 = FaultInjectingCollection()
         self.openapi_specs_v2 = FaultInjectingCollection()
+        self.kafka_connect_syncs_v2 = FaultInjectingCollection()
 
     def __getitem__(self, name):
         return getattr(self, name)
@@ -186,6 +187,22 @@ def test_save_flow_with_terminal_parent_violation_returns_4xx_with_issue_message
         detail = resp.json()["detail"]
         messages = [i["message"] for i in detail["issues"]]
         assert any("terminal" in m for m in messages), messages
+        assert fake_db.flows_v2.docs == []
+    finally:
+        _clear_overrides()
+
+
+def test_save_flow_rejects_missing_kafka_connect_sync_reference():
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    flow = _valid_flow(flow_id="flow-missing-sync")
+    flow["blocks"][1]["adapter"] = "kafka_kc"
+    flow["blocks"][1]["config"] = {"syncId": "sync-does-not-exist"}
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/flows/", json=flow)
+        assert resp.status_code == 422, resp.text
+        assert any("was not found" in issue["message"] for issue in resp.json()["detail"]["issues"])
         assert fake_db.flows_v2.docs == []
     finally:
         _clear_overrides()
@@ -493,6 +510,28 @@ def test_validate_endpoint_clean_flow_returns_no_issues():
         _clear_overrides()
 
 
+def test_validate_endpoint_reports_missing_kafka_connect_sync_reference():
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    flow = _valid_flow(flow_id="flow-sync-validation")
+    flow["blocks"][1].update(
+        {
+            "adapter": "kc",
+            "mode": None,
+            "serviceId": "svc-1",
+            "config": {"attachTopicId": "topic-missing", "syncId": "sync-does-not-exist"},
+        }
+    )
+    fake_db.flows_v2.docs.append(flow)
+    client = _make_client(fake_db)
+    try:
+        resp = client.post("/api/v2/flows/flow-sync-validation/validate")
+        assert resp.status_code == 200, resp.text
+        assert any("was not found" in issue["message"] for issue in resp.json())
+    finally:
+        _clear_overrides()
+
+
 # --------------------------------------------------- observability (T7.5)
 # Full coverage (metrics attribution, dlq header mapping, drift verdicts,
 # repair, block test) lives in tests/test_v2_runtime.py -- this is just the
@@ -579,10 +618,41 @@ def test_dashboard_summary_math_over_seeded_set():
         {
             "flowId": "fa",
             "connectors": [
-                {"name": "conn1", "state": "RUNNING"},
-                {"name": "conn2", "state": "PAUSED"},
+                {"name": "legacy-conn-1", "state": "RUNNING"},
+                {"name": "legacy-conn-2", "state": "RUNNING"},
             ],
         }
+    )
+    fake_db.kafka_connect_syncs_v2.docs.extend(
+        [
+            {
+                "id": "sync1",
+                "direction": "sink",
+                "enabled": True,
+                "remote_present": True,
+                "retired": False,
+                "connector_name": "conn1",
+                "last_status": {"connector": {"state": "RUNNING"}},
+            },
+            {
+                "id": "sync2",
+                "direction": "sink",
+                "enabled": True,
+                "remote_present": True,
+                "retired": False,
+                "connector_name": "conn2",
+                "last_status": {"connector": {"state": "PAUSED"}},
+            },
+            {
+                "id": "draft-sync",
+                "direction": "sink",
+                "enabled": False,
+                "remote_present": False,
+                "retired": False,
+                "connector_name": "draft",
+                "last_status": None,
+            },
+        ]
     )
 
     client = _make_client(fake_db)

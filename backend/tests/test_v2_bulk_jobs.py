@@ -90,6 +90,23 @@ def test_start_bulk_job_returns_202_and_creates_job(fake_db, monkeypatch):
     assert [item["flow_name"] for item in job["items"]] == ["alpha", "bravo", "charlie"]
 
 
+def test_start_delete_job_persists_cleanup_options(fake_db, monkeypatch):
+    monkeypatch.setattr(bulk_runner, "launch_bulk_job", lambda db, job_id: None)
+    client = _make_client(fake_db)
+
+    resp = client.post(
+        "/api/v2/flows/bulk",
+        json={
+            "verb": "delete",
+            "flowIds": ["flow-0"],
+            "deleteOptions": {"deleteTopics": False, "clearCache": True},
+        },
+    )
+
+    assert resp.status_code == 202, resp.text
+    assert _job(fake_db)["delete_options"] == {"deleteTopics": False, "clearCache": True}
+
+
 def test_items_preserve_caller_ordering(fake_db, monkeypatch):
     monkeypatch.setattr(bulk_runner, "_run_one", lambda db, verb, doc: asyncio.sleep(0))
     client = _make_client(fake_db)
@@ -130,6 +147,70 @@ def test_second_submission_is_queued(fake_db, monkeypatch):
     assert all(job["status"] == "queued" for job in jobs)
 
 
+def test_one_pending_item_can_be_cancelled_without_cancelling_siblings(fake_db, monkeypatch):
+    monkeypatch.setattr(bulk_runner, "launch_bulk_job", lambda db, job_id: None)
+
+    async def fake_run_one(db, verb, flow_doc):
+        return None
+
+    monkeypatch.setattr(bulk_runner, "_run_one", fake_run_one)
+    client = _make_client(fake_db)
+    response = client.post("/api/v2/flows/bulk", json={"verb": "deploy", "flowIds": ["flow-0", "flow-1"]})
+    job_id = response.json()["jobId"]
+    item_id = fake_db.bulk_jobs_v2.docs[0]["items"][1]["id"]
+
+    cancelled = client.post(f"/api/v2/flows/bulk/{job_id}/items/{item_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["items"][1]["status"] == "cancelled"
+    assert cancelled.json()["items"][0]["cancellable"] is True
+
+    async def run():
+        await bulk_runner.run_bulk_job(fake_db, job_id)
+
+    asyncio.run(run())
+    job = fake_db.bulk_jobs_v2.docs[0]
+    assert job["status"] == "completed"
+    assert [item["status"] for item in job["items"]] == ["succeeded", "cancelled"]
+    assert job["completed"] == 2
+
+
+def test_same_flow_cannot_be_submitted_twice_while_first_item_is_live(fake_db, monkeypatch):
+    monkeypatch.setattr(bulk_runner, "launch_bulk_job", lambda db, job_id: None)
+    client = _make_client(fake_db)
+    first = client.post("/api/v2/flows/bulk", json={"verb": "deploy", "flowIds": ["flow-0"]})
+    assert first.status_code == 202
+    second = client.post("/api/v2/flows/bulk", json={"verb": "stop", "flowIds": ["flow-0"]})
+    assert second.status_code == 409
+    assert "conflicts" in second.json()["detail"]
+
+
+def test_preflight_failure_is_recorded_per_flow_and_later_items_continue(fake_db, monkeypatch):
+    async def fake_run_one(db, verb, flow_doc):
+        if flow_doc["id"] == "flow-0":
+            from services.adapter.deployer.lifecycle import DeployPreflightFailed
+
+            raise DeployPreflightFailed([{"label": "Security checks", "ok": False, "detail": "7 exploits found"}])
+
+    monkeypatch.setattr(bulk_runner, "_run_one", fake_run_one)
+
+    async def run():
+        job = await bulk_runner.create_bulk_job(
+            fake_db,
+            verb="deploy",
+            flow_docs=fake_db.flows_v2.docs[:2],
+            owner_instance_id="test",
+        )
+        await bulk_runner.run_bulk_job(fake_db, job["id"])
+        return await fake_db.bulk_jobs_v2.find_one({"id": job["id"]}, {"_id": 0})
+
+    job = asyncio.run(run())
+    assert job["status"] == "completed"
+    assert job["failed"] == 1
+    assert job["items"][0]["status"] == "failed"
+    assert "7 exploits found" in job["items"][0]["error"]
+    assert job["items"][1]["status"] == "succeeded"
+
+
 # ------------------------------------------------------------------- runner
 
 
@@ -159,6 +240,33 @@ def test_runner_marks_every_item_succeeded_and_counts(fake_db, monkeypatch):
     assert job["status"] == "completed"
     assert (job["succeeded"], job["failed"], job["completed"]) == (3, 0, 3)
     assert all(item["status"] == "succeeded" for item in job["items"])
+
+
+def test_delete_options_are_persisted_and_forwarded_to_each_delete(fake_db, monkeypatch):
+    seen: List[Dict[str, Any]] = []
+
+    async def fake_run_one(db, verb, flow_doc, delete_options=None):
+        seen.append({"verb": verb, "flow_id": flow_doc["id"], "options": delete_options})
+
+    monkeypatch.setattr(bulk_runner, "_run_one", fake_run_one)
+
+    async def go():
+        job = await bulk_runner.create_bulk_job(
+            fake_db,
+            verb="delete",
+            flow_docs=fake_db.flows_v2.docs[:2],
+            owner_instance_id="test",
+            delete_options={"deleteTopics": False, "clearCache": True},
+        )
+        await bulk_runner.run_bulk_job(fake_db, job["id"])
+        return await fake_db.bulk_jobs_v2.find_one({"id": job["id"]}, {"_id": 0})
+
+    job = asyncio.run(go())
+    assert job["delete_options"] == {"deleteTopics": False, "clearCache": True}
+    assert seen == [
+        {"verb": "delete", "flow_id": "flow-0", "options": {"deleteTopics": False, "clearCache": True}},
+        {"verb": "delete", "flow_id": "flow-1", "options": {"deleteTopics": False, "clearCache": True}},
+    ]
 
 
 def test_one_failing_flow_does_not_stop_the_run(fake_db, monkeypatch):
@@ -271,6 +379,34 @@ def test_get_job_returns_camelcase_shape(fake_db, monkeypatch):
     assert body["total"] == 1
     assert body["items"][0]["flowName"] == "alpha"
     assert "cancelRequested" in body
+
+
+def test_get_job_serializes_legacy_datetime_timestamps(fake_db):
+    fake_db.bulk_jobs_v2.docs.append(
+        {
+            "id": "bulk-legacy",
+            "verb": "deploy",
+            "status": "interrupted",
+            "total": 1,
+            "completed": 0,
+            "succeeded": 0,
+            "failed": 0,
+            "items": [
+                {
+                    "flow_id": "flow-0",
+                    "flow_name": "alpha",
+                    "status": "pending",
+                    "started_at": datetime.now(timezone.utc),
+                }
+            ],
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+    )
+    client = _make_client(fake_db)
+    body = client.get("/api/v2/flows/bulk/bulk-legacy").json()
+    assert body["updatedAt"].endswith("Z")
+    assert body["items"][0]["startedAt"].endswith("Z")
 
 
 def test_get_unknown_job_404(fake_db):

@@ -41,6 +41,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from models.adapter import AppService, ApprovedSchema, Flow, FlowBlock, GatewayProxy, PlatformConnection
@@ -441,6 +443,19 @@ def _bump_changed_dedup_epochs(flow_doc: Dict[str, Any], prev_hashes: Dict[str, 
 _DEDUP_CHANGE_WARNING = "Dedup settings changed — the cache resets and previously suppressed records may reappear."
 
 
+@dataclass
+class StagedNifiDeployment:
+    """A target-NiFi deployment that has not changed MongoDB yet."""
+
+    flow_id: str
+    flow_name: str
+    old_process_group_id: Optional[str]
+    parameter_context_id: Optional[str]
+    parameter_context_created: bool
+    staged_group_name: str
+    update: Dict[str, Any]
+
+
 async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     """compiler-spec.md §7/§8. Redeploy reuses this same entry point:
     when `flow_doc["nifiProcessGroupId"]` is already set, the previous PG
@@ -456,6 +471,55 @@ async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     deferred to a following deploy, unlike a manual `clear_dedup_cache()`
     call, which has no plan to bake it into). A non-blocking warning row is
     appended to the preflight response either way."""
+    return await _deploy_impl(db, flow_doc)
+
+
+async def stage_nifi_migration(
+    db,
+    flow_doc: Dict[str, Any],
+    target_connection: Dict[str, Any],
+    *,
+    staged_group_name: str,
+) -> StagedNifiDeployment:
+    """Build one flow on a different NiFi without cutting over MongoDB.
+
+    Kafka topics and Kafka Connect connectors already belong to the flow and
+    are deliberately left untouched. The old NiFi process group is retained
+    as a rollback copy until the coordinator verifies the complete target.
+    """
+    staged = await _deploy_impl(
+        db,
+        deepcopy(flow_doc),
+        target_nifi=PlatformConnection.model_validate(target_connection),
+        preserve_existing_nifi=True,
+        provision_external_resources=False,
+        persist=False,
+        nifi_group_name_override=staged_group_name,
+    )
+    parameter_context_id = staged.pop("_migrationParameterContextId", None)
+    parameter_context_created = bool(staged.pop("_migrationParameterContextCreated", False))
+    actual_group_name = str(staged.pop("_migrationRootGroupName", staged_group_name))
+    return StagedNifiDeployment(
+        flow_id=str(flow_doc.get("id") or ""),
+        flow_name=str(flow_doc.get("name") or ""),
+        old_process_group_id=flow_doc.get("nifiProcessGroupId"),
+        parameter_context_id=parameter_context_id,
+        parameter_context_created=parameter_context_created,
+        staged_group_name=actual_group_name,
+        update=staged,
+    )
+
+
+async def _deploy_impl(
+    db,
+    flow_doc: Dict[str, Any],
+    *,
+    target_nifi: Optional[PlatformConnection] = None,
+    preserve_existing_nifi: bool = False,
+    provision_external_resources: bool = True,
+    persist: bool = True,
+    nifi_group_name_override: Optional[str] = None,
+) -> Dict[str, Any]:
     flow = Flow(**flow_doc)
     prev_dedup_hashes = ((flow_doc.get("provenance") or {}).get("dedupConfigHashes")) or {}
     current_dedup_hashes = _current_dedup_hashes(flow)
@@ -466,6 +530,16 @@ async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     services = await _load_services(db)
     schemas_all = await _load_schemas(db)
     connections = await _load_connections(db)
+    if target_nifi is not None:
+        # Preflight/compiler resolve the active connection by type. Replace
+        # only the in-memory NiFi selection; Mongo stays on the source until
+        # every target process group has been staged and validated.
+        for connection in connections:
+            if connection.type == "nifi":
+                connection.active = connection.id == target_nifi.id
+        if not any(c.type == "nifi" and c.id == target_nifi.id for c in connections):
+            target_nifi.active = True
+            connections.append(target_nifi)
     gateway = await _load_gateway(db)
 
     rows, plan = await _preflight_rows(db, flow, flow_doc, services, schemas_all, connections, gateway)
@@ -479,6 +553,12 @@ async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
         )
         raise DeployPreflightFailed(rows)
 
+    if nifi_group_name_override:
+        # Migration must never delete a retained rollback copy merely
+        # because it has the canonical flow name. Stage under a unique name;
+        # the coordinator finalizes the name only after full validation.
+        plan.rootGroup.name = nifi_group_name_override
+
     nifi_conn_doc = _active_connection(connections, "nifi")
     kafka_conn_doc = _active_connection(connections, "kafka")
     if not nifi_conn_doc or not kafka_conn_doc:
@@ -486,15 +566,16 @@ async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     nifi_conn = _nifi_conn_dict(nifi_conn_doc)
     kafka_conn = _kafka_conn_dict(kafka_conn_doc)
 
-    if flow_doc.get("nifiProcessGroupId"):
+    if flow_doc.get("nifiProcessGroupId") and not preserve_existing_nifi:
         await nifi_apply.delete_flow_pg(nifi_conn, flow_doc["nifiProcessGroupId"])
 
-    topic_results = await topics.ensure_topics(kafka_conn, plan.topics)
-    failed_topics = [t for t in topic_results if not t["ok"]]
-    if failed_topics:
-        await audit(db, action="Flow deploy failed", target=flow.name, status="Failed",
-                    details=f"Topic creation failed: {', '.join(t['name'] for t in failed_topics)}", object="Flow")
-        raise LifecycleError(f"Failed to create topic(s): {', '.join(t['name'] for t in failed_topics)}")
+    if provision_external_resources:
+        topic_results = await topics.ensure_topics(kafka_conn, plan.topics)
+        failed_topics = [t for t in topic_results if not t["ok"]]
+        if failed_topics:
+            await audit(db, action="Flow deploy failed", target=flow.name, status="Failed",
+                        details=f"Topic creation failed: {', '.join(t['name'] for t in failed_topics)}", object="Flow")
+            raise LifecycleError(f"Failed to create topic(s): {', '.join(t['name'] for t in failed_topics)}")
 
     try:
         applied = await nifi_apply.apply_plan(nifi_conn, plan)
@@ -502,7 +583,7 @@ async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
         await audit(db, action="Flow deploy failed", target=flow.name, status="Failed", details=str(exc), object="Flow")
         raise LifecycleError(str(exc)) from exc
 
-    if plan.connectors:
+    if plan.connectors and provision_external_resources:
         kc_conn_doc = _active_connection(connections, "kafka_connect")
         if not kc_conn_doc:
             await nifi_apply.delete_flow_pg(nifi_conn, applied.process_group_id)
@@ -538,6 +619,11 @@ async def deploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
         # comparison would see a stored epoch that never matches what NiFi
         # actually has compiled in.
         update["blocks"] = flow_doc.get("blocks")
+    if not persist:
+        update["_migrationParameterContextId"] = applied.parameter_context_id
+        update["_migrationParameterContextCreated"] = applied.parameter_context_created
+        update["_migrationRootGroupName"] = plan.rootGroup.name
+        return update
     await db[COLLECTIONS.flows].update_one({"id": flow.id}, {"$set": update})
     await audit(
         db, action="Flow deployed", target=flow.name, status="Success",
@@ -805,10 +891,18 @@ async def undeploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     return await db[COLLECTIONS.flows].find_one({"id": flow.id}, {"_id": 0})
 
 
-async def delete(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
+async def delete(
+    db,
+    flow_doc: Dict[str, Any],
+    *,
+    delete_options: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Used by `DELETE /api/v2/flows/{id}`: full teardown when deployed
     (undeploy, then delete the DLQ + every topic undeploy only emptied),
-    then the flow/runtime docs themselves.
+    then the flow/runtime docs themselves. `delete_options` can retain the
+    generated Kafka topics (`deleteTopics=False`) and request invalidation of
+    all dedup namespaces (`clearCache=True`); omitted options preserve the
+    historical delete behaviour.
 
     E7 fix: `undeploy()` above is the ONLY place that deletes this flow's
     Kafka Connect connectors, and it only runs when `deployedAt` /
@@ -829,14 +923,50 @@ async def delete(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     than the scope map alone, so a delete AFTER undeploy (scope map already
     nulled) still removes the flow's `raw.*` topics."""
     flow = Flow(**flow_doc)
+    options = delete_options or {}
+    delete_topics = bool(options.get("deleteTopics", options.get("delete_topics", True)))
+    clear_cache = bool(options.get("clearCache", options.get("clear_cache", False)))
     owned_topics = _delete_candidate_data_topics(flow_doc)
     dlq_topic = _dlq_topic_name(flow_doc)
     connector_names = _all_connector_names(flow_doc)
     orphans: List[Dict[str, Any]] = []
+    retained_topics: List[str] = []
+    cache_block_count = sum(
+        1
+        for block in flow.blocks
+        for transform in block.transforms
+        if transform.kind == "dedup"
+    )
 
     was_deployed = bool(flow_doc.get("deployedAt") or flow_doc.get("nifiProcessGroupId"))
     if was_deployed:
         await undeploy(db, flow_doc)
+
+    # A deployed flow has already bumped every dedup epoch as part of
+    # undeploy.  For a draft/stopped flow, honour the explicit cache choice
+    # with the same namespace invalidation used by the flow's Clear cache
+    # action before removing the document.  Redis is cluster-internal here,
+    # so this is an invalidation marker rather than a direct FLUSHDB call.
+    if clear_cache and cache_block_count and not was_deployed:
+        cache_updates = _dedup_epoch_bump_updates(flow)
+        if cache_updates:
+            await db[COLLECTIONS.flows].update_one(
+                {"id": flow.id},
+                {"$set": {**cache_updates, "updatedAt": now_iso()}},
+            )
+    if clear_cache:
+        await audit(
+            db,
+            action="Dedup caches cleared",
+            target=flow.name,
+            status="Success",
+            details=(
+                f"Invalidated {cache_block_count} dedup cache namespace(s) using the flow epoch reset."
+                if cache_block_count
+                else "No dedup cache namespaces were configured for this flow."
+            ),
+            object="Flow",
+        )
 
     connections = await _load_connections(db)
 
@@ -853,25 +983,47 @@ async def delete(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
             for name in connector_names:
                 orphans.append({"kind": "connector", "ref": name, "reason": "No active kafka_connect connection is configured."})
 
-    kafka_conn_doc = _active_connection(connections, "kafka")
     all_topics = [dlq_topic] + owned_topics
-    if kafka_conn_doc:
-        kafka_conn = _kafka_conn_dict(kafka_conn_doc)
-        for name in all_topics:
-            result = await topics.delete_topic(kafka_conn, name)
-            if not result.get("ok"):
-                orphans.append({"kind": "topic", "ref": name, "reason": result.get("error") or "Topic delete failed."})
+    if delete_topics:
+        kafka_conn_doc = _active_connection(connections, "kafka")
+        if kafka_conn_doc:
+            kafka_conn = _kafka_conn_dict(kafka_conn_doc)
+            for name in all_topics:
+                result = await topics.delete_topic(kafka_conn, name)
+                if not result.get("ok"):
+                    orphans.append({"kind": "topic", "ref": name, "reason": result.get("error") or "Topic delete failed."})
+        else:
+            for name in all_topics:
+                orphans.append({"kind": "topic", "ref": name, "reason": "No active kafka connection is configured."})
     else:
-        for name in all_topics:
-            orphans.append({"kind": "topic", "ref": name, "reason": "No active kafka connection is configured."})
+        retained_topics = all_topics
 
     await db[COLLECTIONS.flows].delete_one({"id": flow.id})
     await db[COLLECTIONS.runtimes].delete_one({"flowId": flow.id})
-    details = None
+    details_parts: List[str] = []
     if orphans:
-        details = f"{len(orphans)} object(s) could not be cleaned up: " + "; ".join(f"{o['kind']} {o['ref']}" for o in orphans)
-    await audit(db, action="Flow deleted", target=flow.name, status="Warning", details=details, object="Flow")
-    return {"ok": True, "id": flow.id, "orphans": orphans}
+        details_parts.append(
+            f"{len(orphans)} object(s) could not be cleaned up: "
+            + "; ".join(f"{o['kind']} {o['ref']}" for o in orphans)
+        )
+    if retained_topics:
+        details_parts.append("Retained topics: " + ", ".join(retained_topics))
+    await audit(
+        db,
+        action="Flow deleted",
+        target=flow.name,
+        status="Warning" if orphans else "Success",
+        details=" ".join(details_parts) or None,
+        object="Flow",
+    )
+    return {
+        "ok": True,
+        "id": flow.id,
+        "orphans": orphans,
+        "retainedTopics": retained_topics,
+        "cacheCleared": bool(clear_cache and cache_block_count),
+        "cacheBlockCount": cache_block_count if clear_cache else 0,
+    }
 
 
 # ------------------------------------------------------------- dedup cache clear

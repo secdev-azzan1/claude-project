@@ -195,6 +195,133 @@ DEDUP_MIN_WINDOW_HOURS = 1 / 60  # 1 minute
 DEDUP_MAX_WINDOW_HOURS = 8760  # 365 days
 DEDUP_DEFAULT_WINDOW_HOURS = 24
 
+_RETENTION_KINDS = {"extract", "add_field", "set_from_attribute", "rename"}
+_PAGINATION_TYPES = {"none", "page", "cursor", "offset", "next_url"}
+_PAGINATION_STOPS = {"empty_response", "total_count", "has_more"}
+
+
+def _whole_number(value: Any, *, minimum: int = 1) -> bool:
+    try:
+        text = str(value).strip()
+        return bool(text) and int(text) >= minimum and str(int(text)) == text
+    except (TypeError, ValueError):
+        return False
+
+
+def _pagination_refusals(block: FlowBlock) -> List[str]:
+    """Validate the v2 UI/compiler pagination contract before deployment."""
+    pagination = (block.config or {}).get("pagination") or {}
+    ptype = str(pagination.get("type") or "none").strip().lower()
+    fields = pagination.get("fields") or {}
+    if ptype not in _PAGINATION_TYPES:
+        return [f"Unsupported pagination type: {ptype or '(blank)' }."]
+    if ptype == "none":
+        return []
+
+    issues: List[str] = []
+    if block.mode == "write" and ptype in {"cursor", "next_url"}:
+        issues.append("HTTP write pagination supports page or offset counters, not cursor or next URL.")
+    if block.mode == "write" and str((block.config or {}).get("writeForwards") or "original") != "response":
+        issues.append('HTTP write pagination requires "Continue with" to be the response.')
+
+    max_pages = fields.get("maxPages")
+    has_max_pages = max_pages is not None and bool(str(max_pages).strip())
+    if has_max_pages and not _whole_number(max_pages):
+        issues.append("Pagination maximum pages must be a positive whole number.")
+
+    if ptype == "page":
+        if fields.get("sizeValue") is not None and str(fields.get("sizeValue")).strip() and not _whole_number(fields.get("sizeValue")):
+            issues.append("Pagination page size must be a positive whole number.")
+        if fields.get("firstPage") is not None and str(fields.get("firstPage")).strip() and not _whole_number(fields.get("firstPage"), minimum=0):
+            issues.append("Pagination first page must be a non-negative whole number.")
+        stop = str(fields.get("stop") or "empty_response")
+    elif ptype == "offset":
+        if fields.get("limitValue") is not None and str(fields.get("limitValue")).strip() and not _whole_number(fields.get("limitValue")):
+            issues.append("Pagination limit must be a positive whole number.")
+        stop = str(fields.get("offsetStop") or "empty_response")
+    elif ptype == "cursor":
+        cursor_size = fields.get("cursorSizeValue", fields.get("sizeValue"))
+        if cursor_size is not None and str(cursor_size).strip() and not _whole_number(cursor_size):
+            issues.append("Cursor page size must be a positive whole number.")
+        source = str(fields.get("cursorSource") or "body")
+        if source not in {"body", "header"}:
+            issues.append("Cursor source must be the response body or a response header.")
+        return issues
+    else:  # next_url
+        source = str(fields.get("nextUrlSource") or ("body" if fields.get("urlPath") else "link_header"))
+        if source not in {"body", "header", "link_header"}:
+            issues.append("Next URL source must be the body, a response header, or the Link header.")
+        return issues
+
+    if stop not in _PAGINATION_STOPS:
+        issues.append(f"Unsupported pagination stop condition: {stop}.")
+    elif stop in {"total_count", "has_more"} and not _whole_number(max_pages):
+        issues.append("Total-count and has-more stopping require a positive maximum-pages safety limit.")
+    return issues
+
+
+def _retention_target(rule: Any, index: int) -> Optional[tuple[str, str]]:
+    """Return (plane, name) for a field-producing transform."""
+    cfg = rule.config or {}
+    if rule.kind == "extract":
+        return "attribute", str(cfg.get("attribute") or f"extract_{index}").strip()
+    if rule.kind in {"add_field", "set_from_attribute"}:
+        value = str(cfg.get("field") or "").strip()
+        return ("record", value) if value else None
+    if rule.kind == "rename":
+        value = str(cfg.get("to") or "").strip()
+        return ("record", value) if value else None
+    return None
+
+
+def _contains_placeholder(value: Any, name: str) -> bool:
+    if isinstance(value, str):
+        return f"${{{name}}}" in value
+    if isinstance(value, dict):
+        return any(_contains_placeholder(k, name) or _contains_placeholder(v, name) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_contains_placeholder(v, name) for v in value)
+    return False
+
+
+def _descendant_blocks(flow: Flow, block: FlowBlock) -> List[FlowBlock]:
+    """Return descendants in graph order for temporary-key safety checks."""
+    by_parent: Dict[Optional[str], List[FlowBlock]] = {}
+    for candidate in flow.blocks:
+        by_parent.setdefault(candidate.parentId, []).append(candidate)
+    result: List[FlowBlock] = []
+    queue = list(by_parent.get(block.id, []))
+    while queue:
+        current = queue.pop(0)
+        result.append(current)
+        queue.extend(by_parent.get(current.id, []))
+    return result
+
+
+def _block_references_key(block: FlowBlock, name: str, plane: str) -> bool:
+    """Best-effort reference check for values crossing a block boundary."""
+    if _contains_placeholder(block.config or {}, name):
+        return True
+    for condition in (block.branch.rules if block.branch and block.branch.rules else []):
+        if plane == "attribute" and condition.field == name:
+            return True
+        if plane == "record" and condition.field == name:
+            return True
+    for rule in block.transforms:
+        cfg = rule.config or {}
+        if rule.kind in {"add_field", "set_from_attribute"} and _contains_placeholder(cfg.get("value"), name):
+            return True
+        if rule.kind == "set_from_attribute" and plane == "attribute" and cfg.get("attribute") == name:
+            return True
+        if rule.kind in {"coerce", "remove_field"} and plane == "record" and cfg.get("field") == name:
+            return True
+        if rule.kind == "rename" and plane == "record" and cfg.get("from") == name:
+            return True
+        if rule.kind == "dedup" and plane == "record":
+            if name in (cfg.get("identityFields") or []) or name in (cfg.get("excludedFields") or []):
+                return True
+    return False
+
 
 def dedup_stream_not_per_record_reason(flow: Flow, block: FlowBlock) -> Optional[str]:
     """Dedup (DetectDuplicate + the hash script) is per-FlowFile, so it is
@@ -221,11 +348,11 @@ def dedup_stream_not_per_record_reason(flow: Flow, block: FlowBlock) -> Optional
         cfg = cur.config or {}
         if cur.adapter == "http":
             if cur.mode == "read":
-                if cfg.get("split") is False:
+                if cfg.get("split") is False and str(cfg.get("recordPath") or "$").strip() != "$":
                     return f'"{cur.name}" reads whole responses (split is off), so one FlowFile carries many records'
                 return None
             if cur.mode == "write" and str(cfg.get("writeForwards") or "original") == "response":
-                if cfg.get("split") is False:
+                if cfg.get("split") is False and str(cfg.get("recordPath") or "$").strip() != "$":
                     return f'"{cur.name}" forwards whole responses (split is off), so one FlowFile carries many records'
                 return None
             # http write forwarding the original / http lookup: granularity
@@ -287,6 +414,8 @@ def validate_block(
             at(f"Unresolved ${{...}} values: {', '.join(missing)} — extract them upstream or define a flow variable.")
         for refusal in gateway_refusals(block, gateway, services):
             at(refusal)
+        for refusal in _pagination_refusals(block):
+            at(refusal)
     if block.adapter == "jdbc" and not (block.config or {}).get("table"):
         at("Pick a table.")
     if block.adapter == "kafka" and block.mode == "read" and not block.parentId and not (block.config or {}).get("topicName"):
@@ -336,6 +465,41 @@ def validate_block(
         valid_number = isinstance(window, (int, float)) and not isinstance(window, bool)
         if not valid_number or not (DEDUP_MIN_WINDOW_HOURS <= window <= DEDUP_MAX_WINDOW_HOURS):
             at("Dedup window must be between 1 minute and 365 days (1/60-8760 hours).")
+
+    # A temporary key is still available to every operation in this block,
+    # then is removed from each outbound copy.  Validate the small persisted
+    # contract here so malformed values never reach the compiler silently.
+    temporary_targets: List[tuple[str, str]] = []
+    for index, rule in enumerate(block.transforms):
+        cfg = rule.config or {}
+        retention = str(cfg.get("retention", "flow")).strip().lower()
+        if retention not in {"flow", "block"}:
+            at(f"Transform {index + 1} has an invalid retention value; use 'flow' or 'block'.")
+            continue
+        if retention != "block" or rule.kind not in _RETENTION_KINDS:
+            continue
+        target = _retention_target(rule, index)
+        if target is None or not target[1]:
+            at(f"Transform {index + 1} cannot be temporary until its output name is set.")
+            continue
+        if (
+            target == ("attribute", "kafka.key")
+            and block.adapter == "kafka"
+            and block.mode == "write"
+        ):
+            at("The temporary attribute 'kafka.key' is consumed by this Kafka destination; keep it available through publish.")
+            continue
+        if target in temporary_targets:
+            at(f"The temporary {target[0]} '{target[1]}' is produced by more than one transform; use one owner per key.")
+        temporary_targets.append(target)
+
+        downstream_users = [child.name or child.id for child in _descendant_blocks(flow, block)
+                            if _block_references_key(child, target[1], target[0])]
+        if downstream_users:
+            at(
+                f"Temporary {target[0]} '{target[1]}' is referenced downstream by "
+                f"{', '.join(downstream_users)}; keep it downstream or recreate it before use."
+            )
 
     if dedup_positions:
         per_record_reason = dedup_stream_not_per_record_reason(flow, block)

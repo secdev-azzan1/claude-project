@@ -794,6 +794,41 @@ async def test_delete_after_undeploy_still_deletes_derived_data_topics(monkeypat
     assert fake_db.flows_v2.docs == []
 
 
+@async_test
+async def test_delete_options_can_retain_topics_and_clear_all_dedup_caches(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _http_kafka_flow(flow_id="flow-delete-options-1")
+    flow_doc["blocks"][1]["transforms"] = [
+        {"id": "dedup-1", "kind": "dedup", "config": {"identityFields": ["id"], "windowHours": 24}}
+    ]
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    delete_topic_calls = []
+
+    async def fail_if_topic_deleted(kafka_conn, name):
+        delete_topic_calls.append(name)
+        raise AssertionError("retained topics must not be deleted")
+
+    monkeypatch.setattr(topics, "delete_topic", fail_if_topic_deleted)
+
+    result = await lifecycle.delete(
+        fake_db,
+        flow_doc,
+        delete_options={"deleteTopics": False, "clearCache": True},
+    )
+
+    assert delete_topic_calls == []
+    assert result["retainedTopics"] == ["dlq.test_flow", "raw.test_flow.thing"]
+    assert result["cacheCleared"] is True
+    assert result["cacheBlockCount"] == 1
+    assert fake_db.flows_v2.docs == []
+    assert any(event["action"] == "Dedup caches cleared" for event in fake_db.audit_v2.docs)
+    deleted = next(event for event in fake_db.audit_v2.docs if event["action"] == "Flow deleted")
+    assert deleted["status"] == "Success"
+    assert "Retained topics" in deleted["details"]
+
+
 # ------------------------------------------------------------------ 8. M10: undeploy clears dedup
 
 

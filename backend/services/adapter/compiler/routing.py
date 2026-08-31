@@ -44,12 +44,13 @@ in `ConnectionSpec.to` (inside the parent's group) and in the root-level
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from models.adapter import FlowBlock
 from services.adapter.naming import tokenize
 
 from .ir import CompileError, PortLink, ProcessorSpec, branch_rule_el
+from .transforms import CleanupPlan, compile_cleanup
 
 if TYPE_CHECKING:  # pragma: no cover
     from models.adapter import Flow
@@ -146,6 +147,7 @@ def wire_children(
     parent: FlowBlock,
     children: List[FlowBlock],
     tail: "Tail",
+    cleanup: Optional[CleanupPlan] = None,
     port_links: List[PortLink],
 ) -> List[str]:
     """Wire `parent`'s finished-record `tail` to every child in `children`.
@@ -187,18 +189,22 @@ def wire_children(
         added_keys.extend([f"route_fields__merge_{index}" for index in range(len(fields))])
 
     for child in children:
+        child_prefix = f"egress__{tokenize(child.id)}"
         if _is_unconditional(child):
-            builder.link(working_key, out_port(child.id), [working_rel])
+            child_tail = compile_cleanup(builder, cleanup=cleanup or CleanupPlan(),
+                                         tail=(working_key, working_rel), key_prefix=child_prefix)
+            builder.link(child_tail[0], out_port(child.id), [child_tail[1]])
         elif (child.branch.match or "all") == "any":
-            added_keys.extend(_wire_any_match(builder, child=child, source=(working_key, working_rel)))
+            added_keys.extend(_wire_any_match(builder, child=child, source=(working_key, working_rel), cleanup=cleanup))
         else:
-            added_keys.extend(_wire_all_match(builder, child=child, source=(working_key, working_rel)))
+            added_keys.extend(_wire_all_match(builder, child=child, source=(working_key, working_rel), cleanup=cleanup))
         port_links.append(PortLink(fromBlockId=parent.id, toBlockId=child.id, viaPort=out_port(child.id)))
 
     return added_keys
 
 
-def _wire_any_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail") -> List[str]:
+def _wire_any_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail",
+                    cleanup: Optional[CleanupPlan] = None) -> List[str]:
     """match="any": ONE `RouteOnAttribute` with one genuine dynamic property
     per rule (D7's "N real decision expressions on one processor"), but with
     `Routing Strategy = Route to 'matched' if any matches` and a SINGLE
@@ -222,11 +228,14 @@ def _wire_any_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail"
     src_key, src_rel = source
     builder.link(src_key, key, [src_rel])
     builder.to_dlq(key, "failure")
-    builder.link(key, out_port(child.id), ["matched"])
+    child_tail = compile_cleanup(builder, cleanup=cleanup or CleanupPlan(), tail=(key, "matched"),
+                                 key_prefix=f"egress__{tokenize(child.id)}")
+    builder.link(child_tail[0], out_port(child.id), [child_tail[1]])
     return [key]
 
 
-def _wire_all_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail") -> List[str]:
+def _wire_all_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail",
+                    cleanup: Optional[CleanupPlan] = None) -> List[str]:
     rules = child.branch.rules or []
     if not rules:
         raise CompileError(f"Branch on {child.id!r} has match='all' but no rules")
@@ -246,5 +255,7 @@ def _wire_all_match(builder: "BlockBuilder", *, child: FlowBlock, source: "Tail"
         builder.to_dlq(key, "failure")
         keys.append(key)
         src_key, src_rel = key, "matched"
-    builder.link(src_key, out_port(child.id), [src_rel])
+    child_tail = compile_cleanup(builder, cleanup=cleanup or CleanupPlan(), tail=(src_key, src_rel),
+                                 key_prefix=f"egress__{tokenize(child.id)}")
+    builder.link(child_tail[0], out_port(child.id), [child_tail[1]])
     return keys

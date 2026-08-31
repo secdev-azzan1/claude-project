@@ -186,6 +186,30 @@ def test_restart_connector_404_is_failure(monkeypatch):
     run()
 
 
+def test_start_and_stop_connector_use_supported_lifecycle_routes(monkeypatch):
+    seen = []
+
+    class RecordingAsyncClient(FakeAsyncClient):
+        async def request(self, method, url, **kwargs):
+            seen.append((method, url))
+            return FakeResponse(202)
+
+    monkeypatch.setattr(kafka_connect_client.httpx, "AsyncClient", RecordingAsyncClient)
+
+    @async_test
+    async def run():
+        started = await kafka_connect_client.start_connector(CONN, "sync name")
+        stopped = await kafka_connect_client.stop_connector(CONN, "sync name")
+        assert started["ok"] is True
+        assert stopped["ok"] is True
+
+    run()
+    assert seen == [
+        ("PUT", "http://connect:8083/connectors/sync%20name/resume"),
+        ("PUT", "http://connect:8083/connectors/sync%20name/stop"),
+    ]
+
+
 # ------------------------------------------------ enable_sink must not stamp on failure
 
 

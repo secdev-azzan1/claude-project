@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -33,6 +33,7 @@ from services.runtime_recovery import APP_INSTANCE_ID
 from services.adapter.deployer.connect_apply import ConnectApplyError
 from services.adapter.deployer.nifi_apply import NifiApplyError
 from services.adapter.legality import validate_placement
+from services.kafka_connect_link_validation import validate_sync_link
 from services.adapter.validation import GatewaySnapshot, ValidationIssue, validate_flow
 
 router = APIRouter(prefix="/api/v2/flows", tags=["flows-v2"])
@@ -46,6 +47,8 @@ ALLOWED_VERBS = ("deploy", "redeploy", "start", "pause", "resume", "stop", "stop
 # States getEditLockReason() / disableBlockReason() (frontend/src/pages/Flows.tsx)
 # both refuse edits/disable in — a flow that is deployed and not at rest.
 _LOCKED_STATES = ("Running", "Paused", "Deploying", "Degraded")
+_ACTIVE_QUEUE_STATES = ("queued", "running", "pending")
+_ACTIVE_QUEUE_ITEM_STATES = ("pending", "running")
 
 
 class SetEnabledRequest(BaseModel):
@@ -90,8 +93,119 @@ async def _get_flow_doc_or_404(db: AsyncIOMotorDatabase, flow_id: str) -> Dict[s
     return doc
 
 
+async def _get_flow_queue_lock(db: AsyncIOMotorDatabase, flow_id: str) -> Optional[Dict[str, Any]]:
+    """Return the first live queue item for a flow, if one exists.
+
+    The queue is persisted as bulk-job groups, but locking is deliberately
+    item-level: a flow remains protected while it is pending inside a bulk
+    group or while that item is running.
+    """
+    # Do the item predicate in Python instead of relying on a Mongo array
+    # filter. This also keeps the helper usable by the lightweight in-memory
+    # database used by the router tests.
+    try:
+        collection = db[COLLECTIONS.bulk_jobs]
+    except AttributeError:
+        # Older isolated router tests (and some migration tools) do not
+        # provision the optional queue collection. No queue collection means
+        # there cannot be a queue lock to enforce.
+        return None
+    docs = await collection.find(
+        {"status": {"$in": list(_ACTIVE_QUEUE_STATES)}},
+        {"_id": 0, "id": 1, "verb": 1, "items": 1, "created_at": 1},
+    ).to_list(10000)
+    docs.sort(key=lambda doc: str(doc.get("created_at") or ""))
+    for doc in docs:
+        if any(
+            item.get("flow_id") == flow_id and item.get("status") in _ACTIVE_QUEUE_ITEM_STATES
+            for item in (doc.get("items") or [])
+        ):
+            return doc
+    return None
+
+
+async def _require_flow_queue_unlocked(db: AsyncIOMotorDatabase, flow_id: str) -> None:
+    flow_lock = await db[COLLECTIONS.flows].find_one({"id": flow_id}, {"_id": 0, "migrationLock": 1})
+    if flow_lock and flow_lock.get("migrationLock"):
+        raise HTTPException(
+            status_code=409,
+            detail="Flow is locked while its NiFi runtime is being migrated to another connection.",
+        )
+    job = await _get_flow_queue_lock(db, flow_id)
+    if not job:
+        return
+    item = next((i for i in job.get("items") or [] if i.get("flow_id") == flow_id), {})
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Flow is locked by queued operation '{job.get('verb')}'. "
+            "Wait for it to finish or cancel the queued item."
+        ),
+    )
+
+
 def _issue_dict(issue: ValidationIssue) -> Dict[str, Any]:
     return {"blockId": issue.blockId, "where": issue.where, "message": issue.message}
+
+
+async def _flow_sync_link_issues(db: AsyncIOMotorDatabase, flow: Flow) -> List[Dict[str, Any]]:
+    """Validate every optional syncId reference stored by Flow Builder."""
+    refs: Dict[str, List[str]] = {}
+    issues: List[Dict[str, Any]] = []
+    for block in flow.blocks:
+        sync_id = str((block.config or {}).get("syncId") or "").strip()
+        if not sync_id:
+            continue
+        if block.adapter not in ("kc", "kafka_kc"):
+            issues.append(
+                {
+                    "blockId": block.id,
+                    "where": "syncId",
+                    "message": "Kafka Connect syncs can only be linked to Kafka Connect blocks.",
+                }
+            )
+        else:
+            refs.setdefault(sync_id, []).append(block.id)
+    if not refs:
+        return issues
+    syncs = await db[COLLECTIONS.kafka_connect_syncs].find(
+        {"id": {"$in": list(refs)}}, {"_id": 0}
+    ).to_list(None)
+    sync_by_id = {str(doc.get("id")): doc for doc in syncs}
+    services = await _load_services(db)
+    blocks_by_id = {block.id: block for block in flow.blocks}
+    for sync_id, block_ids in refs.items():
+        sync = sync_by_id.get(sync_id)
+        if not sync:
+            for block_id in block_ids:
+                issues.append(
+                    {
+                        "blockId": block_id,
+                        "where": "syncId",
+                        "message": f"Kafka Connect sync '{sync_id}' was not found.",
+                    }
+                )
+            continue
+        for block_id in block_ids:
+            block = blocks_by_id[block_id]
+            if sync.get("retired"):
+                issues.append(
+                    {
+                        "blockId": block_id,
+                        "where": "syncId",
+                        "message": f"Kafka Connect sync '{sync_id}' is retired. Reinstate it or choose another sync.",
+                    }
+                )
+                continue
+            issues.extend(
+                {
+                    "blockId": block_id,
+                    "where": "syncId",
+                    "message": message,
+                }
+                for message in validate_sync_link(sync, flow, block, services)
+            )
+    return issues
 
 
 # ----------------------------------------------------------- guard mirrors
@@ -224,6 +338,7 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
     existing = await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
 
     if existing:
+        await _require_flow_queue_unlocked(db, flow_in.id)
         existing_flow = Flow(**existing)
         lock_reason = _get_edit_lock_reason(existing_flow)
         if lock_reason:
@@ -247,9 +362,11 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
 
     placement_violations = validate_placement(flow_in)
     flow_level_issues = [i for i in validate_flow(flow_in, services, schemas, gateway) if i.blockId is None]
-    if placement_violations or flow_level_issues:
+    sync_link_issues = await _flow_sync_link_issues(db, flow_in)
+    if placement_violations or flow_level_issues or sync_link_issues:
         issues = [{"blockId": v.blockId, "where": None, "message": v.message} for v in placement_violations]
         issues += [_issue_dict(i) for i in flow_level_issues]
+        issues += sync_link_issues
         raise HTTPException(status_code=422, detail={"issues": issues})
 
     now = now_iso()
@@ -268,17 +385,35 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
     return await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
 
 
+class FlowDeleteOptions(BaseModel):
+    """Optional cleanup choices for a single-flow deletion."""
+
+    # Existing deletes remove generated topics, so keep that safe default for
+    # old API callers and for bulk deletes that do not send this object.
+    deleteTopics: bool = True
+    clearCache: bool = False
+
+
 @router.delete("/{flow_id}")
-async def delete_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+async def delete_flow_v2(
+    flow_id: str,
+    delete_options: Optional[FlowDeleteOptions] = Body(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
     """Mirror of api.ts's `runFlowVerb("delete")`. Performs a full teardown
     (undeploy: delete the NiFi PG + Connect connectors, empty owned Kafka
     topics) before removing the flow/runtime docs when the flow is
     deployed — `services/adapter/deployer/lifecycle.py`'s `delete()` does
     the actual work; a flow that was never deployed just has its docs
     removed, same as before."""
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     try:
-        result = await lifecycle.delete(db, doc)
+        result = await lifecycle.delete(
+            db,
+            doc,
+            delete_options=delete_options.model_dump() if delete_options else None,
+        )
     except (NifiApplyError, ConnectApplyError, lifecycle.LifecycleError) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return result
@@ -311,6 +446,7 @@ _VERB_HANDLERS = {
 class BulkJobRequest(BaseModel):
     verb: str
     flowIds: List[str]
+    deleteOptions: Optional[FlowDeleteOptions] = None
 
 
 @router.post("/bulk", status_code=202, summary="Start a background bulk verb run")
@@ -325,12 +461,41 @@ async def start_bulk_job_v2(payload: BulkJobRequest, db: AsyncIOMotorDatabase = 
     if not docs:
         raise HTTPException(status_code=404, detail="None of the selected flows exist.")
 
-    # Preserve the caller's ordering so the UI's list matches the run order.
+    # Preserve the caller's ordering so the UI's list matches the run order,
+    # while treating repeated ids as one selected flow. This keeps an API
+    # caller from accidentally putting the same flow into two positions in a
+    # single operation group.
     by_id = {str(doc.get("id")): doc for doc in docs}
-    ordered = [by_id[fid] for fid in payload.flowIds if fid in by_id]
+    ordered = [by_id[fid] for fid in dict.fromkeys(payload.flowIds) if fid in by_id]
+
+    # Queue admission is intentionally independent from deploy validation. A
+    # flow with a security or completeness problem is still a valid queue
+    # item; its turn will record the precise per-flow refusal and the worker
+    # will continue with later items. The only admission refusal here is a
+    # flow already owned by another live queue item.
+    conflicts = []
+    for flow_id in dict.fromkeys(payload.flowIds):
+        flow_doc = by_id.get(flow_id) or {}
+        if flow_doc.get("migrationLock"):
+            raise HTTPException(
+                status_code=409,
+                detail="A selected flow is locked while its NiFi runtime is being migrated.",
+            )
+        lock = await _get_flow_queue_lock(db, flow_id)
+        if lock:
+            conflicts.append({"flowId": flow_id, "verb": lock.get("verb"), "jobId": lock.get("id")})
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "One or more flows already have a queued operation.", "conflicts": conflicts},
+        )
 
     job = await bulk_runner.create_bulk_job(
-        db, verb=verb, flow_docs=ordered, owner_instance_id=APP_INSTANCE_ID
+        db,
+        verb=verb,
+        flow_docs=ordered,
+        owner_instance_id=APP_INSTANCE_ID,
+        delete_options=(payload.deleteOptions.model_dump() if payload.deleteOptions else None),
     )
     await audit(
         db,
@@ -380,7 +545,8 @@ async def cancel_bulk_job_v2(job_id: str, db: AsyncIOMotorDatabase = Depends(get
         raise HTTPException(status_code=409, detail="A running operation cannot be cancelled.")
 
     # A queued job is cancelled atomically, so the worker cannot claim it
-    # after this update. All child items remain untouched.
+    # after this update. Mark every child item too, so the queue UI can show
+    # exactly which flows were removed and the flow locks are released.
     await db[COLLECTIONS.bulk_jobs].update_one(
         {"id": job_id, "status": "queued"},
         {
@@ -389,10 +555,69 @@ async def cancel_bulk_job_v2(job_id: str, db: AsyncIOMotorDatabase = Depends(get
                 "cancel_requested": True,
                 "updated_at": now_iso(),
                 "finished_at": now_iso(),
+                "items": [
+                    {**item, "status": "cancelled", "finished_at": now_iso()}
+                    if item.get("status") == "pending" else item
+                    for item in (doc.get("items") or [])
+                ],
             }
         },
     )
     updated = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    return bulk_job_to_response(updated)
+
+
+@router.post("/bulk/{job_id}/items/{item_id}/cancel", summary="Cancel one queued flow operation")
+async def cancel_bulk_item_v2(job_id: str, item_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    """Cancel exactly one pending flow inside a queued or running bulk job.
+
+    A worker may already be executing another item in the same job, so the
+    parent job can be running while this item is still cancellable.
+    """
+    doc = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Bulk job not found")
+    if doc.get("status") in TERMINAL_BULK_STATES:
+        raise HTTPException(status_code=409, detail="This operation has already finished.")
+
+    try:
+        result = await db[COLLECTIONS.bulk_jobs].update_one(
+            {
+                "id": job_id,
+                "status": {"$in": ["queued", "running"]},
+                "items": {"$elemMatch": {"id": item_id, "status": "pending"}},
+            },
+            {"$set": {"items.$.status": "cancelled", "items.$.finished_at": now_iso(), "updated_at": now_iso()}},
+        )
+    except (IndexError, TypeError, ValueError):
+        result = type("UpdateResult", (), {"modified_count": 0})()
+    # The production path above is an atomic positional update. The fallback
+    # keeps the endpoint compatible with the small in-memory test collection,
+    # which intentionally implements only whole-document array writes.
+    if getattr(result, "modified_count", 0) == 0:
+        latest = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+        latest_items = list((latest or {}).get("items") or [])
+        match = next((item for item in latest_items if item.get("id") == item_id), None)
+        if match and match.get("status") == "pending":
+            match["status"] = "cancelled"
+            match["finished_at"] = now_iso()
+            result = await db[COLLECTIONS.bulk_jobs].update_one(
+                {"id": job_id, "status": {"$in": ["queued", "running"]}},
+                {"$set": {"items": latest_items, "updated_at": now_iso()}},
+            )
+    if getattr(result, "modified_count", 0) == 0:
+        raise HTTPException(status_code=409, detail="This flow operation is already running or finished.")
+
+    updated = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
+    items = list((updated or {}).get("items") or [])
+    if updated and updated.get("status") == "queued" and items and all(
+        i.get("status") == "cancelled" for i in items
+    ):
+        await db[COLLECTIONS.bulk_jobs].update_one(
+            {"id": job_id, "status": "queued"},
+            {"$set": {"status": "cancelled", "finished_at": now_iso(), "updated_at": now_iso()}},
+        )
+        updated = await db[COLLECTIONS.bulk_jobs].find_one({"id": job_id}, {"_id": 0})
     return bulk_job_to_response(updated)
 
 
@@ -401,6 +626,7 @@ async def run_flow_verb_v2(flow_id: str, verb: str, db: AsyncIOMotorDatabase = D
     if verb not in ALLOWED_VERBS:
         raise HTTPException(status_code=404, detail=f"Unknown verb: {verb}")
 
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     flow = Flow(**doc)
 
@@ -440,6 +666,7 @@ async def clear_dedup_cache_v2(
     `services/adapter/deployer/lifecycle.py`'s `clear_dedup_cache()`
     docstring for why this is a redeploy-scoped epoch bump rather than an
     instantaneous Redis flush (Redis is not reachable from this host)."""
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     try:
         return await lifecycle.clear_dedup_cache(db, doc, block_id)
@@ -455,6 +682,7 @@ async def test_block_v2(flow_id: str, block_id: str, db: AsyncIOMotorDatabase = 
     hosts no Test section at all (every write, kafka_kc, kc) refuses with
     422, mirroring the builder UI's own `hostsTest` rule. See
     `services/adapter/runtime.py::test_block` for the implementation."""
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     try:
         result = await runtime_svc.test_block(db, doc, block_id)
@@ -471,6 +699,7 @@ async def test_block_v2(flow_id: str, block_id: str, db: AsyncIOMotorDatabase = 
 
 @router.post("/{flow_id}/enabled")
 async def set_flow_enabled_v2(flow_id: str, body: SetEnabledRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     flow = Flow(**doc)
 
@@ -496,7 +725,7 @@ async def validate_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_
     gateway = await _load_gateway(db)
 
     issues = validate_flow(flow, services, schemas, gateway)
-    return [_issue_dict(i) for i in issues]
+    return [_issue_dict(i) for i in issues] + await _flow_sync_link_issues(db, flow)
 
 
 # ------------------------------------------------------------- observability
@@ -531,6 +760,7 @@ async def clear_flow_topic_v2(flow_id: str, body: ClearTopicRequest, db: AsyncIO
     (MVP §19.7) -- owned topics only (an unowned topic 404s, an adopted one
     409s), count -> clear -> count against the live cluster, audited.
     See `services/adapter/runtime.py::clear_topic` for the full contract."""
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     try:
         return await runtime_svc.clear_topic(db, doc, body.topic)
@@ -556,6 +786,7 @@ async def get_flow_runtime_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(g
 
 @router.post("/{flow_id}/runtime/repair")
 async def force_repair_flow_runtime_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
+    await _require_flow_queue_unlocked(db, flow_id)
     doc = await _get_flow_doc_or_404(db, flow_id)
     try:
         return await runtime_svc.repair_runtime(db, doc)

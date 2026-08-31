@@ -68,6 +68,8 @@ class COLLECTIONS:
     audit = "audit_v2"
     openapi_specs = "openapi_specs_v2"
     bulk_jobs = "bulk_jobs_v2"  # background bulk flow-verb runs
+    kafka_connect_syncs = "kafka_connect_syncs_v2"
+    bulk_queue_leases = "bulk_queue_leases_v2"
 
 
 async def audit(

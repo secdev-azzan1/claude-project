@@ -72,10 +72,11 @@ async def test_create_parameter_context_coerces_none_to_empty_string(monkeypatch
             ParameterSpec(name="topic_b1", value="raw.x.y", sensitive=False),
         ],
     )
-    pc_id, pc_name = await nifi_apply._ensure_parameter_context("https://nifi.test", _AUTH, spec)
+    pc_id, pc_name, created = await nifi_apply._ensure_parameter_context("https://nifi.test", _AUTH, spec)
 
     assert pc_id == "pc-1"
     assert pc_name == "pc"
+    assert created is True
 
     create_call = next(c for c in calls if c[0] == "POST" and c[1] == "/nifi-api/parameter-contexts")
     values = _params_by_name(create_call[2]["component"]["parameters"])
@@ -105,9 +106,10 @@ async def test_update_parameter_context_on_redeploy_coerces_none_to_empty_string
     monkeypatch.setattr(nifi_apply, "nifi_api_request", fake_request)
 
     spec = ParameterContextSpec(name="pc", parameters=[ParameterSpec(name="redis_password", value=None, sensitive=True)])
-    pc_id, _ = await nifi_apply._ensure_parameter_context("https://nifi.test", _AUTH, spec)
+    pc_id, _, created = await nifi_apply._ensure_parameter_context("https://nifi.test", _AUTH, spec)
 
     assert pc_id == "pc-1"
+    assert created is False
     update_call = next(c for c in calls if c[0] == "POST" and c[1] == "/nifi-api/parameter-contexts/pc-1/update-requests")
     values = _params_by_name(update_call[2]["component"]["parameters"])
     assert values["redis_password"] == ""
@@ -269,6 +271,11 @@ async def test_apply_plan_validation_gate_passes_when_all_valid(monkeypatch):
     monkeypatch.setattr(nifi_apply, "nifi_api_request", fake.request)
     _patch_root_pg(monkeypatch)
     _patch_validation_gate_fast(monkeypatch)
+
+    async def stop_ok(*_args, **_kwargs):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "stop_pg", stop_ok)
 
     async def fail_if_teardown(*args, **kwargs):
         raise AssertionError("delete_flow_pg must not run on a valid deploy")

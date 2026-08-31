@@ -467,6 +467,24 @@ class TestValidateBlock:
         issues = validation.validate_block(f, b, [], [])
         assert not any("Dedup window" in i.message for i in issues)
 
+    def test_temporary_kafka_key_is_rejected_for_kafka_publish(self):
+        b = make_block(
+            id="w",
+            adapter="kafka",
+            mode="write",
+            entity="asset",
+            transforms=[
+                TransformRule(
+                    id="t1",
+                    kind="extract",
+                    config={"attribute": "kafka.key", "path": "$.id", "retention": "block"},
+                )
+            ],
+        )
+        f = make_flow([b])
+        issues = validation.validate_block(f, b, [], [])
+        assert any("kafka.key" in i.message and "keep it available" in i.message for i in issues)
+
     def test_raw_branch_transform_rejected(self):
         raw_read = make_block(id="raw", adapter="kafka", mode="read", config={"parseFormat": "raw"})
         write = make_block(

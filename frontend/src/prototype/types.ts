@@ -23,6 +23,9 @@ export type TransformKind =
   | "coerce"
   | "dedup";
 
+/** Lifetime of a key produced by a generic transform. */
+export type TransformRetention = "flow" | "block";
+
 /** The operators a branch condition can use. */
 export type BranchOp = "equals" | "not_equals" | "contains" | "starts_with" | "regex" | "is_empty";
 
@@ -49,6 +52,8 @@ export interface TransformRule {
   // set_from_attribute: {field, attribute} · rename: {from, to}
   // coerce: {field, type} · dedup: {identityFields[], excludedFields[], windowHours}
   // route: {rules: RouteRule[], defaultAction: "forward"|"drop"}
+  // Field-producing transforms may also set retention: "flow" | "block".
+  // "block" removes the generated key immediately before this block's output.
   config: Record<string, unknown>;
 }
 

@@ -347,6 +347,54 @@ async def resume_connector(conn: Dict[str, Any], name: str) -> Dict[str, Any]:
     }
 
 
+async def stop_connector(conn: Dict[str, Any], name: str) -> Dict[str, Any]:
+    """Fully stop a connector while retaining its configuration and offsets.
+
+    Kafka Connect exposes this separately from PAUSE on newer workers.  PAUSE
+    remains available through ``pause_connector`` because it is a distinct
+    operator action and is supported by older workers as well.
+    """
+    encoded = urllib.parse.quote(name, safe="")
+    result = await _request(conn, "PUT", f"/connectors/{encoded}/stop")
+    if not result["ok"]:
+        if result.get("status_code") == 404:
+            result["error_code"] = CONNECT_NOT_FOUND
+            result["error"] = f"Connector '{name}' not found."
+        return result
+    return {
+        "ok": True,
+        "reachable": True,
+        "status_code": result["status_code"],
+        "message": f"Connector '{name}' stopped.",
+        "data": result.get("data"),
+        "error_code": None,
+    }
+
+
+async def start_connector(conn: Dict[str, Any], name: str) -> Dict[str, Any]:
+    """Start a fully stopped connector by resuming it.
+
+    Kafka Connect's REST API uses ``resume`` for both PAUSED and STOPPED
+    connectors. There is no separate ``/start`` endpoint in the standard
+    connector lifecycle API.
+    """
+    encoded = urllib.parse.quote(name, safe="")
+    result = await _request(conn, "PUT", f"/connectors/{encoded}/resume")
+    if not result["ok"]:
+        if result.get("status_code") == 404:
+            result["error_code"] = CONNECT_NOT_FOUND
+            result["error"] = f"Connector '{name}' not found."
+        return result
+    return {
+        "ok": True,
+        "reachable": True,
+        "status_code": result["status_code"],
+        "message": f"Connector '{name}' started.",
+        "data": result.get("data"),
+        "error_code": None,
+    }
+
+
 async def restart_connector(
     conn: Dict[str, Any],
     name: str,

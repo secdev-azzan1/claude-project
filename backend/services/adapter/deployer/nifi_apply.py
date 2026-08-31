@@ -79,6 +79,7 @@ class AppliedResult:
     process_group_id: str
     parameter_context_id: str
     parameter_context_name: str
+    parameter_context_created: bool = False
     groups: Dict[str, str] = field(default_factory=dict)  # blockId -> child PG id
     components: Dict[str, Dict[str, str]] = field(default_factory=dict)  # blockId -> {plan key: nifi id}
 
@@ -112,7 +113,7 @@ async def apply_plan(nifi_conn: Dict[str, Any], plan: DeploymentPlan) -> Applied
     if not root_pg_id:
         raise NifiApplyError("Could not resolve the NiFi root process group.")
 
-    pc_id, pc_name = await _ensure_parameter_context(url, auth, plan.parameterContext)
+    pc_id, pc_name, pc_created = await _ensure_parameter_context(url, auth, plan.parameterContext)
 
     # Best-effort crash-recovery: a same-named PG left over from a previous
     # failed/aborted deploy would otherwise make the create below a harmless
@@ -159,6 +160,18 @@ async def apply_plan(nifi_conn: Dict[str, Any], plan: DeploymentPlan) -> Applied
         # the except below tears the PG down), instead of reporting a
         # successful deploy for a flow that can never start.
         await _await_valid_processors(url, auth, plan, components)
+
+        # NiFi defaults newly-created processors to RUNNING in this
+        # environment.  A deployment is persisted as stopped by the
+        # lifecycle layer, so explicitly stop the complete flow process group
+        # before reporting success.  Without this guard a deploy could begin
+        # ingesting data while the user still believes the flow is stopped.
+        stopped = await stop_pg(nifi_conn, flow_pg_id)
+        if not stopped.get("ok"):
+            raise NifiApplyError(
+                f"Deployed process group {flow_pg_id} could not be stopped: "
+                f"{stopped.get('error', 'unknown NiFi error')}"
+            )
     except Exception as exc:
         logger.error("Applying plan for flow %s failed — deleting partial process group %s: %s", plan.flowId, flow_pg_id, exc)
         try:
@@ -173,6 +186,7 @@ async def apply_plan(nifi_conn: Dict[str, Any], plan: DeploymentPlan) -> Applied
         process_group_id=flow_pg_id,
         parameter_context_id=pc_id,
         parameter_context_name=pc_name,
+        parameter_context_created=pc_created,
         groups=groups,
         components=components,
     )
@@ -201,7 +215,7 @@ def _param_value_for_nifi(value: Optional[str]) -> str:
     return "" if value is None else value
 
 
-async def _ensure_parameter_context(url: str, auth: Dict[str, Any], spec: ParameterContextSpec) -> Tuple[str, str]:
+async def _ensure_parameter_context(url: str, auth: Dict[str, Any], spec: ParameterContextSpec) -> Tuple[str, str, bool]:
     listing = await nifi_api_request(url, "GET", "/nifi-api/flow/parameter-contexts", **auth)
     existing_id: Optional[str] = None
     if listing.get("ok"):
@@ -225,10 +239,10 @@ async def _ensure_parameter_context(url: str, auth: Dict[str, Any], spec: Parame
         pc_id = data.get("id") or (data.get("component") or {}).get("id")
         if not pc_id:
             raise NifiApplyError(f"NiFi did not return an id for parameter context {spec.name!r}.")
-        return pc_id, spec.name
+        return pc_id, spec.name, True
 
     await _update_parameter_context(url, auth, existing_id, params_body)
-    return existing_id, spec.name
+    return existing_id, spec.name, False
 
 
 async def _update_parameter_context(url: str, auth: Dict[str, Any], pc_id: str, params_body: List[Dict[str, Any]]) -> None:

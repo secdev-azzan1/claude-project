@@ -60,15 +60,12 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
   const fields = pagination.fields ?? {};
   const type = pagination.type ?? "none";
 
-  // A write (POST/PUT/PATCH) body has no concept of a cursor token or a
-  // server-given next-URL to hand back — only "keep incrementing a counter"
-  // pagination styles make sense there, and the compiler's write-mode
-  // pagination (blocks_http.py::_compile_write) only auto-fills offset/page
-  // bodies. The "has more" flag stop condition stays unimplemented for both
-  // read and write blocks (pre-existing gap, not part of this fix).
+  // Write blocks advance counters in the request body/query, so cursor and
+  // next-URL styles remain read-only. Their responses can still expose all
+  // three stop signals (empty page, total count, or has-more flag).
   const isWrite = block.mode === "write";
   const paginationTypes = isWrite ? PAGINATION_TYPES.filter((p) => ["none", "page", "offset"].includes(p.value)) : PAGINATION_TYPES;
-  const stopConditions = isWrite ? STOP_CONDITIONS.filter((s) => ["empty_response", "total_count"].includes(s.value)) : STOP_CONDITIONS;
+  const stopConditions = STOP_CONDITIONS;
 
   const patch = (next: Partial<PaginationConfig>) =>
     onPatchConfig(block.id, {
@@ -116,7 +113,7 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
           ? field(`${prefix}Path`, "JSONPath", pathPlaceholder, { width: "w-64" })
           : field(`${prefix}Header`, "Header name", headerPlaceholder, { width: "w-64" })}
         {source === "header" && (
-          <p className="text-xs text-muted-foreground">Capitalisation must match the API exactly.</p>
+          <p className="text-xs text-muted-foreground">Header lookup is case-insensitive.</p>
         )}
       </div>
     );
@@ -145,6 +142,19 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
     );
   };
 
+  const safetyLimit = (required: boolean) => (
+    <div className="space-y-1">
+      {field("maxPages", required ? "Maximum pages (required safety limit)" : "Maximum pages (optional safety limit)", "100", {
+        width: "w-36",
+      })}
+      <p className="text-xs text-muted-foreground">
+        {required
+          ? "Required for metadata-based stopping so a missing field or header cannot loop forever."
+          : "Leave blank to rely on the API's natural end signal."}
+      </p>
+    </div>
+  );
+
   const pageStop = fields.stop ?? "empty_response";
   const offsetStop = fields.offsetStop ?? "empty_response";
   const nextUrlSource = fields.nextUrlSource ?? "link_header";
@@ -170,7 +180,7 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
           <div className="flex flex-wrap gap-2">
             {field("pageParam", "Page parameter", "page")}
             {field("sizeParam", "Page size parameter", "size")}
-            {field("sizeValue", "Page size", "500", { width: "w-24" })}
+            {field("sizeValue", "Page size", "100", { width: "w-24" })}
             {field("firstPage", "First page number", "1", { width: "w-28" })}
           </div>
           {stopSelect("stop")}
@@ -178,6 +188,7 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
             metadataSource("totalCount", "Where is the total count?", "$.meta.total", "X-Total-Count")}
           {pageStop === "has_more" &&
             metadataSource("hasMore", 'Where is the "has more" flag?', "$.meta.hasMore", "X-Has-More")}
+          {safetyLimit(pageStop === "total_count" || pageStop === "has_more")}
         </div>
       )}
 
@@ -186,12 +197,13 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
           <div className="flex flex-wrap gap-2">
             {field("cursorParam", "Cursor parameter", "cursor")}
             {field("cursorSizeParam", "Page size parameter (optional)", "limit")}
-            {field("cursorSizeValue", "Page size (optional)", "500", { width: "w-24" })}
+            {field("cursorSizeValue", "Page size (optional)", "100", { width: "w-24" })}
           </div>
-          {metadataSource("cursor", "Where does the next-page token come from?", "$.nextToken", "X-Next-Cursor")}
+          {metadataSource("cursor", "Where does the next-page token come from?", "$.nextCursor", "X-Next-Cursor")}
           <p className="text-xs text-muted-foreground">
             Cursor paging has no stop condition to choose: it ends when a response carries no next token.
           </p>
+          {safetyLimit(false)}
         </div>
       )}
 
@@ -200,13 +212,14 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
           <div className="flex flex-wrap gap-2">
             {field("offsetParam", "Offset parameter", "offset")}
             {field("limitParam", "Limit parameter", "limit")}
-            {field("limitValue", "Limit", "500", { width: "w-24" })}
+            {field("limitValue", "Limit", "100", { width: "w-24" })}
           </div>
           {stopSelect("offsetStop")}
           {offsetStop === "total_count" &&
             metadataSource("offsetTotalCount", "Where is the total count?", "$.meta.total", "X-Total-Count")}
           {offsetStop === "has_more" &&
             metadataSource("hasMore", 'Where is the "has more" flag?', "$.meta.hasMore", "X-Has-More")}
+          {safetyLimit(offsetStop === "total_count" || offsetStop === "has_more")}
         </div>
       )}
 
@@ -241,13 +254,14 @@ export function PaginationFields({ block, locked, onPatchConfig }: PaginationFie
           {nextUrlSource === "header" && (
             <>
               {field("nextUrlHeader", "Header name", "X-Next-Url", { width: "w-64" })}
-              <p className="text-xs text-muted-foreground">Capitalisation must match the API exactly.</p>
+              <p className="text-xs text-muted-foreground">Header lookup is case-insensitive.</p>
             </>
           )}
-          {nextUrlSource === "body" && field("nextUrlPath", "Next URL JSONPath", "$.paging.next", { width: "w-64" })}
+          {nextUrlSource === "body" && field("nextUrlPath", "Next URL JSONPath", "$.next", { width: "w-64" })}
           <p className="text-xs text-muted-foreground">
             Stops when the response carries no next link — there is nothing else to decide.
           </p>
+          {safetyLimit(false)}
         </div>
       )}
     </div>

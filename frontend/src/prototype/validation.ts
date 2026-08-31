@@ -168,6 +168,115 @@ function sinkConfigRefusals(block: FlowBlock): string[] {
   return refusals;
 }
 
+const RETENTION_KINDS = new Set(["extract", "add_field", "set_from_attribute", "rename"]);
+
+function retentionTarget(t: FlowBlock["transforms"][number], index: number): { plane: "attribute" | "record"; name: string } | null {
+  const cfg = t.config ?? {};
+  if (t.kind === "extract") return { plane: "attribute", name: String(cfg.attribute || `extract_${index}`).trim() };
+  if (t.kind === "add_field" || t.kind === "set_from_attribute") {
+    const name = String(cfg.field || "").trim();
+    return name ? { plane: "record", name } : null;
+  }
+  if (t.kind === "rename") {
+    const name = String(cfg.to || "").trim();
+    return name ? { plane: "record", name } : null;
+  }
+  return null;
+}
+
+function containsPlaceholder(value: unknown, name: string): boolean {
+  if (typeof value === "string") return value.includes(`\${${name}}`);
+  if (Array.isArray(value)) return value.some((v) => containsPlaceholder(v, name));
+  if (value && typeof value === "object")
+    return Object.entries(value as Record<string, unknown>).some(([k, v]) => containsPlaceholder(k, name) || containsPlaceholder(v, name));
+  return false;
+}
+
+function descendantBlocks(flow: Flow, block: FlowBlock): FlowBlock[] {
+  const children = new Map<string | null, FlowBlock[]>();
+  for (const candidate of flow.blocks) children.set(candidate.parentId ?? null, [...(children.get(candidate.parentId ?? null) ?? []), candidate]);
+  const result: FlowBlock[] = [];
+  const queue = [...(children.get(block.id) ?? [])];
+  while (queue.length) {
+    const current = queue.shift()!;
+    result.push(current);
+    queue.push(...(children.get(current.id) ?? []));
+  }
+  return result;
+}
+
+function referencesKey(block: FlowBlock, name: string, plane: "attribute" | "record"): boolean {
+  if (containsPlaceholder(block.config, name)) return true;
+  for (const condition of block.branch?.rules ?? []) if (condition.field === name) return true;
+  for (const t of block.transforms) {
+    const cfg = t.config ?? {};
+    if ((t.kind === "add_field" || t.kind === "set_from_attribute") && containsPlaceholder(cfg.value, name)) return true;
+    if (t.kind === "set_from_attribute" && plane === "attribute" && cfg.attribute === name) return true;
+    if ((t.kind === "coerce" || t.kind === "remove_field") && plane === "record" && cfg.field === name) return true;
+    if (t.kind === "rename" && plane === "record" && cfg.from === name) return true;
+    if (t.kind === "dedup" && plane === "record" && ([...(Array.isArray(cfg.identityFields) ? cfg.identityFields : []), ...(Array.isArray(cfg.excludedFields) ? cfg.excludedFields : [])].includes(name))) return true;
+  }
+  return false;
+}
+
+const PAGINATION_TYPES = new Set(["none", "page", "cursor", "offset", "next_url"]);
+const PAGINATION_STOPS = new Set(["empty_response", "total_count", "has_more"]);
+
+function positiveWhole(value: unknown, minimum = 1): boolean {
+  const text = String(value ?? "").trim();
+  if (!text) return false;
+  const parsed = Number(text);
+  return Number.isInteger(parsed) && parsed >= minimum;
+}
+
+function paginationRefusals(block: FlowBlock): string[] {
+  const pagination = (block.config.pagination as { type?: unknown; fields?: Record<string, unknown> } | undefined) ?? {};
+  const type = String(pagination.type ?? "none").trim().toLowerCase();
+  const fields = pagination.fields ?? {};
+  if (!PAGINATION_TYPES.has(type)) return [`Unsupported pagination type: ${type || "(blank)"}.`];
+  if (type === "none") return [];
+
+  const issues: string[] = [];
+  if (block.mode === "write" && (type === "cursor" || type === "next_url"))
+    issues.push("HTTP write pagination supports page or offset counters, not cursor or next URL.");
+  if (block.mode === "write" && String(block.config.writeForwards ?? "original") !== "response")
+    issues.push('HTTP write pagination requires "Continue with" to be the response.');
+
+  const maxPages = fields.maxPages;
+  if (String(maxPages ?? "").trim() && !positiveWhole(maxPages))
+    issues.push("Pagination maximum pages must be a positive whole number.");
+
+  let stop = "empty_response";
+  if (type === "page") {
+    if (String(fields.sizeValue ?? "").trim() && !positiveWhole(fields.sizeValue))
+      issues.push("Pagination page size must be a positive whole number.");
+    if (String(fields.firstPage ?? "").trim() && !positiveWhole(fields.firstPage, 0))
+      issues.push("Pagination first page must be a non-negative whole number.");
+    stop = String(fields.stop ?? "empty_response");
+  } else if (type === "offset") {
+    if (String(fields.limitValue ?? "").trim() && !positiveWhole(fields.limitValue))
+      issues.push("Pagination limit must be a positive whole number.");
+    stop = String(fields.offsetStop ?? "empty_response");
+  } else if (type === "cursor") {
+    const cursorSize = fields.cursorSizeValue ?? fields.sizeValue;
+    if (String(cursorSize ?? "").trim() && !positiveWhole(cursorSize))
+      issues.push("Cursor page size must be a positive whole number.");
+    if (!["body", "header"].includes(String(fields.cursorSource ?? "body")))
+      issues.push("Cursor source must be the response body or a response header.");
+    return issues;
+  } else {
+    const source = String(fields.nextUrlSource ?? (fields.urlPath ? "body" : "link_header"));
+    if (!["body", "header", "link_header"].includes(source))
+      issues.push("Next URL source must be the body, a response header, or the Link header.");
+    return issues;
+  }
+
+  if (!PAGINATION_STOPS.has(stop)) issues.push(`Unsupported pagination stop condition: ${stop}.`);
+  else if ((stop === "total_count" || stop === "has_more") && !positiveWhole(maxPages))
+    issues.push("Total-count and has-more stopping require a positive maximum-pages safety limit.");
+  return issues;
+}
+
 export function validateBlock(
   flow: Flow,
   block: FlowBlock,
@@ -206,6 +315,7 @@ export function validateBlock(
     if (missing.length > 0)
       at(`Unresolved \${...} values: ${missing.join(", ")} — extract them upstream or define a flow variable.`);
     for (const refusal of gatewayRefusals(block, gateway, services)) at(refusal);
+    for (const refusal of paginationRefusals(block)) at(refusal);
   }
   if (block.adapter === "jdbc" && !(block.config.table as string)) at("Pick a table.");
   if (block.adapter === "kafka" && block.mode === "read" && !block.parentId && !(block.config.topicName as string))
@@ -244,6 +354,27 @@ export function validateBlock(
     const windowIssue = dedupWindowIssue(t.config.windowHours);
     if (windowIssue) at(windowIssue);
   }
+
+  const temporaryTargets: string[] = [];
+  block.transforms.forEach((t, index) => {
+    const retention = String(t.config.retention ?? "flow").trim().toLowerCase();
+    if (retention !== "flow" && retention !== "block") at(`Transform ${index + 1} has an invalid retention value; use 'flow' or 'block'.`);
+    if (retention !== "block" || !RETENTION_KINDS.has(t.kind)) return;
+    const target = retentionTarget(t, index);
+    if (!target) {
+      at(`Transform ${index + 1} cannot be temporary until its output name is set.`);
+      return;
+    }
+    if (target.plane === "attribute" && target.name === "kafka.key" && block.adapter === "kafka" && block.mode === "write") {
+      at("The temporary attribute 'kafka.key' is consumed by this Kafka destination; keep it available through publish.");
+      return;
+    }
+    const targetKey = `${target.plane}:${target.name}`;
+    if (temporaryTargets.includes(targetKey)) at(`The temporary ${target.plane} '${target.name}' is produced by more than one transform; use one owner per key.`);
+    temporaryTargets.push(targetKey);
+    const users = descendantBlocks(flow, block).filter((child) => referencesKey(child, target.name, target.plane));
+    if (users.length) at(`Temporary ${target.plane} '${target.name}' is referenced downstream by ${users.map((u) => u.name || u.id).join(", ")}; keep it downstream or recreate it before use.`);
+  });
 
   return issues;
 }
