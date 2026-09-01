@@ -174,6 +174,20 @@ describe("Schemas", () => {
     expect(apiState.listRegistrySubjectVersions).toHaveBeenCalledWith("inventory-value");
   });
 
+  it("shows a dedicated key and Docs editor for each schema field", async () => {
+    renderPage();
+
+    const templateRow = await screen.findByRole("button", { name: /inventory/i });
+    fireEvent.click(templateRow);
+
+    expect(await screen.findByText("Schema fields")).toBeInTheDocument();
+    expect(screen.getByText("Key 1")).toBeInTheDocument();
+    expect(screen.getByText("Key name")).toBeInTheDocument();
+    expect(screen.getByText("Docs")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Docs Add a description/i }));
+    expect(screen.getByRole("textbox", { name: "Field documentation" })).toBeInTheDocument();
+  });
+
   it("refreshes the current badge and version picker after editing and re-registering", async () => {
     renderPage();
 

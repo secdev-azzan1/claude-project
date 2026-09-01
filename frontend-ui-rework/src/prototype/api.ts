@@ -290,6 +290,12 @@ export type FlowVerb =
 
 export async function listFlows(): Promise<Flow[]> {
   const data = await request<Flow[]>("/api/v2/flows/");
+  // Keep the UI usable when talking to an older backend or when a legacy
+  // flow was stored with a Kafka writer but without its materialized topic
+  // node. The backend now performs the same reconciliation, but applying the
+  // existing pure helper here makes the client tolerant during rolling
+  // restarts and keeps the topic column/messages selector consistent.
+  data.forEach(syncFlowTopics);
   cache.flows = data;
   loaded.flows = true;
   return data;
@@ -313,7 +319,9 @@ export async function getFlow(id: string): Promise<Flow | null> {
   const staged = stagedNewFlows.get(id);
   if (staged) return { ...staged };
   try {
-    return await request<Flow>(`/api/v2/flows/${id}`);
+    const flow = await request<Flow>(`/api/v2/flows/${id}`);
+    syncFlowTopics(flow);
+    return flow;
   } catch (err) {
     if (err instanceof ApiRequestError && err.status === 404) return null;
     throw err;

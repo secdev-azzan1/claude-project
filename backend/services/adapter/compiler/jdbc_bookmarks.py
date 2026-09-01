@@ -4,15 +4,17 @@ The incremental JDBC contract is deliberately explicit instead of relying on
 NiFi processor state:
 
 * Redis is read before every query.
-* A query returns one ordered row at a time.  The row carries its watermark
-  (and optional tie-breaker) as FlowFile attributes.
+* A query returns the currently available ordered rows as one record-set
+  FlowFile.  The last row carries the greatest watermark (and optional
+  tie-breaker) for the candidate cursor.
 * The bookmark is written only after the downstream terminal publisher has
-  reported success.
+  reported success for the whole batch.
 
-One-row scheduling is intentional.  It makes the commit boundary unambiguous
-and prevents a partially published result set from advancing the cursor past
-rows that were not delivered.  A later batching optimisation can preserve the
-same contract with an explicit acknowledgement/fan-in stage.
+Batching is intentional.  A scheduled run drains all rows after the current
+cursor instead of publishing only one row and waiting for the next timer tick.
+The commit remains at-least-once: if publishing fails, the cursor is not
+advanced, so a retry can replay already-published rows but cannot silently
+skip them.
 """
 
 from __future__ import annotations
@@ -196,13 +198,13 @@ def incremental_query_sql(block: "FlowBlock", source: BookmarkSource, *, with_cu
         where = f"{wm} IS NOT NULL"
         if source.tie_breaker:
             where += f" AND {source.tie_breaker} IS NOT NULL"
-        return f"SELECT {projection} FROM {table} WHERE {where} ORDER BY {order} LIMIT 1"
+        return f"SELECT {projection} FROM {table} WHERE {where} ORDER BY {order}"
     if not source.tie_breaker:
-        return f"SELECT {projection} FROM {table} WHERE {wm} > ? ORDER BY {order} LIMIT 1"
+        return f"SELECT {projection} FROM {table} WHERE {wm} > ? ORDER BY {order}"
     tie = source.tie_breaker
     return (
         f"SELECT {projection} FROM {table} WHERE ({wm} > ?) OR ({wm} = ? AND {tie} > ?) "
-        f"ORDER BY {order} LIMIT 1"
+        f"ORDER BY {order}"
     )
 
 
@@ -233,6 +235,32 @@ def _update_attributes(builder: "BlockBuilder", key: str, props: Dict[str, Any],
     )
     builder.link(tail[0], key, [tail[1]] if tail[1] else [])
     return key, "success"
+
+
+def _ensure_incremental_json_writer(builder: "BlockBuilder") -> str:
+    """Return the writer used to keep one incremental batch as an array.
+
+    The ordinary application writer is intentionally ``output-oneline``
+    because most flow paths work one record per FlowFile. Incremental JDBC is
+    different: the query must drain all rows available in the scheduled run,
+    while the downstream Record Reader still turns the array into individual
+    records for Kafka publication.
+    """
+    key = "cs_incremental_json_writer"
+    if not builder.has_cs(key):
+        builder.add_cs(
+            ControllerServiceSpec(
+                key=key,
+                name="incremental_json_writer",
+                type="org.apache.nifi.json.JsonRecordSetWriter",
+                properties={
+                    "Schema Access Strategy": "inherit-record-schema",
+                    "Schema Write Strategy": "no-schema",
+                    "Output Grouping": "output-array",
+                },
+            )
+        )
+    return key
 
 
 def attach_bookmark_commit(
@@ -275,7 +303,7 @@ def attach_bookmark_commit(
             type="org.apache.nifi.processors.standard.PutDistributedMapCache",
             properties={
                 "Cache Entry Identifier": f"#{{jdbc_bookmark_key_{source.block_id}}}",
-                "Cache Update Strategy": "Replace if present",
+                "Cache Update Strategy": "replace",
                 "Distributed Cache Service": cache_key,
             },
             autoTerminate=["success"],
@@ -297,11 +325,12 @@ def add_incremental_source(
     table: str,
     cron: tuple[str, str],
 ) -> tuple[str, str]:
-    """Build the Redis fetch -> one-row query -> cursor capture source."""
+    """Build the Redis fetch -> batch query -> cursor capture source."""
     source = bookmark_source_for_block(block)
     if source is None:  # pragma: no cover - caller guards this
         raise CompileError(f"JDBC block {block.id!r} is not incremental")
     cache_key = _bookmark_cache(builder, ctx, add_param=add_param, flow_id=flow.id, source=source)
+    batch_writer_key = _ensure_incremental_json_writer(builder)
     period, strategy = cron
     key_param = f"#{{jdbc_bookmark_key_{source.block_id}}}"
 
@@ -333,9 +362,9 @@ def add_incremental_source(
 
     query_props: Dict[str, Any] = {
         "Database Connection Pooling Service": db_pool,
-        "Record Writer": "cs_json_writer",
-        "SQL select query": "${jdbc.query}",
-        "Max Rows Per FlowFile": "1",
+        "Record Writer": batch_writer_key,
+        "SQL Query": "${jdbc.query}",
+        "Max Rows Per FlowFile": "0",
     }
     builder.add_processor(
         ProcessorSpec(
@@ -356,7 +385,7 @@ def add_incremental_source(
             ProcessorSpec(
                 key="bookmark_initial_query", name="bookmark_initial_query",
                 type="org.apache.nifi.processors.standard.ExecuteSQLRecord",
-                properties={"Database Connection Pooling Service": db_pool, "Record Writer": "cs_json_writer", "SQL select query": "${jdbc.query}", "Max Rows Per FlowFile": "1"},
+                properties={"Database Connection Pooling Service": db_pool, "Record Writer": batch_writer_key, "SQL Query": "${jdbc.query}", "Max Rows Per FlowFile": "0"},
             )
         )
         builder.to_dlq("bookmark_initial_query", "failure")
@@ -364,7 +393,7 @@ def add_incremental_source(
             ProcessorSpec(
                 key="bookmark_initial_extract", name="bookmark_initial_extract",
                 type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "ignore", "jdbc.bookmark.candidate": "$. __dmp_watermark".replace(" ", "")},
+                properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "ignore", "jdbc.bookmark.candidate": "$[-1].__dmp_watermark"},
                 autoTerminate=["unmatched"],
             )
         )
@@ -375,7 +404,7 @@ def add_incremental_source(
                 ProcessorSpec(
                     key="bookmark_initial_tie", name="bookmark_initial_tie",
                     type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                    properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "ignore", "jdbc.bookmark.tie": "$. __dmp_tie".replace(" ", "")},
+                    properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "ignore", "jdbc.bookmark.tie": "$[-1].__dmp_tie"},
                     autoTerminate=["unmatched"],
                 )
             )
@@ -402,10 +431,11 @@ def add_incremental_source(
             properties={"Replacement Strategy": "Always Replace", "Replacement Value": "${jdbc.bookmark.raw}", "Evaluation Mode": "Entire text", "Character Set": "UTF-8"},
         )
     )
+    builder.to_dlq("bookmark_decode", "failure")
     builder.add_processor(
         ProcessorSpec(
             key="bookmark_extract", name="bookmark_extract", type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-            properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "fail", "jdbc.bookmark.value": "$.watermark"},
+            properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "skip", "jdbc.bookmark.value": "$.watermark"},
             autoTerminate=["unmatched"],
         )
     )
@@ -416,7 +446,7 @@ def add_incremental_source(
             ProcessorSpec(
                 key="bookmark_extract_tie", name="bookmark_extract_tie",
                 type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "fail", "jdbc.bookmark.tie": "$.tie"},
+                properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "skip", "jdbc.bookmark.tie": "$.tie"},
                 autoTerminate=["unmatched"],
             )
         )
@@ -446,33 +476,26 @@ def add_incremental_source(
     else:
         builder.link(oldest_tail[0], "query", [oldest_tail[1]])
 
-    reader_key, split_writer_key = ("cs_json_reader", "cs_json_writer")
-    builder.add_processor(
-        ProcessorSpec(
-            key="split", name="split", type="org.apache.nifi.processors.standard.SplitRecord",
-            properties={"Record Reader": reader_key, "Record Writer": split_writer_key, "Records Per Split": "1"},
-            autoTerminate=["original"],
-        )
-    )
-    builder.link("query", "split", ["success"])
-    builder.to_dlq("split", "failure")
-    candidate_path = "$." + source.watermark_column.split(".")[-1]
+    # The query output is an ordered JSON array. The final element is the
+    # greatest cursor in this batch, so one capture/commit advances the
+    # bookmark only after the publisher has accepted every record.
+    candidate_path = "$[-1]." + source.watermark_column.split(".")[-1]
     builder.add_processor(
         ProcessorSpec(
             key="bookmark_capture", name="bookmark_capture", type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-            properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "fail", "jdbc.bookmark.candidate": candidate_path},
+            properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "skip", "jdbc.bookmark.candidate": candidate_path},
             autoTerminate=["unmatched"],
         )
     )
-    builder.link("split", "bookmark_capture", ["splits"])
+    builder.link("query", "bookmark_capture", ["success"])
     builder.to_dlq("bookmark_capture", "failure")
     if source.tie_breaker:
-        tie_path = "$." + source.tie_breaker.split(".")[-1]
+        tie_path = "$[-1]." + source.tie_breaker.split(".")[-1]
         builder.add_processor(
             ProcessorSpec(
                 key="bookmark_capture_tie", name="bookmark_capture_tie",
                 type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "fail", "jdbc.bookmark.tie": tie_path},
+                properties={"Destination": "flowfile-attribute", "Return Type": "scalar", "Path Not Found Behavior": "skip", "jdbc.bookmark.tie": tie_path},
                 autoTerminate=["unmatched"],
             )
         )

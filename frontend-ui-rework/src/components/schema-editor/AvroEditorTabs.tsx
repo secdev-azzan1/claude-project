@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_STRUCTURED_SCHEMA_DEPTH } from "@/lib/schemaEditor";
 import { cn } from "@/lib/utils";
-import { AlertCircle, Plus } from "lucide-react";
+import { AlertCircle, FileCode2, FileJson, Plus } from "lucide-react";
 import { SchemaFieldList } from "./SchemaFieldList";
 import { createDefaultField } from "./schemaTypes";
 import type { AvroBuffer } from "./useAvroBuffer";
@@ -55,23 +55,15 @@ export function AvroEditorTabs({
 
   return (
     <Tabs value={tab} onValueChange={setTab} className={cn("min-w-0", className)}>
-      <div className="flex items-center justify-between gap-2">
-        <TabsList>
-          <TabsTrigger value="structured">Structured Editor</TabsTrigger>
-          <TabsTrigger value="raw">Raw Avro JSON</TabsTrigger>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabsList aria-label="Schema editor modes">
+          <TabsTrigger value="structured">
+            <FileCode2 /> Structured Editor
+          </TabsTrigger>
+          <TabsTrigger value="raw">
+            <FileJson /> Raw Avro JSON
+          </TabsTrigger>
         </TabsList>
-        {!readOnly && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!record}
-            title={record ? undefined : "Nothing to add a field to yet."}
-            onClick={handleAddRootField}
-          >
-            <Plus className="h-4 w-4" /> Add Field
-          </Button>
-        )}
       </div>
 
       {buffer.rawError && tab === "structured" && (
@@ -89,14 +81,15 @@ export function AvroEditorTabs({
           <EmptyState>{emptyLabel}</EmptyState>
         ) : (
           <>
+            <div className="w-full space-y-3">
             {showIdentity && (
-              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid w-full gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Record name</Label>
                   <Input
                     value={record.name}
                     readOnly={readOnly}
-                    className="h-8 font-mono text-sm"
+                    className="h-8 max-w-[24rem] font-mono text-sm"
                     onChange={(event) => buffer.setRecord({ ...record, name: event.target.value })}
                   />
                 </div>
@@ -106,7 +99,7 @@ export function AvroEditorTabs({
                     value={record.namespace ?? ""}
                     readOnly={readOnly}
                     placeholder="com.example"
-                    className="h-8 font-mono text-sm"
+                    className="h-8 max-w-[24rem] font-mono text-sm"
                     onChange={(event) =>
                       buffer.setRecord({ ...record, namespace: event.target.value || undefined })
                     }
@@ -114,6 +107,32 @@ export function AvroEditorTabs({
                 </div>
               </div>
             )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 px-3.5 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Schema fields</p>
+                <p className="text-xs text-muted-foreground">
+                  Define the keys that consumers will receive and document what each one means.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm">
+                  {buffer.fields.length} {buffer.fields.length === 1 ? "key" : "keys"}
+                </span>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!record}
+                    title={record ? undefined : "Nothing to add a field to yet."}
+                    onClick={handleAddRootField}
+                  >
+                    <Plus className="h-4 w-4" /> Add Field
+                  </Button>
+                )}
+              </div>
+            </div>
 
             <div className={cn("min-w-0", bodyClassName)}>
               <SchemaFieldList fields={buffer.fields} depth={1} readOnly={readOnly} onChange={buffer.setFields} />
@@ -123,6 +142,7 @@ export function AvroEditorTabs({
               Structured editing is capped at depth {MAX_STRUCTURED_SCHEMA_DEPTH}. Anything deeper — plus enums,
               fixed, unions and named references — is preserved exactly and edited on the Raw Avro JSON tab.
             </p>
+            </div>
           </>
         )}
         {footer}

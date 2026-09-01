@@ -70,9 +70,9 @@ afterEach(() => {
 });
 
 describe("Apisix", () => {
-  it("renders the Proxies page title", async () => {
+  it("renders the HTTP Proxies page title", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Proxies" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "HTTP Proxies" })).toBeInTheDocument();
   });
 });

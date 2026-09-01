@@ -559,8 +559,13 @@ def test_jdbc_read_incremental_golden_checks():
 
     query = next(p for p in group.processors if p.key == "query")
     assert query.type == "org.apache.nifi.processors.standard.ExecuteSQLRecord"
-    assert query.properties["SQL select query"] == "${jdbc.query}"
-    assert query.properties["Max Rows Per FlowFile"] == "1"
+    assert query.properties["SQL Query"] == "${jdbc.query}"
+    assert "SQL select query" not in query.properties
+    assert query.properties["Max Rows Per FlowFile"] == "0"
+    assert "LIMIT 1" not in next(p for p in group.processors if p.key == "bookmark_oldest").properties["jdbc.query"]
+    batch_writer = next(cs for cs in group.controllerServices if cs.key == "cs_incremental_json_writer")
+    assert batch_writer.type == "org.apache.nifi.json.JsonRecordSetWriter"
+    assert batch_writer.properties["Output Grouping"] == "output-array"
     query_seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
     assert query_seed.properties["sql.args.1.type"] == "93"
     assert query_seed.properties["sql.args.1.value"] == "${jdbc.bookmark.value}"
@@ -592,13 +597,14 @@ def test_jdbc_read_incremental_golden_checks():
     pw_param = next(p for p in plan.parameterContext.parameters if p.name == "svc_svc-db_db_password")
     assert pw_param.sensitive is True and pw_param.value == "s3cret"
 
-    split = next(p for p in group.processors if p.key == "split")
-    assert split.type == "org.apache.nifi.processors.standard.SplitRecord"
-    assert split.properties["Records Per Split"] == "1"
+    assert not any(p.key == "split" for p in group.processors)
+    capture = next(p for p in group.processors if p.key == "bookmark_capture")
+    assert capture.properties["jdbc.bookmark.candidate"] == "$[-1].updated_at"
+    assert any(c.from_ == "query" and c.to == "bookmark_capture" and c.relationships == ["success"] for c in group.connections)
     dlq_from_query = [c for c in group.connections if c.from_ == "query" and c.to == "dlq"]
     assert dlq_from_query and dlq_from_query[0].relationships == ["failure"]
-    dlq_from_split = [c for c in group.connections if c.from_ == "split" and c.to == "dlq"]
-    assert dlq_from_split and dlq_from_split[0].relationships == ["failure"]
+    dlq_from_capture = [c for c in group.connections if c.from_ == "bookmark_capture" and c.to == "dlq"]
+    assert dlq_from_capture and dlq_from_capture[0].relationships == ["failure"]
 
 
 def test_jdbc_incremental_requires_redis_at_compile_time():
@@ -641,10 +647,13 @@ def test_jdbc_incremental_new_position_snapshots_without_publishing():
 
     initial = next(p for p in group.processors if p.key == "bookmark_initial_query")
     assert initial.type == "org.apache.nifi.processors.standard.ExecuteSQLRecord"
-    assert initial.properties["SQL select query"] == "${jdbc.query}"
+    assert initial.properties["SQL Query"] == "${jdbc.query}"
     seed = next(p for p in group.processors if p.key == "bookmark_initial_seed")
     assert "updated_at IS NOT NULL" in seed.properties["jdbc.query"]
     assert "ORDER BY updated_at DESC LIMIT 1" in seed.properties["jdbc.query"]
+    assert initial.properties["Max Rows Per FlowFile"] == "0"
+    initial_extract = next(p for p in group.processors if p.key == "bookmark_initial_extract")
+    assert initial_extract.properties["jdbc.bookmark.candidate"] == "$[-1].__dmp_watermark"
     assert not any(c.from_ == "bookmark_initial_query" and c.to == "outputPort:b-write" for c in group.connections)
 
 
@@ -655,6 +664,7 @@ def test_jdbc_incremental_tie_breaker_uses_compound_cursor():
     group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
     seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
     assert "(updated_at > ?) OR (updated_at = ? AND id > ?)" in seed.properties["jdbc.query"]
+    assert "LIMIT 1" not in seed.properties["jdbc.query"]
     assert seed.properties["sql.args.3.type"] == "-5"
 
 

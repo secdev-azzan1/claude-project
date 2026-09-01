@@ -2,7 +2,7 @@
 
 Runtime bookmark reads and writes happen inside NiFi through the Redis
 controller service.  The backend still needs one narrowly-scoped operation:
-when a flow is deleted, remove that flow's cursor keys.  This module keeps
+when a flow is undeployed or deleted, remove that flow's cursor keys.  This module keeps
 that concern optional and isolated from the compiler and makes a connection
 failure visible to the delete response instead of claiming the key was gone.
 """
@@ -57,4 +57,3 @@ async def delete_flow_bookmarks(config: Dict[str, Any], flow_id: str, block_ids:
         return await asyncio.to_thread(_delete_sync, config, flow_id, list(block_ids))
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-

@@ -142,6 +142,10 @@ def test_save_valid_flow_ok_and_audit_written():
         assert body["createdAt"]
 
         assert len(fake_db.flows_v2.docs) == 1
+        stored_topics = fake_db.flows_v2.docs[0]["topics"]
+        assert len(stored_topics) == 1
+        assert stored_topics[0]["name"] == "raw.valid_flow.thing"
+        assert stored_topics[0]["writerBlockId"] == "b2"
 
         audit_actions = [e["action"] for e in fake_db.audit_v2.docs]
         assert "Flow created" in audit_actions
@@ -188,6 +192,54 @@ def test_save_flow_with_terminal_parent_violation_returns_4xx_with_issue_message
         messages = [i["message"] for i in detail["issues"]]
         assert any("terminal" in m for m in messages), messages
         assert fake_db.flows_v2.docs == []
+    finally:
+        _clear_overrides()
+
+
+def test_flow_list_and_detail_materialize_topics_for_legacy_writer_only_flow():
+    """Imported flows may have the writer topic override but no FlowTopic
+    node. Both read endpoints must expose the same topic inventory, while the
+    read-time reconciliation remains non-persisting until the flow is saved."""
+    fake_db = FakeDB()
+    flow = _valid_flow(
+        flow_id="flow-legacy-topic",
+        topics=[],
+        blocks=[
+            _valid_flow()["blocks"][0],
+            {
+                "id": "b2",
+                "adapter": "kafka",
+                "mode": "write",
+                "name": "Write Topic",
+                "parentId": "b1",
+                "serviceId": None,
+                "entity": "thing",
+                "topicOverride": "gold.cmdb.thing",
+                "config": {},
+                "transforms": [],
+            },
+        ],
+    )
+    fake_db.flows_v2.docs.append(flow)
+    client = _make_client(fake_db)
+    try:
+        list_response = client.get("/api/v2/flows/")
+        assert list_response.status_code == 200, list_response.text
+        list_topics = list_response.json()[0]["topics"]
+        assert list_topics == [
+            {
+                "id": "topic-b2",
+                "kind": "materialized",
+                "name": "gold.cmdb.thing",
+                "sealed": False,
+                "writerBlockId": "b2",
+            }
+        ]
+
+        detail_response = client.get("/api/v2/flows/flow-legacy-topic")
+        assert detail_response.status_code == 200, detail_response.text
+        assert detail_response.json()["topics"] == list_topics
+        assert fake_db.flows_v2.docs[0]["topics"] == []
     finally:
         _clear_overrides()
 

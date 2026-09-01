@@ -29,6 +29,7 @@ from models.adapter.bulk_job import BULK_VERBS, TERMINAL_BULK_STATES, bulk_job_t
 from services.adapter import bulk_runner, runtime as runtime_svc
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
 from services.adapter.deployer import lifecycle
+from services.adapter.topic_inventory import materialize_flow_topics
 from services.runtime_recovery import APP_INSTANCE_ID
 from services.adapter.deployer.connect_apply import ConnectApplyError
 from services.adapter.deployer.nifi_apply import NifiApplyError
@@ -304,12 +305,13 @@ def _get_verb_block_reason(
 
 @router.get("/")
 async def list_flows_v2(db: AsyncIOMotorDatabase = Depends(get_db)):
-    return await db[COLLECTIONS.flows].find({}, {"_id": 0}).to_list(None)
+    docs = await db[COLLECTIONS.flows].find({}, {"_id": 0}).to_list(None)
+    return [materialize_flow_topics(doc) for doc in docs]
 
 
 @router.get("/{flow_id}")
 async def get_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    return await _get_flow_doc_or_404(db, flow_id)
+    return materialize_flow_topics(await _get_flow_doc_or_404(db, flow_id))
 
 
 @router.post("/")
@@ -334,6 +336,11 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
     # client-side); a blank id must never become a stored document key.
     if not (flow_in.id or "").strip():
         flow_in.id = new_id("flow")
+
+    # Older/imported flows can have a Kafka writer and topicOverride but no
+    # corresponding FlowTopic node. Normalize before validation and storage so
+    # future reads and saves have one canonical topic representation.
+    flow_in = Flow(**materialize_flow_topics(flow_in.model_dump()))
 
     existing = await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
 

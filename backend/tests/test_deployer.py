@@ -731,7 +731,7 @@ async def test_delete_records_orphan_when_connector_delete_fails(monkeypatch):
 
 
 @async_test
-async def test_delete_removes_incremental_bookmarks_but_undeploy_does_not(monkeypatch):
+async def test_undeploy_and_delete_remove_incremental_bookmarks(monkeypatch):
     fake_db = FakeDB()
     _seed_core_connections(fake_db, redis=True)
     flow_doc = _incremental_jdbc_flow()
@@ -754,8 +754,8 @@ async def test_delete_removes_incremental_bookmarks_but_undeploy_does_not(monkey
     assert len(bookmark_calls) == 1
     assert bookmark_calls[0][1:] == ("flow-jdbc-delete", ["jdbc-read"])
 
-    # The bookmark cleanup belongs to Delete, not Undeploy/redeploy.  A
-    # deployed copy is enough to exercise the undeploy path without touching
+    # Undeploy now removes the flow-owned bookmark as part of the runtime
+    # reset.  A deployed copy is enough to exercise that path without touching
     # a real NiFi instance.
     deployed = _incremental_jdbc_flow(
         "flow-jdbc-undeploy",
@@ -765,6 +765,7 @@ async def test_delete_removes_incremental_bookmarks_but_undeploy_does_not(monkey
         runtimeScopeMap={"jdbc-read": {"topics": []}, "kafka-write": {"topics": []}},
     )
     undeploy_calls_before = len(bookmark_calls)
+    fake_db.flows_v2.docs.append(deployed)
 
     async def fake_delete_flow_pg(nifi_conn, pg_id):
         return {"ok": True}
@@ -775,7 +776,56 @@ async def test_delete_removes_incremental_bookmarks_but_undeploy_does_not(monkey
     monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
     monkeypatch.setattr(topics, "empty_topic", fake_empty_topic)
     await lifecycle.undeploy(fake_db, deployed)
-    assert len(bookmark_calls) == undeploy_calls_before
+    assert len(bookmark_calls) == undeploy_calls_before + 1
+    assert bookmark_calls[-1][1:] == ("flow-jdbc-undeploy", ["jdbc-read"])
+
+@async_test
+async def test_redeploy_preserves_incremental_bookmark(monkeypatch):
+    fake_db = FakeDB()
+    flow_doc = _incremental_jdbc_flow("flow-jdbc-redeploy", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root")
+    deploy_calls = []
+
+    async def fake_deploy(db, doc):
+        deploy_calls.append(doc["id"])
+        return {"id": doc["id"], "state": "Stopped"}
+
+    async def fail_if_bookmarks_are_deleted(*args, **kwargs):
+        raise AssertionError("redeploy must not remove incremental bookmarks")
+
+    monkeypatch.setattr(lifecycle, "deploy", fake_deploy)
+    monkeypatch.setattr(lifecycle.bookmark_store, "delete_flow_bookmarks", fail_if_bookmarks_are_deleted)
+
+    result = await lifecycle.redeploy(fake_db, flow_doc)
+
+    assert deploy_calls == ["flow-jdbc-redeploy"]
+    assert result["state"] == "Stopped"
+
+
+@async_test
+async def test_undeploy_reports_bookmark_cleanup_failure(monkeypatch):
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db)
+    flow_doc = _incremental_jdbc_flow(
+        "flow-jdbc-undeploy-no-redis",
+        state="Stopped",
+        deployedAt="2026-08-01T00:00:00.000Z",
+        nifiProcessGroupId="pg-root",
+        runtimeScopeMap={"jdbc-read": {"topics": []}, "kafka-write": {"topics": []}},
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    result = await lifecycle.undeploy(fake_db, flow_doc)
+
+    assert result["state"] == "Draft"
+    assert result["bookmarkCleanup"]["ok"] is False
+    assert "No active Redis connection" in result["bookmarkCleanup"]["error"]
+    undeployed = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow undeployed"]
+    assert undeployed[0]["status"] == "Warning"
 
 
 @async_test

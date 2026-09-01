@@ -489,7 +489,7 @@ export default function Apisix() {
 
   return (
     <AppLayout
-      title="Proxies"
+      title="HTTP Proxies"
       description="Named egress proxies an HTTP block routes through. Proxy definitions are self-serve; the host allowlist is administrator-managed."
       actions={
         <Button onClick={openCreate}>
@@ -520,7 +520,7 @@ export default function Apisix() {
         <section>
           <SectionHeading
             icon={Globe}
-            title="Proxies"
+            title="HTTP Proxies"
             blurb="One proxy is one egress definition. An http block references it by id — deploy needs it reconciled and its host allowlisted."
             count={proxies.length}
             unit="proxy"

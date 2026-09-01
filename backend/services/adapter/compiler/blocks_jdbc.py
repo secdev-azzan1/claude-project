@@ -163,9 +163,9 @@ def _compile_read(
     Ordinary reads keep the existing ``QueryDatabaseTableRecord`` path.  An
     incremental read is different: NiFi's processor-local state is not the
     platform bookmark, so it uses the explicit Redis-backed source in
-    ``jdbc_bookmarks.py``.  That source reads one ordered row per scheduled
-    run, captures its watermark, and lets the terminal publisher commit the
-    cursor only after success.
+    ``jdbc_bookmarks.py``. That source drains the rows available after the
+    bookmark in one ordered batch, captures the final watermark, and lets the
+    terminal publisher commit the cursor only after the batch succeeds.
     """
     service = _service_for(block, ctx)
     table_ref = _configured_table(block)

@@ -883,12 +883,50 @@ async def undeploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
         for name in owned_topics:
             await topics.empty_topic(kafka_conn, name)
 
+    # An undeploy is a destructive reset of the flow's runtime identity.  A
+    # JDBC bookmark belongs to that runtime identity, so it must not survive
+    # an undeploy.  Redeploy never calls this function and therefore keeps its
+    # bookmark.  Keep the result on the response (rather than persisting it)
+    # so the UI/API caller can see when Redis cleanup could not be completed.
+    incremental_block_ids = [
+        block.id
+        for block in flow.blocks
+        if block.adapter == "jdbc" and block.mode == "read" and (block.config or {}).get("incremental") is True
+    ]
+    bookmark_cleanup: Optional[Dict[str, Any]] = None
+    if incremental_block_ids:
+        redis_conn_doc = _active_connection(connections, "redis")
+        if not redis_conn_doc:
+            bookmark_cleanup = {
+                "ok": False,
+                "deleted": 0,
+                "error": "No active Redis connection is configured; incremental bookmark keys were not removed.",
+            }
+        else:
+            bookmark_cleanup = await bookmark_store.delete_flow_bookmarks(
+                redis_conn_doc.config or {}, flow.id, incremental_block_ids
+            )
+
     now = now_iso()
     update = {"state": "Draft", "deployedAt": None, "runtimeScopeMap": None, "nifiProcessGroupId": None, "updatedAt": now}
     update.update(_dedup_epoch_bump_updates(flow))
     await db[COLLECTIONS.flows].update_one({"id": flow.id}, {"$set": update})
-    await audit(db, action="Flow undeployed", target=flow.name, status="Success", object="Flow")
-    return await db[COLLECTIONS.flows].find_one({"id": flow.id}, {"_id": 0})
+    result_doc = await db[COLLECTIONS.flows].find_one({"id": flow.id}, {"_id": 0})
+    if bookmark_cleanup is not None:
+        result_doc["bookmarkCleanup"] = bookmark_cleanup
+    await audit(
+        db,
+        action="Flow undeployed",
+        target=flow.name,
+        status="Warning" if bookmark_cleanup and not bookmark_cleanup.get("ok") else "Success",
+        details=(
+            f"Incremental bookmark cleanup failed: {bookmark_cleanup.get('error')}"
+            if bookmark_cleanup and not bookmark_cleanup.get("ok")
+            else None
+        ),
+        object="Flow",
+    )
+    return result_doc
 
 
 async def delete(
@@ -939,8 +977,16 @@ async def delete(
     )
 
     was_deployed = bool(flow_doc.get("deployedAt") or flow_doc.get("nifiProcessGroupId"))
+    undeploy_result: Optional[Dict[str, Any]] = None
     if was_deployed:
-        await undeploy(db, flow_doc)
+        undeploy_result = await undeploy(db, flow_doc)
+        bookmark_cleanup = (undeploy_result or {}).get("bookmarkCleanup")
+        if bookmark_cleanup and not bookmark_cleanup.get("ok"):
+            orphans.append({
+                "kind": "bookmark",
+                "ref": flow.id,
+                "reason": bookmark_cleanup.get("error") or "Incremental bookmark cleanup failed.",
+            })
 
     # A deployed flow has already bumped every dedup epoch as part of
     # undeploy.  For a draft/stopped flow, honour the explicit cache choice
@@ -975,7 +1021,10 @@ async def delete(
         for block in flow.blocks
         if block.adapter == "jdbc" and block.mode == "read" and (block.config or {}).get("incremental") is True
     ]
-    if incremental_block_ids:
+    # A deployed flow's undeploy path already removes its bookmarks.  Keep
+    # this fallback for a flow that is already Draft (for example after a
+    # repair or a previous undeploy) so permanent deletion remains complete.
+    if incremental_block_ids and not was_deployed:
         redis_conn_doc = _active_connection(connections, "redis")
         if not redis_conn_doc:
             orphans.append({
