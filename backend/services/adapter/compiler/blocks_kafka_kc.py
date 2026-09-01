@@ -68,6 +68,47 @@ def compile_publish(
     tail: Tail,
     bookmark_source: BookmarkSource | None = None,
 ) -> None:
+    # Schema inference deliberately uses the same compiled upstream chain as
+    # deployment, but writes JSON to a disposable Kafka topic.  This is the
+    # V1 ceremony contract: infer from records after NiFi has added envelope
+    # fields and applied every configured transform, rather than inferring
+    # from a browser probe or a pre-transform response.
+    if ctx.inference_target_block_id == block.id:
+        topic = (ctx.inference_topic or "").strip()
+        if not topic:
+            raise CompileError("Schema inference target has no temporary Kafka topic.")
+        add_param(f"topic_{block.id}", topic, False)
+        topics_out.append(TopicSpec(name=topic, kind="schema_inference", ownerBlockId=block.id))
+
+        cs_kafka = ensure_kafka_connection_cs(builder, ctx, add_param)
+        reader_key, writer_key = ensure_json_record_services(builder)
+        tail_key, tail_rel = tail
+        builder.add_processor(
+            ProcessorSpec(
+                key="publish", name="publish", type="org.apache.nifi.kafka.processors.PublishKafka",
+                properties={
+                    "Kafka Connection Service": cs_kafka,
+                    "Topic Name": f"#{{topic_{block.id}}}",
+                    "Record Reader": reader_key,
+                    "Record Writer": writer_key,
+                    "Publish Strategy": "USE_VALUE",
+                    "Record Metadata Strategy": "FROM_PROPERTIES",
+                    "Failure Strategy": "Route to Failure",
+                    "acks": "all",
+                    "compression.type": "none",
+                    "partitioner.class": "org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+                    "Transactions Enabled": "false",
+                    "Kafka Key Attribute Encoding": "utf-8",
+                    "Header Encoding": "UTF-8",
+                    "max.request.size": "1 MB",
+                },
+                autoTerminate=["success"],
+            )
+        )
+        builder.link(tail_key, "publish", [tail_rel] if tail_rel else [])
+        builder.to_dlq("publish", "failure")
+        return
+
     if ctx.approved_schemas.get(block.id) is None:
         raise CompileError(
             f'kafka_kc block {block.id!r} ("{block.name}") has no approved schema — the schema '

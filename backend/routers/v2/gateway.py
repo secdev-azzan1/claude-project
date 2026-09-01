@@ -396,7 +396,7 @@ async def delete_proxy(proxy_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
             status_code=409,
             detail=(
                 f'Cannot delete: {len(deps)} flow(s) route through "{proxy.get("name")}" ({shown}). '
-                "Repoint them first."
+                "Remove the dependency from those flows first."
             ),
         )
 

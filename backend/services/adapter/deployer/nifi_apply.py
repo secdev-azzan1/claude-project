@@ -385,7 +385,13 @@ async def _wait_all_cs_enabled(url: str, auth: Dict[str, Any], cs_ids: List[str]
     same-group services — e.g. the dedup Redis cache CS referencing the
     Redis pool CS — can need more than one enable pass; mirrors the
     alpha's `_wait_cs_enabled`, generalized to a whole set of ids)."""
-    deadline = asyncio.get_event_loop().time() + timeout
+    # Reading and enabling are individual NiFi REST calls.  A fixed 45-second
+    # window is adequate for a small writer group, but can expire during the
+    # first dependency pass for a large group before NiFi has had a chance to
+    # enable the services that depend on earlier ones.  Scale the window with
+    # the number of services while retaining the existing 45-second minimum.
+    effective_timeout = max(timeout, len(cs_ids) * 15)
+    deadline = asyncio.get_event_loop().time() + effective_timeout
     last: Dict[str, Dict[str, Any]] = {}
     while asyncio.get_event_loop().time() < deadline:
         last = {}
@@ -408,7 +414,9 @@ async def _wait_all_cs_enabled(url: str, auth: Dict[str, Any], cs_ids: List[str]
         for cid, info in last.items()
         if info.get("state") != "ENABLED"
     )
-    raise NifiApplyError(f"Controller service(s) did not reach ENABLED within {timeout}s: {details}")
+    raise NifiApplyError(
+        f"Controller service(s) did not reach ENABLED within {effective_timeout}s: {details}"
+    )
 
 
 async def _set_cs_enabled(url: str, auth: Dict[str, Any], cs_id: str) -> None:
@@ -714,6 +722,39 @@ async def delete_flow_pg(nifi_conn: Dict[str, Any], process_group_id: str) -> Di
         return {"ok": False, "error": f"Could not delete process group {process_group_id} after retries."}
     except Exception as exc:  # pragma: no cover - defensive, matches this fn's documented never-raise contract
         logger.exception("delete_flow_pg(%s) failed", process_group_id)
+        return {"ok": False, "error": str(exc)[:300]}
+
+
+async def delete_parameter_context(nifi_conn: Dict[str, Any], parameter_context_id: str) -> Dict[str, Any]:
+    """Delete a parameter context created for a disposable deployment.
+
+    Normal flow deployments intentionally keep their shared parameter context;
+    the schema ceremony is the only caller that opts into this cleanup.  The
+    endpoint is idempotent for an already-removed context.
+    """
+    if not parameter_context_id:
+        return {"ok": True}
+    url = _endpoint(nifi_conn)
+    auth = _auth(nifi_conn)
+    try:
+        current = await nifi_api_request(url, "GET", f"/nifi-api/parameter-contexts/{parameter_context_id}", **auth)
+        if not current.get("ok"):
+            if current.get("status_code") == 404:
+                return {"ok": True, "message": "Parameter context already gone."}
+            return {"ok": False, "error": current.get("error") or "Could not read parameter context."}
+        version = ((current.get("data") or {}).get("revision") or {}).get("version", 0)
+        result = await nifi_api_request(
+            url,
+            "DELETE",
+            f"/nifi-api/parameter-contexts/{parameter_context_id}",
+            params={"version": str(version), "disconnectedNodeAcknowledged": "false"},
+            **auth,
+        )
+        if result.get("ok") or result.get("status_code") == 404:
+            return {"ok": True}
+        return {"ok": False, "error": result.get("error") or "Failed to delete parameter context."}
+    except Exception as exc:  # pragma: no cover - defensive cleanup boundary
+        logger.exception("delete_parameter_context(%s) failed", parameter_context_id)
         return {"ok": False, "error": str(exc)[:300]}
 
 

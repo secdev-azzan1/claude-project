@@ -1,7 +1,7 @@
 // Platform Connections — adapter-prototype rebuild.
-// Multiple connections per type, exactly one Active per type; health and
+// At most one saved connection per type; health and
 // reachability recorded as two separate facts; manual Test only (no polling);
-// Activate guarded by dependents (Repoint instead). The APISIX *catalog*
+// Activate is guarded by deployed-flow dependents. The APISIX *catalog*
 // (proxies, cert profiles, host allowlist) lives on its own /apisix page — this
 // page owns the connection, which is infrastructure identity, and links across.
 
@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -43,9 +42,7 @@ import {
 } from "@/components/ui/select";
 import {
   ArrowLeft,
-  ArrowLeftRight,
   CheckCircle2,
-  Circle,
   Database,
   FileCode2,
   Globe,
@@ -57,7 +54,6 @@ import {
   RefreshCw,
   Trash2,
   Workflow,
-  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { timeAgo } from "@/lib/api";
@@ -67,10 +63,8 @@ import {
   connectionDependents,
   deleteConnection,
   listConnections,
-  repointConnection,
   saveConnection,
   testConnection,
-  type RepointStep,
 } from "@/prototype/api";
 import type {
   ConnectionType,
@@ -559,155 +553,6 @@ function ConnectionFormFields({
   );
 }
 
-// ─── Repoint dialog ──────────────────────────────────────────────────────────
-
-type RepointMode = "adopt" | "migrate";
-
-const REPOINT_MODES: { value: RepointMode; label: string; explanation: string }[] = [
-  { value: "migrate", label: "Migrate and verify", explanation: "Rebuild every managed flow and its Kafka, schema-registry, and Redis controller services; switch only after all target components validate." },
-  { value: "adopt", label: "Adopt the same NiFi", explanation: "Use only when both connection cards point to the exact same physical NiFi. No resources are copied." },
-];
-
-function RepointDialog({
-  conn,
-  connections,
-  onClose,
-  onCompleted,
-}: {
-  conn: PlatformConnection;
-  connections: PlatformConnection[];
-  onClose: () => void;
-  onCompleted: () => void;
-}) {
-  const [mode, setMode] = useState<RepointMode>("migrate");
-  const [steps, setSteps] = useState<RepointStep[] | null>(null);
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resultSummary, setResultSummary] = useState<string | null>(null);
-
-  const currentActive = connections.find((c) => c.type === conn.type && c.active);
-  const dependents = currentActive ? connectionDependents(currentActive) : [];
-
-  const start = async () => {
-    setRunning(true);
-    setError(null);
-    try {
-      const result = await repointConnection(conn.id, mode, (s) => setSteps(s));
-      const serviceCount = result.controllerServices?.length ?? 0;
-      setResultSummary(
-        mode === "migrate"
-          ? `${result.flowCount} flow(s) and ${serviceCount} flow-scoped controller service(s) verified on the target.${result.rollbackRetained ? " Source runtime retained for rollback." : ""}`
-          : `${result.flowCount} deployed flow(s) verified on the same NiFi instance.`,
-      );
-      toast.success(`Repoint complete — "${conn.name}" is now the active ${TYPE_META[conn.type].label} connection.`);
-      setDone(true);
-      onCompleted();
-    } catch (err) {
-      const message = (err as Error).message;
-      setError(message);
-      toast.error(`Repoint failed: ${message}`);
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open && !running) onClose(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Repoint to {conn.name}</DialogTitle>
-          <DialogDescription>
-            Move the active {TYPE_META[conn.type].label} connection and its dependents to this endpoint.
-          </DialogDescription>
-        </DialogHeader>
-
-        {!steps && (
-          <>
-            <RadioGroup value={mode} onValueChange={(v) => setMode(v as RepointMode)} className="gap-3">
-              {REPOINT_MODES.map((m) => (
-                <label key={m.value} className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-muted/40">
-                  <RadioGroupItem value={m.value} className="mt-0.5" />
-                  <span>
-                    <span className="text-sm font-medium">{m.label}</span>
-                    <span className="block text-xs text-muted-foreground">{m.explanation}</span>
-                  </span>
-                </label>
-              ))}
-            </RadioGroup>
-
-            <div className="rounded-md bg-muted/40 border px-3 py-2 text-sm">
-              <div className="text-xs font-medium text-muted-foreground mb-1">Impact preview</div>
-              {dependents.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No deployed flows depend on the current active connection.</p>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {dependents.length} deployed flow(s) follow the active connection{currentActive ? ` (“${currentActive.name}”)` : ""}:
-                  </p>
-                  <ul className="text-xs space-y-0.5">
-                    {dependents.map((name) => (
-                      <li key={name} className="font-medium">{name}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        {steps && (
-          <ul className="space-y-2 py-1">
-            {steps.map((s) => (
-              <li key={s.label} className="flex items-center gap-2 text-sm">
-                {s.status === "done" ? (
-                  <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                ) : s.status === "failed" ? (
-                  <XCircle className="h-4 w-4 text-destructive shrink-0" />
-                ) : s.status === "active" ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-info shrink-0" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-                )}
-                <span className={s.status === "pending" ? "text-muted-foreground" : ""}>{s.label}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {error && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            <div className="font-medium">Migration did not switch connections</div>
-            <div className="mt-1 text-xs">{error}</div>
-          </div>
-        )}
-
-        {resultSummary && (
-          <div className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
-            {resultSummary}
-          </div>
-        )}
-
-        <DialogFooter>
-          {done ? (
-            <Button onClick={onClose}>Done</Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={onClose} disabled={running} title={running ? "A repoint is in progress." : undefined}>
-                Cancel
-              </Button>
-              <Button onClick={start} disabled={running} title={running ? "A repoint is in progress." : undefined}>
-                {running && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                {mode === "migrate" ? "Migrate and verify" : "Verify and adopt"}
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── Main panel ──────────────────────────────────────────────────────────────
 
 type FormState = {
@@ -735,7 +580,6 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
   const [deleteTarget, setDeleteTarget] = useState<PlatformConnection | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [redisConfirm, setRedisConfirm] = useState<PlatformConnection | null>(null);
-  const [repointTarget, setRepointTarget] = useState<PlatformConnection | null>(null);
   const [checkingNifiId, setCheckingNifiId] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["connections"] });
@@ -778,10 +622,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
       await activateConnection(conn.id);
       toast.success(`"${conn.name}" is now the active ${TYPE_META[conn.type].label} connection.`);
     } catch (err) {
-      toast.error((err as Error).message, {
-        description: "Repoint moves the dependents safely (adopt / migrate / reset).",
-        action: { label: "Repoint", onClick: () => setRepointTarget(conn) },
-      });
+      toast.error((err as Error).message);
     } finally {
       setActivatingId(null);
       invalidate();
@@ -888,6 +729,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
   const redisDeps = activeRedis ? connectionDependents(activeRedis) : [];
 
   const hasAnyConnections = connections.length > 0;
+  const availableTypes = TYPE_ORDER.filter((type) => !connections.some((c) => c.type === type));
 
   return (
     <div className="space-y-8">
@@ -920,7 +762,11 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
             {testingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Test All
           </Button>
-          <Button onClick={() => setTypePickerOpen(true)}>
+          <Button
+            onClick={() => setTypePickerOpen(true)}
+            disabled={availableTypes.length === 0}
+            title={availableTypes.length === 0 ? "All platform connection types are already configured." : undefined}
+          >
             <Plus className="h-4 w-4" /> Add Connection
           </Button>
         </div>
@@ -1021,9 +867,6 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
                                 {checkingNifiId === c.id ? "Checking..." : "Check NiFi services"}
                               </Button>
                             )}
-                            <Button size="sm" variant="outline" onClick={() => setRepointTarget(c)}>
-                              <ArrowLeftRight className="h-3.5 w-3.5" /> Repoint
-                            </Button>
                             {c.type === "apisix" && (
                               <Button
                                 size="sm"
@@ -1064,7 +907,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
             <DialogDescription>Choose the platform system to connect.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            {TYPE_ORDER.map((type) => {
+            {TYPE_ORDER.filter((type) => !connections.some((c) => c.type === type)).map((type) => {
               const meta = TYPE_META[type];
               const Icon = meta.icon;
               return (
@@ -1085,7 +928,11 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
               );
             })}
           </div>
-          <p className="text-xs text-muted-foreground">Iceberg moved to Sink destination services.</p>
+          {availableTypes.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Each platform type already has one connection. Edit or delete an existing card to change it.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Iceberg moved to Sink destination services.</p>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1182,7 +1029,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
               disabled={deleting || deleteDeps.length > 0}
               title={
                 deleteDeps.length > 0
-                  ? `Blocked: ${deleteDeps.length} deployed flow(s) depend on this connection. Repoint or undeploy them first.`
+                  ? `Blocked: ${deleteDeps.length} deployed flow(s) depend on this connection. Undeploy them first.`
                   : deleting
                     ? "Deleting…"
                     : undefined
@@ -1245,15 +1092,6 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Repoint ──────────────────────────────────────────────────────── */}
-      {repointTarget && (
-        <RepointDialog
-          conn={repointTarget}
-          connections={connections}
-          onClose={() => setRepointTarget(null)}
-          onCompleted={invalidate}
-        />
-      )}
     </div>
   );
 }
@@ -1261,7 +1099,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
 const Connections = () => (
   <AppLayout
     title="Platform Connections"
-    description="Runtime systems the platform talks to — one active connection per type. Health checks are manual: no background polling."
+    description="Runtime systems the platform talks to — one saved connection per type. Health checks are manual: no background polling."
   >
     <PlatformConnectionsPanel showHeading={false} />
   </AppLayout>

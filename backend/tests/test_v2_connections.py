@@ -114,7 +114,7 @@ def _deployed_flow(flow_id="flow-1", name="Critical Flow", blocks=None):
 # ------------------------------------------------------------------ CRUD / redaction
 
 
-def test_create_first_of_type_auto_activates_and_redacts_secret():
+def test_create_first_of_type_auto_activates_and_rejects_second_connection():
     fake_db = FakeDB()
     client = _make_client(fake_db)
     try:
@@ -140,7 +140,8 @@ def test_create_first_of_type_auto_activates_and_redacts_secret():
         stored = next(d for d in fake_db.connections_v2.docs if d["id"] == conn_id)
         assert stored["config"]["token"] == "super-secret-token"
 
-        # A second nifi connection is NOT auto-active.
+        # A second connection of the same type is rejected, even if it would
+        # have been inactive. V2 keeps one saved connection per type.
         resp2 = client.post(
             "/api/v2/connections/",
             json={
@@ -149,8 +150,9 @@ def test_create_first_of_type_auto_activates_and_redacts_secret():
                 "config": {"url": "https://nifi2.example.com", "authMode": "bearer", "token": "tok2"},
             },
         )
-        assert resp2.status_code == 201
-        assert resp2.json()["active"] is False
+        assert resp2.status_code == 409
+        assert "already exists" in resp2.json()["detail"]
+        assert len(fake_db.connections_v2.docs) == 1
     finally:
         _clear_overrides()
 
@@ -304,11 +306,21 @@ def test_activate_blocked_when_active_peer_has_dependents():
         a = client.post(
             "/api/v2/connections/", json={"type": "nifi", "name": "A", "config": {"url": "https://a", "authMode": "bearer", "token": "t"}}
         ).json()
-        b = client.post(
-            "/api/v2/connections/", json={"type": "nifi", "name": "B", "config": {"url": "https://b", "authMode": "bearer", "token": "t2"}}
-        ).json()
         assert a["active"] is True
-        assert b["active"] is False
+        b = {
+            "id": "legacy-nifi-b",
+            "type": "nifi",
+            "name": "B",
+            "active": False,
+            "health": "Not Tested",
+            "reachability": "Unknown",
+            "lastTestedAt": None,
+            "config": {"url": "https://b", "authMode": "bearer", "token": "t2"},
+            "hasSecret": True,
+        }
+        # Legacy duplicate cards may still exist in an already-populated
+        # database; activation must keep its dependent-flow guard for them.
+        fake_db.connections_v2.docs.append(b)
 
         fake_db.flows_v2.docs.append(_deployed_flow())
 
@@ -346,9 +358,18 @@ def test_delete_allowed_when_inactive_even_with_deployed_flows():
         client.post(
             "/api/v2/connections/", json={"type": "nifi", "name": "A", "config": {"url": "https://a", "authMode": "bearer", "token": "t"}}
         ).json()
-        b = client.post(
-            "/api/v2/connections/", json={"type": "nifi", "name": "B", "config": {"url": "https://b", "authMode": "bearer", "token": "t2"}}
-        ).json()
+        b = {
+            "id": "legacy-nifi-b",
+            "type": "nifi",
+            "name": "B",
+            "active": False,
+            "health": "Not Tested",
+            "reachability": "Unknown",
+            "lastTestedAt": None,
+            "config": {"url": "https://b", "authMode": "bearer", "token": "t2"},
+            "hasSecret": True,
+        }
+        fake_db.connections_v2.docs.append(b)
         # Depends on active A; B is inactive and thus freely deletable.
         fake_db.flows_v2.docs.append(_deployed_flow())
 
@@ -752,58 +773,19 @@ def test_dispatch_redis_indirect_verification():
         _clear_overrides()
 
 
-# ------------------------------------------------------------------------ repoint
+# ------------------------------------------------------------------ removed API
 
 
-def test_repoint_adopt_uses_identity_safe_service(monkeypatch):
+def test_v2_repoint_endpoint_is_removed():
     fake_db = FakeDB()
     client = _make_client(fake_db)
     try:
-        a = client.post(
-            "/api/v2/connections/", json={"type": "nifi", "name": "A", "config": {"url": "https://a", "authMode": "bearer", "token": "t"}}
+        conn = client.post(
+            "/api/v2/connections/",
+            json={"type": "nifi", "name": "Primary", "config": {"url": "https://nifi", "authMode": "bearer", "token": "t"}},
         ).json()
-        b = client.post(
-            "/api/v2/connections/", json={"type": "nifi", "name": "B", "config": {"url": "https://b", "authMode": "bearer", "token": "t2"}}
-        ).json()
-
-        async def fake_adopt(db, target):
-            await db.connections_v2.update_one({"id": a["id"]}, {"$set": {"active": False}})
-            await db.connections_v2.update_one({"id": target["id"]}, {"$set": {"active": True}})
-            return {"mode": "adopt", "flowCount": 0}
-
-        monkeypatch.setattr(connections_v2.nifi_repoint, "adopt", fake_adopt)
-        resp = client.post(f"/api/v2/connections/{b['id']}/repoint", json={"mode": "adopt"})
-        assert resp.status_code == 200
-        assert resp.json()["connection"]["active"] is True
-        assert resp.json()["result"]["mode"] == "adopt"
-
-        stored_a = next(d for d in fake_db.connections_v2.docs if d["id"] == a["id"])
-        assert stored_a["active"] is False
-    finally:
-        _clear_overrides()
-
-
-def test_repoint_migrate_dispatches_and_reset_is_not_an_api_mode(monkeypatch):
-    fake_db = FakeDB()
-    client = _make_client(fake_db)
-    try:
-        client.post(
-            "/api/v2/connections/", json={"type": "nifi", "name": "A", "config": {"url": "https://a", "authMode": "bearer", "token": "t"}}
-        ).json()
-        b = client.post(
-            "/api/v2/connections/", json={"type": "nifi", "name": "B", "config": {"url": "https://b", "authMode": "bearer", "token": "t2"}}
-        ).json()
-
-        async def fake_migrate(_db, target):
-            return {"mode": "migrate", "targetConnectionId": target["id"], "flowCount": 2}
-
-        monkeypatch.setattr(connections_v2.nifi_repoint, "migrate", fake_migrate)
-        migrated = client.post(f"/api/v2/connections/{b['id']}/repoint", json={"mode": "migrate"})
-        assert migrated.status_code == 200
-        assert migrated.json()["result"]["flowCount"] == 2
-
-        reset = client.post(f"/api/v2/connections/{b['id']}/repoint", json={"mode": "reset"})
-        assert reset.status_code == 422
+        response = client.post(f"/api/v2/connections/{conn['id']}/repoint", json={"mode": "migrate"})
+        assert response.status_code == 404
     finally:
         _clear_overrides()
 

@@ -587,6 +587,33 @@ def test_http_test_basic_auth_401_is_failed(monkeypatch):
     assert event["status"] == "Failed"
 
 
+def test_http_test_basic_auth_404_is_healthy_reachable(monkeypatch):
+    fake_db = FakeDB()
+    client = _make_client(fake_db)
+    created = client.post(
+        "/api/v2/services/",
+        json={
+            "type": "http",
+            "name": "Child-route API",
+            "config": {
+                "baseUrl": "https://x.example/api-prefix",
+                "authMode": "basic",
+                "username": "u",
+                "password": "p",
+            },
+        },
+    ).json()
+    patch_httpx(monkeypatch, {"HEAD": FakeResponse(404), "GET": FakeResponse(404)})
+
+    response = client.post(f"/api/v2/services/{created['id']}/test")
+
+    assert response.status_code == 200
+    assert response.json()["health"] == "Healthy"
+    event = fake_db.audit_v2.docs[-1]
+    assert event["action"] == "Service tested"
+    assert event["status"] == "Success"
+
+
 def test_http_test_bearer_auth_sends_header(monkeypatch):
     fake_db = FakeDB()
     client = _make_client(fake_db)

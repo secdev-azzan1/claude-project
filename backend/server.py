@@ -33,6 +33,7 @@ from routers.v2 import schemas as v2_schemas
 from routers.v2 import flows as v2_flows
 from routers.v2 import dashboard as v2_dashboard
 from routers.v2 import audit as v2_audit
+from routers.v2 import schema_inference as v2_schema_inference
 from services.adapter.seed import seed_v2_connections
 
 # Configure logging
@@ -155,6 +156,7 @@ app.include_router(v2_schemas.router)
 app.include_router(v2_flows.router)
 app.include_router(v2_dashboard.router)
 app.include_router(v2_audit.router)
+app.include_router(v2_schema_inference.router)
 
 
 @app.get("/api", tags=["health"], summary="Backend health/version check")
@@ -270,6 +272,7 @@ async def ensure_indexes():
     index_specs = [
         (db.connections, [("id", ASCENDING)], {"unique": True, "name": "uniq_connections_id"}),
         (db.connections, [("type", ASCENDING)], {"unique": True, "name": "uniq_active_connection_per_type", "partialFilterExpression": {"is_active": True}}),
+        (db.connections_v2, [("type", ASCENDING)], {"unique": True, "name": "uniq_v2_connection_type"}),
         (db.application_services, [("id", ASCENDING)], {"unique": True, "name": "uniq_application_services_id"}),
         (db.sources, [("id", ASCENDING)], {"unique": True, "name": "uniq_sources_id"}),
         (db.flows, [("id", ASCENDING)], {"unique": True, "name": "uniq_flows_id"}),
@@ -306,6 +309,8 @@ async def ensure_indexes():
         (db.kafka_connect_syncs_v2, [("connector_name", ASCENDING)], {"unique": True, "name": "uniq_kafka_connect_sync_connector"}),
         (db.kafka_connect_syncs_v2, [("linked_flow_id", ASCENDING)], {"name": "idx_kafka_connect_sync_flow"}),
         (db.bulk_queue_leases_v2, [("id", ASCENDING)], {"unique": True, "name": "uniq_bulk_queue_lease_id"}),
+        (db.schema_inference_jobs_v2, [("id", ASCENDING)], {"unique": True, "name": "uniq_v2_schema_inference_job_id"}),
+        (db.schema_inference_jobs_v2, [("flowId", ASCENDING), ("targetBlockId", ASCENDING), ("status", ASCENDING)], {"name": "idx_v2_schema_inference_target_status"}),
     ]
     for coll, keys, options in index_specs:
         try:

@@ -29,6 +29,7 @@ from models.adapter import (  # noqa: E402
     TransformRule,
 )
 from services.adapter.compiler import CompileContext, CompileError, compile_flow  # noqa: E402
+from services.adapter.compiler.inference import build_inference_plan  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "compiler"
 
@@ -385,6 +386,34 @@ def test_kafka_kc_publish_and_connector():
     ctx_no_schema.approved_schemas = {}
     with pytest.raises(CompileError, match="approved schema"):
         compile_flow(golden_flow(), ctx_no_schema)
+
+
+def test_schema_inference_plan_reuses_chain_but_bypasses_avro_and_connect():
+    ctx = golden_ctx()
+    ctx.approved_schemas = {}
+    plan = build_inference_plan(
+        golden_flow(),
+        ctx,
+        target_block_id="b-sink",
+        inference_topic="dmp.schema_inference.golden.asset.job-1",
+        job_id="schema-inference-job-1",
+    )
+
+    assert plan.flowId.startswith("flow-golden__schema_inference__")
+    assert plan.rootGroup.name.startswith("golden_flow_schema_inference_")
+    assert plan.connectors == []
+    assert {topic.name for topic in plan.topics} >= {
+        "dmp.schema_inference.golden.asset.job-1",
+        "dlq.golden_flow_schema_inference_schema_inference_job_1",
+    }
+
+    sink = next(group for group in plan.rootGroup.childGroups if group.blockId == "b-sink")
+    publish = next(processor for processor in sink.processors if processor.key == "publish")
+    assert publish.properties["Record Writer"] == "cs_json_writer"
+    assert "cs_avro_writer" not in {service.key for service in sink.controllerServices}
+    assert "cs_schema_registry" not in {service.key for service in sink.controllerServices}
+    assert "envelope" in {processor.key for processor in sink.processors}
+    assert {"dedupe__hash", "dedupe__detect"}.issubset({processor.key for processor in sink.processors})
 
 
 # --------------------------------------------------------------------------

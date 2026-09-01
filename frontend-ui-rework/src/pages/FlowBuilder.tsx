@@ -351,12 +351,23 @@ export default function FlowBuilder() {
    * as-is rather than round-tripping a no-op save. Throws on save failure so
    * TestPanel can surface it and skip the test call.
    */
-  const ensureSaved = useCallback(async (): Promise<Flow> => {
-    if (!draft) throw new Error("Nothing to save yet.");
-    if (!dirty) return draft;
+  const ensureSaved = useCallback(async (candidate?: Flow): Promise<Flow> => {
+    if (!draft && !candidate) throw new Error("Nothing to save yet.");
+    // The schema ceremony can supply a just-declared entity that has not yet
+    // been committed to the editor draft. Persist that candidate before
+    // starting its temporary NiFi/Kafka inference runtime.
+    if (candidate) {
+      setSaving(true);
+      try {
+        return await persistDraft(candidate);
+      } finally {
+        setSaving(false);
+      }
+    }
+    if (!dirty) return draft as Flow;
     setSaving(true);
     try {
-      return await persistDraft(draft);
+      return await persistDraft(draft as Flow);
     } finally {
       setSaving(false);
     }
@@ -776,6 +787,7 @@ export default function FlowBuilder() {
           block={ceremonyBlock}
           open={!!ceremonyBlockId}
           approvedSchemas={schemas}
+          onEnsureSaved={ensureSaved}
           onOpenChange={(open) => {
             if (!open) {
               setCeremonyBlockId(null);
@@ -950,5 +962,3 @@ function NewFlowPanel({ onCreated }: { onCreated: (id: string) => void }) {
     </AppLayout>
   );
 }
-
-

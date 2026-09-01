@@ -144,7 +144,16 @@ def compile_publish(
                                add_param=add_param, tail=tail)
         return
 
-    topic = derive_topic_name(flow, block).value
+    # The V2 schema ceremony may target a plain kafka write as well as a
+    # governed kafka+connect write.  Its temporary topic is explicit; the
+    # ordinary production path continues to use the governed naming walk.
+    topic = (
+        (ctx.inference_topic or "").strip()
+        if ctx.inference_target_block_id == block.id
+        else derive_topic_name(flow, block).value
+    )
+    if not topic:
+        raise CompileError(f"kafka write block {block.id!r} has no topic configured")
     add_param(f"topic_{block.id}", topic, False)
     topics_out.append(TopicSpec(name=topic, kind="data", ownerBlockId=block.id))
 

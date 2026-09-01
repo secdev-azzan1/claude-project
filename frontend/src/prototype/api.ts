@@ -833,21 +833,6 @@ export async function deleteConnection(id: string): Promise<void> {
   await request(`/api/v2/connections/${id}`, { method: "DELETE" });
 }
 
-export interface RepointStep {
-  label: string;
-  status: "done" | "active" | "pending" | "failed";
-}
-
-export interface RepointResult {
-  mode: "adopt" | "migrate";
-  flowCount: number;
-  controllerServices?: Array<{ name?: string; type?: string; state?: string; validationStatus?: string }>;
-  flows?: Array<{ processGroupId: string; processors?: number; controllerServiceCount?: number; invalid?: number }>;
-  rollbackRetained?: boolean;
-  sourceRuntimeMissing?: string[];
-  finalizationWarnings?: string[];
-}
-
 export interface NifiPlatformServiceResult {
   kind: string;
   name: string;
@@ -873,28 +858,6 @@ export interface NifiServiceReadinessResult {
 
 export async function checkNifiPlatformServices(connectionId: string): Promise<NifiServiceReadinessResult> {
   return request<NifiServiceReadinessResult>(`/api/v2/connections/${connectionId}/nifi-services/readiness`, { method: "POST" });
-}
-
-export async function repointConnection(id: string, mode: "adopt" | "migrate", onStep: (steps: RepointStep[]) => void): Promise<RepointResult> {
-  const activeLabel = mode === "adopt"
-    ? "Verifying that both cards identify the same NiFi"
-    : "Staging and validating flows, parameters, and controller services";
-  onStep([{ label: activeLabel, status: "active" }]);
-  try {
-    const response = await request<{ result: RepointResult }>(`/api/v2/connections/${id}/repoint`, {
-      method: "POST",
-      body: { mode },
-    });
-    onStep([
-      { label: activeLabel, status: "done" },
-      { label: "Verified target runtime and switched the active connection", status: "done" },
-      { label: "Recorded the migration audit trail", status: "done" },
-    ]);
-    return response.result;
-  } catch (error) {
-    onStep([{ label: activeLabel, status: "failed" }]);
-    throw error;
-  }
 }
 
 export async function getGatewayResources(): Promise<GatewayResources> {

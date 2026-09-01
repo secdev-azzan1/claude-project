@@ -729,7 +729,7 @@ async def delete_approved_schema(schema_id: str, db: AsyncIOMotorDatabase = Depe
                 status_code=409,
                 detail=(
                     f'Cannot delete — flow "{flow.get("name") or flow.get("id")}" is deployed and its kafka_kc '
-                    "block still references this schema. Undeploy or repoint the block first."
+                    "block still references this schema. Undeploy or remove the block first."
                 ),
             )
 

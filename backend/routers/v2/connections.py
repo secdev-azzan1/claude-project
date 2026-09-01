@@ -1,13 +1,13 @@
 """Platform Connections v2 (T2.1 + T2.2).
 
 CONTRACT SOURCE: frontend/src/prototype/api.ts (`listConnections`,
-`saveConnection`, `testConnection`, `activateConnection`, `repointConnection`,
-`deleteConnection`, `connectionDependents`) and frontend/src/prototype/types.ts
+`saveConnection`, `testConnection`, `activateConnection`, `deleteConnection`,
+`connectionDependents`) and frontend/src/prototype/types.ts
 (`PlatformConnection`), with per-type config fields read off
 frontend/src/pages/Connections.tsx's `defaultDraft` / `connectionToDraft` /
 `draftToConnection` / `ConnectionFormFields`. This router is the server-side
 counterpart of that mock: same guard reasons, same upsert semantics, same
-one-active-per-type + dependents rules -- but backed by Mongo
+one-saved-connection-per-type + dependents rules -- but backed by Mongo
 (`connections_v2`) and dispatching REAL connectivity probes instead of the
 mock's deterministic "legacy" substring check.
 
@@ -34,18 +34,17 @@ from the real field names.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 
 from db import get_db
 from models.adapter import AppService, Flow, PlatformConnection
 from models.adapter._secrets import SECRET_CONFIG_KEYS
 from services import apicurio_client, apisix_client, kafka_client, kafka_connect_client, nifi_client
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
-from services.adapter import nifi_repoint
 from services import nifi_service_readiness
 from services.adapter.validation import block_proxy_id
 
@@ -378,8 +377,8 @@ async def upsert_connection_v2(
 ):
     """Mirrors api.ts `saveConnection`: a body carrying an `id` that matches
     an existing document updates it in place; anything else (no id, blank
-    id, or an id nothing has) creates a new connection, auto-activating it
-    when it is the first of its type."""
+    id, or an id nothing has) creates a new connection. Creation is rejected
+    when a connection of that type already exists."""
     ctype = payload.get("type")
     if ctype not in CONNECTION_TYPES:
         raise HTTPException(status_code=400, detail=f"Unknown connection type: {ctype!r}")
@@ -390,9 +389,6 @@ async def upsert_connection_v2(
 
     existing = await db[COLLECTIONS.connections].find_one({"id": payload_id}, {"_id": 0}) if payload_id else None
     is_update = existing is not None
-
-    if is_update and existing.get("repointInProgress"):
-        raise HTTPException(status_code=409, detail="This connection is locked by an active NiFi migration.")
 
     if is_update and existing.get("type") != ctype:
         raise HTTPException(status_code=400, detail="Connection type cannot be changed once created.")
@@ -443,13 +439,25 @@ async def upsert_connection_v2(
         updated = await db[COLLECTIONS.connections].find_one({"id": conn_id}, {"_id": 0})
         return _to_response(updated)
 
+    # V2 deliberately supports one saved connection per platform type. Check
+    # every record, not only the active record, so an inactive legacy card
+    # cannot be hidden by creating another card of the same type.
+    existing_of_type = await db[COLLECTIONS.connections].find_one({"type": ctype}, {"_id": 0})
+    if existing_of_type:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f'A {ctype} connection already exists ("{existing_of_type.get("name", "unnamed")}"). '
+                "Edit or delete the existing connection before creating another."
+            ),
+        )
+
     conn_id = new_id("conn")
-    existing_of_type = await db[COLLECTIONS.connections].find_one({"type": ctype})
     doc = {
         "id": conn_id,
         "type": ctype,
         "name": name,
-        "active": existing_of_type is None,
+        "active": True,
         "health": "Not Tested",
         "reachability": "Unknown",
         "lastTestedAt": None,
@@ -460,7 +468,15 @@ async def upsert_connection_v2(
     # `_id`. Insert a copy so the response remains the browser-safe v2 shape;
     # otherwise creation succeeds in Mongo but FastAPI fails while serializing
     # the ObjectId, making the UI report a save error for a card that exists.
-    await db[COLLECTIONS.connections].insert_one(dict(doc))
+    try:
+        await db[COLLECTIONS.connections].insert_one(dict(doc))
+    except DuplicateKeyError as exc:
+        # The unique type index closes the small race between the existence
+        # check above and the insert on clean installations.
+        raise HTTPException(
+            status_code=409,
+            detail=f"A {ctype} connection already exists. Edit or delete it before creating another.",
+        ) from exc
     await audit(db, action="Connection created", target=name, object="Platform Connection", status="Success")
     response.status_code = 201
     return _to_response(doc)
@@ -469,9 +485,6 @@ async def upsert_connection_v2(
 @router.delete("/{conn_id}", status_code=204, summary="Delete a platform connection (v2)")
 async def delete_connection_v2(conn_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     conn = await _get_conn_or_404(db, conn_id)
-    if conn.get("repointInProgress"):
-        raise HTTPException(status_code=409, detail="This connection is locked by an active NiFi migration.")
-
     deps = await connection_dependents(db, conn)
     if deps:
         preview = ", ".join(deps[:3]) + ("…" if len(deps) > 3 else "")
@@ -519,10 +532,6 @@ async def test_connection_v2(conn_id: str, db: AsyncIOMotorDatabase = Depends(ge
 async def activate_connection_v2(conn_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     conn = await _get_conn_or_404(db, conn_id)
     ctype = conn.get("type")
-    locked = await db[COLLECTIONS.connections].find_one({"type": ctype, "repointInProgress": {"$ne": None}})
-    if locked and locked.get("repointInProgress"):
-        raise HTTPException(status_code=409, detail="A connection migration is already in progress.")
-
     peer = await db[COLLECTIONS.connections].find_one({"type": ctype, "active": True, "id": {"$ne": conn_id}})
     if peer:
         peer_deps = await connection_dependents(db, peer)
@@ -534,7 +543,7 @@ async def activate_connection_v2(conn_id: str, db: AsyncIOMotorDatabase = Depend
                 status_code=409,
                 detail=(
                     f'"{peer.get("name")}" has {len(peer_deps)} dependent flow(s) — '
-                    "use Repoint (adopt / migrate / reset) instead of a bare activation."
+                    "Undeploy those flows before activating this legacy connection."
                 ),
             )
 
@@ -577,9 +586,8 @@ async def activate_connection_v2(conn_id: str, db: AsyncIOMotorDatabase = Depend
 async def nifi_service_readiness_v2(conn_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
     """Reconcile Kafka, Apicurio-compatible registry, and Redis root services.
 
-    This is intentionally separate from `/repoint`: it does not activate a
-    connection, migrate flows, copy process groups, or touch flow-scoped
-    controller services.
+    This does not activate a connection, migrate flows, copy process groups,
+    or touch flow-scoped controller services.
     """
     result = await nifi_service_readiness.reconcile_platform_services(db, conn_id)
     await audit(
@@ -591,26 +599,6 @@ async def nifi_service_readiness_v2(conn_id: str, db: AsyncIOMotorDatabase = Dep
         details=result.get("message"),
     )
     return result
-
-
-class RepointRequest(BaseModel):
-    mode: Literal["adopt", "migrate"]
-
-
-@router.post("/{conn_id}/repoint", summary="Repoint a platform connection (v2)")
-async def repoint_connection_v2(conn_id: str, body: RepointRequest, db: AsyncIOMotorDatabase = Depends(get_db)):
-    """Identity-safe adopt or rollback-safe migration for Apache NiFi."""
-    conn = await _get_conn_or_404(db, conn_id)
-    if conn.get("type") != "nifi":
-        raise HTTPException(status_code=501, detail="Safe repoint is currently implemented for Apache NiFi only.")
-    if conn.get("active"):
-        raise HTTPException(status_code=409, detail="This NiFi connection is already active.")
-    try:
-        result = await (nifi_repoint.adopt(db, conn) if body.mode == "adopt" else nifi_repoint.migrate(db, conn))
-    except nifi_repoint.NifiRepointError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    updated = await db[COLLECTIONS.connections].find_one({"id": conn_id}, {"_id": 0})
-    return {"connection": _to_response(updated), "result": result}
 
 
 @router.get("/{conn_id}/impact", summary="Preview a platform connection's dependents (v2)")

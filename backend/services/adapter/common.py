@@ -70,6 +70,7 @@ class COLLECTIONS:
     bulk_jobs = "bulk_jobs_v2"  # background bulk flow-verb runs
     kafka_connect_syncs = "kafka_connect_syncs_v2"
     bulk_queue_leases = "bulk_queue_leases_v2"
+    schema_inference_jobs = "schema_inference_jobs_v2"
 
 
 async def audit(

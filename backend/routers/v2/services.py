@@ -493,6 +493,17 @@ def _classify_http_response(resp: httpx.Response, auth_mode: str) -> Dict[str, A
         if auth_mode == "none":
             return {"ok": True, "health": "Healthy", "message": f"Reachable — HTTP {code} (auth required)."}
         return {"ok": False, "health": "Failed", "message": f"Authentication failed — HTTP {code}."}
+    # A service base URL is often only a prefix for real child endpoints.
+    # HTTP 404 proves DNS/TCP/TLS reachability and, with configured auth,
+    # that credentials were accepted (bad credentials are 401/403 above).
+    # FortiSIEM's APISIX prefix is one such API: the prefix has no resource,
+    # while its child routes are valid and must remain deployable.
+    if code == 404:
+        return {
+            "ok": True,
+            "health": "Healthy",
+            "message": "Reachable — HTTP 404 at the base path (child endpoints may still be valid).",
+        }
     return {"ok": False, "health": "Failed", "message": f"Unexpected response — HTTP {code}."}
 
 

@@ -249,6 +249,14 @@ class CompileContext:
     gateway_proxies: Dict[str, "GatewayProxy"] = field(default_factory=dict)
     approved_schemas: Dict[str, "ApprovedSchema"] = field(default_factory=dict)  # keyed by blockId
 
+    # Schema ceremony override.  A V2 inference run compiles a short-lived
+    # copy of the flow whose target governed writer publishes plain JSON to a
+    # throwaway topic.  Keeping this in the compile context means the normal
+    # envelope and transform chain are still compiled byte-for-byte, while the
+    # production Avro/Connect gate is bypassed only for that temporary plan.
+    inference_target_block_id: Optional[str] = None
+    inference_topic: Optional[str] = None
+
     def connection_config(self, type_: str) -> Dict[str, Any]:
         conn = self.connections.get(type_)
         return dict(conn.config or {}) if conn else {}

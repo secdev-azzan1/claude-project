@@ -1920,7 +1920,7 @@ export function buildSeedState(): PrototypeState {
       { id: "a-17", ts: daysAgo(15), user: "m.haddad", action: "Flow stopped", object: "Flow", target: "CMDB Asset Sync", status: "Success", details: "Queues retained" },
       { id: "a-17b", ts: daysAgo(16), user: "m.haddad", action: "Flow redeployed", object: "Flow", target: "CMDB Asset Sync", status: "Success", details: "Shape unchanged · pinned service revisions refreshed" },
       { id: "a-18", ts: daysAgo(20), user: "admin", action: "Schema approved", object: "Schema", target: "raw.asset_retirement.asset-value", status: "Success", details: "Manually authored — not sample-validated" },
-      { id: "a-19", ts: daysAgo(21), user: "admin", action: "Repoint completed", object: "Platform Connection", target: "Production NiFi (migrate)", status: "Success", details: "6 flows re-created · fingerprints verified" },
+      { id: "a-19", ts: daysAgo(21), user: "admin", action: "Connection change completed", object: "Platform Connection", target: "Production NiFi", status: "Success", details: "6 flows verified" },
       { id: "a-19b", ts: daysAgo(26), user: "admin", action: "Schema approved", object: "Schema", target: "raw.rapid7_assets.asset-value", status: "Success", details: "Registered as global id 2951 · evidence: manually authored — not sample-validated" },
       { id: "a-20", ts: daysAgo(28), user: "admin", action: "Connection created", object: "Platform Connection", target: "APISIX Gateway", status: "Success" },
     ],

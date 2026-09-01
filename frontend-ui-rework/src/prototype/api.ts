@@ -960,6 +960,58 @@ export async function approveSchema(
   return toApprovedSchema(doc);
 }
 
+// --------------------------------------------------------- V2 schema ceremony
+
+export type V2SchemaInferenceStatus =
+  | "queued"
+  | "deploying"
+  | "running"
+  | "collecting"
+  | "inferring"
+  | "cleaning_up"
+  | "stopping"
+  | "complete"
+  | "failed"
+  | "stopped";
+
+export interface V2SchemaInferenceJob {
+  id: string;
+  flowId: string;
+  targetBlockId: string;
+  flowName: string;
+  targetTopic: string;
+  inferenceTopic: string;
+  status: V2SchemaInferenceStatus;
+  messagesCollected: number;
+  targetMessages: number;
+  nifiProcessGroupId?: string | null;
+  generatedSchema?: unknown | null;
+  schemaStatus?: string;
+  error?: string | null;
+  cleanupError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function startSchemaInferenceV2(
+  flowId: string,
+  targetBlockId: string,
+  targetMessages = 10,
+): Promise<V2SchemaInferenceJob> {
+  return request<V2SchemaInferenceJob>("/api/v2/schema-inference/start", {
+    method: "POST",
+    body: { flowId, targetBlockId, targetMessages },
+  });
+}
+
+export async function getSchemaInferenceV2(jobId: string): Promise<V2SchemaInferenceJob> {
+  return request<V2SchemaInferenceJob>(`/api/v2/schema-inference/${encodeURIComponent(jobId)}`);
+}
+
+export async function stopSchemaInferenceV2(jobId: string): Promise<V2SchemaInferenceJob> {
+  return request<V2SchemaInferenceJob>(`/api/v2/schema-inference/${encodeURIComponent(jobId)}/stop`, { method: "POST" });
+}
+
 export async function listSchemas(): Promise<ApprovedSchema[]> {
   const data = await request<{ approved: Record<string, unknown>[]; templates: Record<string, unknown>[] }>(
     "/api/v2/schemas/",
@@ -1231,27 +1283,6 @@ export async function checkNifiPlatformServices(connectionId: string): Promise<N
 
 export async function deleteConnection(id: string): Promise<void> {
   await request(`/api/v2/connections/${id}`, { method: "DELETE" });
-}
-
-export interface RepointStep {
-  label: string;
-  status: "done" | "active" | "pending";
-}
-
-export async function repointConnection(id: string, mode: "adopt" | "migrate", onStep: (steps: RepointStep[]) => void): Promise<void> {
-  const labels = [
-    "Verifying source and target identity",
-    mode === "adopt" ? "Verifying existing process groups" : "Staging flows and controller services",
-    mode === "adopt" ? "Rebinding application provenance" : "Cutting over and restoring runtime state",
-    "Completing final verification",
-  ];
-  const report = (activeIdx: number) =>
-    onStep(labels.map((label, idx) => ({ label, status: idx < activeIdx ? "done" : idx === activeIdx ? "active" : "pending" } as RepointStep)));
-
-  report(0);
-  report(1);
-  await request(`/api/v2/connections/${id}/repoint`, { method: "POST", body: { mode } });
-  report(4);
 }
 
 export async function getGatewayResources(): Promise<GatewayResources> {

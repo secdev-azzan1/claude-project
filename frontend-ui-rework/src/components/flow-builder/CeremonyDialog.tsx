@@ -14,11 +14,10 @@
 // rule — "every edit must still fit those samples before Approve unlocks" —
 // runs against real data instead of being a no-op.
 //
-// The "live sample run" path goes through the SAME engine: the upstream probe's
-// records are inferred across all of them (not just the first), and they are
-// retained as the evidence, so nullability, type widening, the inference notes
-// and the re-validation gate behave identically on both paths. The two differ
-// in where the records came from, nothing else.
+// The "live sample run" path executes the saved V2 source-to-sink chain in a
+// temporary NiFi process group and Kafka topic. The backend infers from those
+// post-transform records, so envelope fields and all configured additions are
+// included rather than only fields visible to a browser-side probe.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -40,12 +39,15 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AvroEditorTabs, recordToDisplayFields, SampleInferencePanel, useAvroBuffer } from "@/components/schema-editor";
 import { normalizeAvroRecord, type AvroField as SchemaAvroField, type AvroRecord } from "@/lib/schemaEditor";
-import { approveSchema, listSchemaTemplates } from "@/prototype/api";
 import {
-  inferAvroFromRecords,
-  validateRecordsAgainstAvro,
-  type InferenceReport,
-} from "@/prototype/inference";
+  approveSchema,
+  getSchemaInferenceV2,
+  listSchemaTemplates,
+  startSchemaInferenceV2,
+  stopSchemaInferenceV2,
+  type V2SchemaInferenceJob,
+} from "@/prototype/api";
+import { validateRecordsAgainstAvro, type InferenceReport } from "@/prototype/inference";
 import { deriveTopicName } from "@/prototype/naming";
 import type { ApprovedSchema, Flow, FlowBlock, SchemaProvenance, SchemaTemplate } from "@/prototype/types";
 import { cn } from "@/lib/utils";
@@ -60,9 +62,6 @@ import {
 import { toast } from "sonner";
 
 const STEPS = ["Declare", "Orchestrate", "Review", "Approve"] as const;
-
-/** How many matched records are retained for inference and re-validation. */
-const MAX_SAMPLE_RECORDS = 500;
 
 const NO_PREFILL = "none";
 const schemaOption = (id: string) => `schema:${id}`;
@@ -92,6 +91,8 @@ export interface CeremonyDialogProps {
    * of that path is that this exact edit becomes the next version.
    */
   prefillDraft?: { rawAvro: string; label: string } | null;
+  /** Save the current V2 draft before starting the real temporary runtime. */
+  onEnsureSaved?: (flow?: Flow) => Promise<Flow>;
   onOpenChange: (open: boolean) => void;
   onApproved: (schema: ApprovedSchema, entity: string) => void;
 }
@@ -103,6 +104,7 @@ export function CeremonyDialog({
   approvedSchemas,
   prefillTemplateId,
   prefillDraft,
+  onEnsureSaved,
   onOpenChange,
   onApproved,
 }: CeremonyDialogProps) {
@@ -127,6 +129,8 @@ export function CeremonyDialog({
   const [progress, setProgress] = useState(0);
   const [collecting, setCollecting] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [inferenceJob, setInferenceJob] = useState<V2SchemaInferenceJob | null>(null);
+  const [inferenceSchema, setInferenceSchema] = useState<unknown | null>(null);
 
   // ---- uploaded evidence path (file handling itself lives in SampleInferencePanel)
   /** The records the schema was inferred from — retained as the evidence. */
@@ -135,14 +139,6 @@ export function CeremonyDialog({
   /** Record path + file count as of the last successful upload inference, for the read-only Review/Approve summaries. */
   const [uploadRecordPath, setUploadRecordPath] = useState("");
   const [uploadFileCount, setUploadFileCount] = useState(0);
-
-  // The live-sample path infers from the parent's probe. Writes other than http
-  // no longer host a Test at all, so for those parents there is genuinely nothing
-  // to sample and the step must say so instead of reporting collected evidence.
-  const parentRecordCount = useMemo(() => {
-    const parent = flow.blocks.find((b) => b.id === block.parentId);
-    return parent?.testResult?.records?.length ?? 0;
-  }, [flow.blocks, block.parentId]);
 
   const topicPreview = useMemo(() => {
     const probe = { ...block, entity: entity || block.entity };
@@ -178,6 +174,8 @@ export function CeremonyDialog({
     setInferReport(null);
     setUploadRecordPath("");
     setUploadFileCount(0);
+    setInferenceJob(null);
+    setInferenceSchema(null);
     seedSignature.current = null;
     buffer.reset(null);
 
@@ -229,14 +227,11 @@ export function CeremonyDialog({
     if (selectedTemplate) record = parsePrefill(selectedTemplate.rawAvro, `template "${selectedTemplate.name}"`);
     else if (selectedApproved) record = parsePrefill(selectedApproved.rawAvro, selectedApproved.subject);
 
-    if (!record && provenance === "sample_run") {
-      const parent = flow.blocks.find((b) => b.id === block.parentId);
-      const probe = (parent?.testResult?.records ?? []).slice(0, MAX_SAMPLE_RECORDS);
-      const inferred = inferAvroFromRecords(probe, recordName, namespace);
-      if (inferred.record.fields.length > 0) {
-        record = inferred.record;
-        evidence = probe;
-        report = inferred.report;
+    if (!record && provenance === "sample_run" && inferenceSchema) {
+      try {
+        record = normalizeAvroRecord(inferenceSchema, recordName);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "The server returned an invalid inferred schema.");
       }
     }
 
@@ -300,21 +295,78 @@ export function CeremonyDialog({
   /** What the retained evidence is called, so the copy never lies about it. */
   const evidenceLabel = provenance === "uploaded" ? "uploaded samples" : "sampled records";
 
-  const startOrchestrate = () => {
+  const startOrchestrate = async () => {
     setStep(1);
     if (provenance === "sample_run") {
       setCollecting(true);
       setProgress(0);
-      const timer = window.setInterval(() => {
-        setProgress((p) => {
-          if (p >= 100) {
-            window.clearInterval(timer);
-            setCollecting(false);
-            return 100;
-          }
-          return p + 12;
-        });
-      }, 260);
+      try {
+        // The entity is declared in this dialog and is not written to the
+        // flow until approval in the normal edit path. Save this exact target
+        // declaration first so the temporary compiler derives the same topic
+        // and the same record identity the user is reviewing.
+        const inferenceFlow = {
+          ...flow,
+          blocks: flow.blocks.map((candidate) => candidate.id === block.id ? { ...candidate, entity } : candidate),
+        };
+        const saved = onEnsureSaved ? await onEnsureSaved(inferenceFlow) : inferenceFlow;
+        const job = await startSchemaInferenceV2(saved.id, block.id, 10);
+        setInferenceJob(job);
+      } catch (error) {
+        setCollecting(false);
+        toast.error(error instanceof Error ? error.message : "Could not start the live schema sample run.");
+      }
+    }
+  };
+
+  // The progress indicator follows the persisted backend job, not a local
+  // timer.  This keeps the UI honest while NiFi is deploying, producing data,
+  // or cleaning up the temporary process group and topic.
+  useEffect(() => {
+    if (!open || !inferenceJob || ["complete", "failed", "stopped"].includes(inferenceJob.status)) return;
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const latest = await getSchemaInferenceV2(inferenceJob.id);
+        if (disposed) return;
+        setInferenceJob(latest);
+        const collected = latest.targetMessages > 0 ? (latest.messagesCollected / latest.targetMessages) * 40 : 0;
+        const nextProgress =
+          latest.status === "queued" ? 5
+          : latest.status === "deploying" ? 25
+          : latest.status === "running" ? 42
+          : latest.status === "collecting" ? Math.min(82, 50 + collected)
+          : latest.status === "inferring" ? 90
+          : latest.status === "cleaning_up" || latest.status === "stopping" ? 96
+          : 0;
+        setProgress(nextProgress);
+        if (latest.generatedSchema) setInferenceSchema(latest.generatedSchema);
+        if (["complete", "failed", "stopped"].includes(latest.status)) {
+          setCollecting(false);
+          setProgress(latest.status === "complete" ? 100 : nextProgress);
+          if (latest.status === "failed") toast.error(latest.error || "Schema inference failed.");
+          if (latest.status === "stopped") toast.info("Schema inference stopped; temporary resources were cleaned up.");
+        }
+      } catch (error) {
+        // A transient poll error must not erase the current job or make the
+        // dialog look complete. The next poll retries against the source of truth.
+        if (!disposed) console.warn("Schema inference status poll failed", error);
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1500);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [open, inferenceJob?.id, inferenceJob?.status]);
+
+  const stopInference = async () => {
+    if (!inferenceJob) return;
+    try {
+      setInferenceJob(await stopSchemaInferenceV2(inferenceJob.id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not stop schema inference.");
     }
   };
 
@@ -375,7 +427,9 @@ export function CeremonyDialog({
   // The uploaded path's "Continue" lives inside SampleInferencePanel itself
   // (its own "Infer schema" button gates on having matched records), so this
   // only needs to gate the sample_run path's footer button.
-  const canOrchestrateNext = provenance === "sample_run" ? progress >= 100 : true;
+  const canOrchestrateNext = provenance === "sample_run"
+    ? inferenceJob?.status === "complete" && !!inferenceSchema
+    : true;
   const fieldCount = buffer.record?.fields.length ?? 0;
   const samplesFail = !!sampleCheck && !sampleCheck.ok;
 
@@ -430,7 +484,18 @@ export function CeremonyDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Evidence path</Label>
-              <RadioGroup value={provenance} onValueChange={(v) => setProvenance(v as SchemaProvenance)} className="gap-2">
+              <RadioGroup
+                value={provenance}
+                onValueChange={(v) => {
+                  setProvenance(v as SchemaProvenance);
+                  setInferenceJob(null);
+                  setInferenceSchema(null);
+                  setProgress(0);
+                  setCollecting(false);
+                  seedSignature.current = null;
+                }}
+                className="gap-2"
+              >
                 <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5">
                   <RadioGroupItem value="sample_run" className="mt-0.5" />
                   <span>
@@ -514,17 +579,35 @@ export function CeremonyDialog({
             {provenance === "sample_run" && (
               <div className="space-y-2">
                 <p className="text-sm">
-                  Collecting ~10 messages through the upstream chain into{" "}
-                  <code className="font-mono text-xs">{topicPreview}-schema-inference</code> (throwaway, deleted afterwards).
+                  The saved flow is running through a temporary NiFi process group into a throwaway Kafka topic. The
+                  records include the envelope and every configured transform before schema inference.
                 </p>
+                {inferenceJob && (
+                  <p className="text-xs text-muted-foreground">
+                    Temporary topic: <code className="font-mono">{inferenceJob.inferenceTopic}</code> · target: {inferenceJob.targetTopic}
+                  </p>
+                )}
                 <Progress value={progress} />
                 <p className="text-xs text-muted-foreground">
-                  {collecting
-                    ? "Sampling… nothing is committed."
-                    : parentRecordCount > 0
-                      ? `Sample collected — the schema is inferred from all ${parentRecordCount} record(s) the upstream probe returned, and they are kept as the evidence every later edit is checked against.`
-                      : "Sample collected, but the upstream block has no probe to read: Review starts from a placeholder field. Upload samples instead if you want the schema inferred from real data."}
+                  {!inferenceJob
+                    ? collecting
+                      ? "Starting the temporary runtime…"
+                      : "Choose Continue to start the live sample run."
+                    : inferenceJob.status === "collecting"
+                      ? `Collecting records… ${inferenceJob.messagesCollected}/${inferenceJob.targetMessages}`
+                      : inferenceJob.status === "complete"
+                        ? `Sample collected — inferred from ${inferenceJob.messagesCollected} record(s) after the complete upstream chain.`
+                        : inferenceJob.status === "failed"
+                          ? inferenceJob.error || "The live sample run failed."
+                          : inferenceJob.status === "stopped"
+                            ? "The live sample run was stopped and its temporary resources were cleaned up."
+                            : `Temporary runtime status: ${inferenceJob.status}.`}
                 </p>
+                {inferenceJob && ["queued", "deploying", "running", "collecting", "inferring", "cleaning_up", "stopping"].includes(inferenceJob.status) && (
+                  <Button variant="outline" size="sm" onClick={() => void stopInference()}>
+                    Stop sample run
+                  </Button>
+                )}
               </div>
             )}
             {provenance === "manual" && (
@@ -677,10 +760,10 @@ export function CeremonyDialog({
                 <dd>
                   {provenance === "sample_run"
                     ? sampleRecords.length > 0
-                      ? `live sample run — inferred from ${sampleRecords.length} record(s) off the upstream probe`
-                      : parentRecordCount > 0
-                        ? `live sample run — ${parentRecordCount} record(s) collected, but the record was pre-filled rather than inferred from them`
-                        : "live sample run — the upstream block has no probe, so no records backed this"
+                      ? `live sample run — inferred from ${sampleRecords.length} record(s)`
+                      : inferenceJob?.status === "complete"
+                        ? `live sample run — inferred from ${inferenceJob.messagesCollected} record(s) through temporary NiFi/Kafka`
+                        : "live sample run — no completed temporary runtime is available"
                     : provenance === "uploaded"
                       ? `uploaded samples — ${uploadFileCount} file(s), ${sampleRecords.length} record(s) at ${uploadRecordPath.trim() || "$"}`
                       : "manually authored — not sample-validated"}
