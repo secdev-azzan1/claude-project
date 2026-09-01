@@ -327,17 +327,17 @@ export default function ApplicationServices() {
       {services.length > 0 && <div className="grid grid-cols-1 gap-4 md:grid-cols-2">{services.map(renderService)}</div>}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-h-[88vh] w-[min(92vw,52rem)] max-w-3xl overflow-y-auto">
+          <DialogHeader className="border-b border-border/60 pb-4">
             <DialogTitle>{editing ? "Configure Application Service" : "Add Application Service"}</DialogTitle>
             <DialogDescription>
               Configure a reusable source connection profile. The selected type controls which fields are shown.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Name</Label>
-              <Input value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+              <Input className="mt-1" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
             </div>
             <div>
               <Label>Service Type</Label>
@@ -346,7 +346,7 @@ export default function ApplicationServices() {
                 disabled={Boolean(editing)}
                 onValueChange={(value) => setForm((prev) => ({ ...prev, serviceType: value as ApplicationServiceType }))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -356,16 +356,20 @@ export default function ApplicationServices() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label>Description</Label>
-              <Textarea value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
+              <Textarea
+                value={form.description}
+                className="mt-1 min-h-[5rem] resize-y"
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
             </div>
 
             {form.serviceType === "REST API" && <RestFields form={form} setForm={setForm} />}
             {form.serviceType === "SMB" && <SmbFields form={form} setForm={setForm} />}
             {form.serviceType === "Webhook" && <WebhookFields form={form} setForm={setForm} />}
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-border/60 pt-4">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -384,12 +388,12 @@ function RestFields({ form, setForm }: { form: FormState; setForm: Dispatch<SetS
     <>
       <div>
         <Label>Base URL</Label>
-        <Input value={form.baseUrl} onChange={(event) => setForm((prev) => ({ ...prev, baseUrl: event.target.value }))} />
+        <Input className="mt-1" value={form.baseUrl} onChange={(event) => setForm((prev) => ({ ...prev, baseUrl: event.target.value }))} />
       </div>
       <div>
         <Label>Auth Type</Label>
         <Select value={form.restAuthType} onValueChange={(value) => setForm((prev) => ({ ...prev, restAuthType: value as RestAuthType }))}>
-          <SelectTrigger>
+          <SelectTrigger className="mt-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -416,7 +420,7 @@ function RestFields({ form, setForm }: { form: FormState; setForm: Dispatch<SetS
           <div>
             <Label>API Key Location</Label>
             <Select value={form.apiKeyLocation} onValueChange={(value) => setForm((prev) => ({ ...prev, apiKeyLocation: value as ApiKeyLocation }))}>
-              <SelectTrigger>
+              <SelectTrigger className="mt-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -466,7 +470,7 @@ function TextInput({ label, value, onChange }: { label: string; value: string; o
   return (
     <div>
       <Label>{label}</Label>
-      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input className="mt-1" value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
@@ -475,7 +479,7 @@ function SecretInput({ label, value, onChange }: { label: string; value: string;
   return (
     <div>
       <Label>{label}</Label>
-      <Input type="password" placeholder="Leave blank to keep unchanged" value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input className="mt-1" type="password" placeholder="Leave blank to keep unchanged" value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }

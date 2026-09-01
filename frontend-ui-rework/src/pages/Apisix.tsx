@@ -246,7 +246,7 @@ function TextField({
       <Input
         value={value}
         placeholder={placeholder}
-        className={mono ? "font-mono" : undefined}
+        className={cn("mt-1", mono && "font-mono")}
         onChange={(e) => onChange(e.target.value)}
       />
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
@@ -732,8 +732,8 @@ export default function Apisix() {
           if (!open) setEditing(null);
         }}
       >
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-h-[88vh] w-[min(92vw,56rem)] max-w-4xl overflow-y-auto">
+          <DialogHeader className="border-b border-border/60 pb-4">
             <DialogTitle>{editing ? `Edit ${editing.name}` : "Add APISIX Proxy"}</DialogTitle>
             <DialogDescription>
               {editing
@@ -742,15 +742,19 @@ export default function Apisix() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3">
-            <TextField label="Name" value={form.name} onChange={(name) => setForm((p) => ({ ...p, name }))} />
-            <TextField
-              label="Description"
-              value={form.description}
-              placeholder="What this egress is for"
-              onChange={(description) => setForm((p) => ({ ...p, description }))}
-            />
-            <div className="grid grid-cols-[1fr_110px] gap-3">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <TextField label="Name" value={form.name} onChange={(name) => setForm((p) => ({ ...p, name }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <TextField
+                label="Description"
+                value={form.description}
+                placeholder="What this egress is for"
+                onChange={(description) => setForm((p) => ({ ...p, description }))}
+              />
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-3 sm:col-span-2">
               <TextField
                 label="Target host"
                 mono
@@ -761,7 +765,7 @@ export default function Apisix() {
               <TextField label="Port" mono value={form.port} onChange={(port) => setForm((p) => ({ ...p, port }))} />
             </div>
             {form.targetHost.trim() && !allowlist.includes(form.targetHost.trim()) && (
-              <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-muted px-3 py-2 text-xs">
+              <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-muted px-3 py-2 text-xs sm:col-span-2">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
                 <span>
                   <span className="font-mono">{form.targetHost.trim()}</span> is not on the gateway allowlist. You can
@@ -770,15 +774,17 @@ export default function Apisix() {
                 </span>
               </div>
             )}
-            <TextField
-              label="SNI"
-              mono
-              value={form.sni}
-              placeholder="Defaults to the target host"
-              hint="Server name sent in the TLS handshake when it differs from the target host."
-              onChange={(sni) => setForm((p) => ({ ...p, sni }))}
-            />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <TextField
+                label="SNI"
+                mono
+                value={form.sni}
+                placeholder="Defaults to the target host"
+                hint="Server name sent in the TLS handshake when it differs from the target host."
+                onChange={(sni) => setForm((p) => ({ ...p, sni }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:col-span-2">
               <TextField
                 label="Connect timeout (ms)"
                 mono
@@ -794,15 +800,17 @@ export default function Apisix() {
                 onChange={(readTimeoutMs) => setForm((p) => ({ ...p, readTimeoutMs }))}
               />
             </div>
-            <TextField
-              label="Route path prefix"
-              mono
-              value={form.path}
-              placeholder="/v2/indicators"
-              hint="Requests from http blocks are matched under this prefix."
-              onChange={(path) => setForm((p) => ({ ...p, path }))}
-            />
-            <div className="grid gap-1.5">
+            <div className="sm:col-span-2">
+              <TextField
+                label="Route path prefix"
+                mono
+                value={form.path}
+                placeholder="/v2/indicators"
+                hint="Requests from http blocks are matched under this prefix."
+                onChange={(path) => setForm((p) => ({ ...p, path }))}
+              />
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
               <Label>Allowed methods</Label>
               <div className="flex flex-wrap gap-2">
                 {HTTP_METHODS.map((m) => {
@@ -829,7 +837,7 @@ export default function Apisix() {
                 })}
               </div>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid gap-1.5 sm:col-span-2">
               <Label>Client certificate profile</Label>
               <Select
                 value={form.certProfileId}
@@ -853,7 +861,7 @@ export default function Apisix() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-border/60 pt-4">
             <Button variant="outline" onClick={() => setFormOpen(false)}>
               Cancel
             </Button>

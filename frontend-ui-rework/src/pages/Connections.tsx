@@ -378,17 +378,19 @@ function ConnectionFormFields({
   onPatch: (patch: Draft) => void;
 }) {
   const nameField = (
-    <Field
-      label="Name"
-      value={draft.name}
-      onChange={(e) => onPatch({ name: e.target.value })}
-      error={errors.name}
-    />
+    <div className="sm:col-span-2">
+      <Field
+        label="Name"
+        value={draft.name}
+        onChange={(e) => onPatch({ name: e.target.value })}
+        error={errors.name}
+      />
+    </div>
   );
 
   if (type === "nifi") {
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {nameField}
         <Field label="URL" value={draft.url} onChange={(e) => onPatch({ url: e.target.value })} error={errors.url} hint="NiFi API base URL, e.g. https://nifi.internal:8443" />
         <div>
@@ -415,7 +417,7 @@ function ConnectionFormFields({
 
   if (type === "kafka") {
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {nameField}
         <Field
           label="Bootstrap servers"
@@ -480,7 +482,7 @@ function ConnectionFormFields({
 
   if (type === "apicurio") {
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {nameField}
         <Field label="URL" value={draft.url} onChange={(e) => onPatch({ url: e.target.value })} error={errors.url} />
         <div>
@@ -509,7 +511,7 @@ function ConnectionFormFields({
 
   if (type === "kafka_connect") {
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {nameField}
         <Field label="URL" value={draft.url} onChange={(e) => onPatch({ url: e.target.value })} error={errors.url} hint="Kafka Connect REST endpoint" />
       </div>
@@ -518,9 +520,9 @@ function ConnectionFormFields({
 
   if (type === "redis") {
     return (
-      <div className="grid gap-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {nameField}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3 sm:col-span-2">
           <div className="col-span-2">
             <Field label="Host" value={draft.host} onChange={(e) => onPatch({ host: e.target.value })} error={errors.host} />
           </div>
@@ -540,7 +542,7 @@ function ConnectionFormFields({
 
   // apisix
   return (
-    <div className="grid gap-3">
+      <div className="grid gap-4 sm:grid-cols-2">
       {nameField}
       <Field
         label="Admin URL"
@@ -961,10 +963,10 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
           }
         }}
       >
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-h-[88vh] w-[min(92vw,52rem)] max-w-3xl overflow-y-auto">
           {formState && (
             <>
-              <DialogHeader>
+              <DialogHeader className="border-b border-border/60 pb-4">
                 <DialogTitle>
                   {formState.mode === "add"
                     ? `Add ${TYPE_META[formState.type].label} connection`
@@ -983,7 +985,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
                 isEdit={formState.mode === "edit"}
                 onPatch={patchDraft}
               />
-              <DialogFooter className="gap-2 sm:gap-0">
+              <DialogFooter className="gap-2 border-t border-border/60 pt-4 sm:gap-0">
                 {formState.mode === "add" && (
                   <Button
                     variant="ghost"

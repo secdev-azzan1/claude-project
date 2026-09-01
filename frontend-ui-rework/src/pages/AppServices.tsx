@@ -394,8 +394,8 @@ export default function AppServices() {
           if (!open) setEditing(null);
         }}
       >
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-h-[92vh] w-[min(96vw,70rem)] max-w-[70rem] overflow-y-auto">
+          <DialogHeader className="border-b border-border/60 pb-4">
             <DialogTitle>{editing ? `Edit ${editing.name}` : "Add Application Service"}</DialogTitle>
             <DialogDescription>
               {editing
@@ -405,9 +405,9 @@ export default function AppServices() {
           </DialogHeader>
 
           {!editing && (
-            <div className="grid gap-2">
+            <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
               <Label>Service type</Label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {TYPE_ORDER.map((type) => {
                   const meta = SERVICE_TYPE_META[type];
                   const Icon = meta.icon;
@@ -417,7 +417,7 @@ export default function AppServices() {
                       key={type}
                       type="button"
                       onClick={() => setFormType(type)}
-                      className={`rounded-md border p-3 text-left transition hover:bg-muted/50 ${
+                      className={`min-h-[6.5rem] rounded-xl border p-4 text-left transition hover:bg-muted/50 ${
                         selected ? "border-primary bg-primary-muted" : ""
                       }`}
                     >
@@ -433,10 +433,23 @@ export default function AppServices() {
           )}
 
           {formType && (
-            <ServiceFormFields type={formType} form={form} onChange={setForm} editing={!!editing} />
+            <div className="rounded-xl border bg-muted/10 p-4 sm:p-5">
+              <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/60 pb-3">
+                <div>
+                  <p className="text-sm font-semibold">Connection details</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Configure the fields required by this service type.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  {SERVICE_TYPE_META[formType].label}
+                </span>
+              </div>
+              <ServiceFormFields type={formType} form={form} onChange={setForm} editing={!!editing} />
+            </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-border/60 pt-4">
             <Button variant="outline" onClick={() => setFormOpen(false)}>
               Cancel
             </Button>

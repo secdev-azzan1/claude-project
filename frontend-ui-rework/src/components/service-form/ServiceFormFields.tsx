@@ -285,7 +285,7 @@ function TextField({
       <Input
         value={value}
         placeholder={placeholder}
-        className={mono ? "font-mono text-xs" : undefined}
+        className={mono ? "mt-1 font-mono text-xs" : "mt-1"}
         onChange={(e) => onChange(e.target.value)}
       />
     </Field>
@@ -406,19 +406,23 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
   const setForm = (updater: (prev: ServiceForm) => ServiceForm) => onChange(updater(form));
   const formType = type;
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-4 sm:grid-cols-2">
 
-              <TextField label="Name" value={form.name} onChange={(name) => setForm((p) => ({ ...p, name }))} />
+              <div className="sm:col-span-2">
+                <TextField label="Name" value={form.name} onChange={(name) => setForm((p) => ({ ...p, name }))} />
+              </div>
 
               {formType === "http" && (
                 <>
-                  <TextField
-                    label="Base URL"
-                    mono
-                    value={form.baseUrl}
-                    placeholder="https://api.example.corp"
-                    onChange={(baseUrl) => setForm((p) => ({ ...p, baseUrl }))}
-                  />
+                  <div className="sm:col-span-2">
+                    <TextField
+                      label="Base URL"
+                      mono
+                      value={form.baseUrl}
+                      placeholder="https://api.example.corp"
+                      onChange={(baseUrl) => setForm((p) => ({ ...p, baseUrl }))}
+                    />
+                  </div>
                   <Field label="Auth mode">
                     <Select
                       value={form.authMode}
@@ -473,7 +477,9 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                       <SecretField label="Client secret" value={form.clientSecret} editing={!!editing} onChange={(clientSecret) => setForm((p) => ({ ...p, clientSecret }))} />
                     </>
                   )}
-                  <ProxyField value={form.proxyId} onChange={(proxyId) => setForm((p) => ({ ...p, proxyId }))} />
+                  <div className="sm:col-span-2">
+                    <ProxyField value={form.proxyId} onChange={(proxyId) => setForm((p) => ({ ...p, proxyId }))} />
+                  </div>
                   {form.authMode === "session_token" && (
                     <>
                       <TextField label="Login path" mono value={form.loginPath} placeholder="/rest/login" onChange={(loginPath) => setForm((p) => ({ ...p, loginPath }))} />
@@ -530,13 +536,13 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                         placeholder="https://trino.datapasc.com"
                         onChange={(dbUrl) => setForm((p) => ({ ...p, dbUrl }))}
                       />
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground sm:col-span-2">
                         Use the URL NiFi can reach. HTTPS is carried into the JDBC connection automatically.
                       </p>
                     </>
                   ) : (
                     <>
-                      <div className="grid grid-cols-[1fr_110px] gap-3">
+                      <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-3 sm:col-span-2">
                         <TextField label="Host" mono value={form.host} onChange={(host) => setForm((p) => ({ ...p, host }))} />
                         <TextField label="Port" mono value={form.port} onChange={(port) => setForm((p) => ({ ...p, port }))} />
                       </div>
@@ -637,11 +643,11 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                       </Field>
                     </>
                   ) : (
-                    <div className="grid gap-4">
+                    <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
                       <TextField label="Catalog URL" mono value={form.catalogUrl} placeholder="http://polaris.corp:8181/api/catalog" onChange={(catalogUrl) => setForm((p) => ({ ...p, catalogUrl }))} />
                       <TextField label="Warehouse" mono value={form.warehouse} placeholder="bronze" onChange={(warehouse) => setForm((p) => ({ ...p, warehouse }))} />
-                      <div className="grid gap-4 rounded-xl bg-muted/40 p-3.5 ring-1 ring-inset ring-border/50">
-                        <SectionLabel>OAuth</SectionLabel>
+                      <div className="grid gap-4 rounded-xl bg-muted/40 p-3.5 ring-1 ring-inset ring-border/50 sm:col-span-2 sm:grid-cols-2">
+                        <SectionLabel className="sm:col-span-2">OAuth</SectionLabel>
                         <TextField label="OAuth client id" value={form.oauthClientId} onChange={(oauthClientId) => setForm((p) => ({ ...p, oauthClientId }))} />
                         <SecretField
                           label="OAuth client secret"
@@ -650,8 +656,8 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                           onChange={(oauthClientSecret) => setForm((p) => ({ ...p, oauthClientSecret }))}
                         />
                       </div>
-                      <div className="grid gap-4 rounded-xl bg-muted/40 p-3.5 ring-1 ring-inset ring-border/50">
-                        <SectionLabel>S3</SectionLabel>
+                      <div className="grid gap-4 rounded-xl bg-muted/40 p-3.5 ring-1 ring-inset ring-border/50 sm:col-span-2 sm:grid-cols-2">
+                        <SectionLabel className="sm:col-span-2">S3</SectionLabel>
                         <TextField label="S3 endpoint" mono value={form.s3Endpoint} placeholder="https://ozones3.corp" onChange={(s3Endpoint) => setForm((p) => ({ ...p, s3Endpoint }))} />
                         <SecretField
                           label="S3 access key"
@@ -666,7 +672,7 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                           onChange={(s3SecretKey) => setForm((p) => ({ ...p, s3SecretKey }))}
                         />
                         <TextField label="S3 region" mono value={form.s3Region} placeholder="us-east-1" onChange={(s3Region) => setForm((p) => ({ ...p, s3Region }))} />
-                        <label className="inline-flex w-fit cursor-pointer items-center gap-2 text-sm font-medium">
+                        <label className="inline-flex w-fit cursor-pointer items-center gap-2 text-sm font-medium sm:col-span-2">
                           <Checkbox
                             checked={form.s3PathStyle}
                             onCheckedChange={(v) => setForm((p) => ({ ...p, s3PathStyle: v === true }))}

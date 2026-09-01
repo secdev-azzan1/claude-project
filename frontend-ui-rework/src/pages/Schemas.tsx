@@ -1666,15 +1666,15 @@ const Schemas = () => {
 
       {/* ------------------------------------------------- new template dialog */}
       <Dialog open={newTemplateOpen} onOpenChange={setNewTemplateOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-h-[88vh] w-[min(92vw,52rem)] max-w-3xl overflow-y-auto">
+          <DialogHeader className="border-b border-border/60 pb-4">
             <DialogTitle>New library template</DialogTitle>
             <DialogDescription>
               Hand-author an Avro record, or infer one from real sample data. Either way it is not registered and is
               bound to no flow — a ceremony can pre-fill from it later.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input
@@ -1694,7 +1694,7 @@ const Schemas = () => {
               <Textarea
                 value={newTemplateDescription}
                 onChange={(event) => setNewTemplateDescription(event.target.value)}
-                className="min-h-[3.5rem]"
+                className="min-h-[5rem] resize-y"
               />
             </div>
 
@@ -1703,9 +1703,9 @@ const Schemas = () => {
               <RadioGroup
                 value={newTemplateMode}
                 onValueChange={(value) => setNewTemplateMode(value as "empty" | "infer")}
-                className="gap-2"
+                className="grid gap-3 sm:grid-cols-2"
               >
-                <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2.5">
+                  <label className="flex cursor-pointer items-start gap-2 rounded-xl border p-3 transition-colors hover:bg-muted/40">
                   <RadioGroupItem value="empty" className="mt-0.5" />
                   <span>
                     <span className="flex items-center gap-1.5 text-sm font-medium">
@@ -1716,7 +1716,7 @@ const Schemas = () => {
                 </label>
                 <label
                   className={cn(
-                    "flex items-start gap-2 rounded-md border p-2.5",
+                    "flex items-start gap-2 rounded-xl border p-3 transition-colors hover:bg-muted/40",
                     newTemplateName.trim() ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                   )}
                 >
@@ -1736,7 +1736,7 @@ const Schemas = () => {
             </div>
 
             {newTemplateMode === "infer" && (
-              <div className="rounded-md border bg-muted/30 p-3">
+              <div className="rounded-xl border bg-muted/30 p-4">
                 <SampleInferencePanel
                   compact
                   recordName={subjectToRecordName(newTemplateName.trim() || "record")}
@@ -1746,7 +1746,7 @@ const Schemas = () => {
               </div>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-border/60 pt-4">
             <Button variant="outline" onClick={() => setNewTemplateOpen(false)}>
               Cancel
             </Button>
