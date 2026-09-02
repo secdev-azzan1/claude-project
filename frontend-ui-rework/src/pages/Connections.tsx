@@ -10,7 +10,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -739,6 +738,11 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
 
   const hasAnyConnections = connections.length > 0;
   const availableTypes = TYPE_ORDER.filter((type) => !connections.some((c) => c.type === type));
+  const healthyCount = connections.filter((c) => c.health === "Healthy").length;
+  const attentionCount = connections.filter(
+    (c) => c.health === "Failed" || c.reachability === "Unreachable",
+  ).length;
+  const untestedCount = connections.filter((c) => c.health === "Not Tested").length;
 
   return (
     <div className="space-y-8">
@@ -788,133 +792,167 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
       </div>
 
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-44 rounded-lg" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          {Array.from({ length: TYPE_ORDER.length }).map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-xl" />
           ))}
         </div>
       )}
 
-      {!isLoading &&
-        TYPE_ORDER.map((type) => {
-          const meta = TYPE_META[type];
-          const Icon = meta.icon;
-          const items = connections.filter((c) => c.type === type);
-          return (
-            <section key={type} className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold tracking-tight">{meta.label}</h2>
-                <span className="text-xs text-muted-foreground hidden md:inline">— {meta.description}</span>
+      {!isLoading && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 px-3.5 py-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-muted text-primary">
+                <Plug className="h-4 w-4" />
               </div>
-              {items.length === 0 ? (
-                <EmptyState
-                  title={`No ${meta.label} connections yet`}
-                  action={
-                    <Button variant="outline" size="sm" onClick={() => openAdd(type)}>
-                      <Plus /> Add
-                    </Button>
-                  }
-                />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Connection board</p>
+                <p className="truncate text-xs text-muted-foreground">One saved connection per platform role.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="rounded-full bg-muted px-2.5 py-1 font-medium">
+                {connections.length}/{TYPE_ORDER.length} configured
+              </span>
+              <span className="rounded-full bg-success-muted px-2.5 py-1 font-medium text-success">
+                {healthyCount} healthy
+              </span>
+              {attentionCount > 0 ? (
+                <span className="rounded-full bg-warning-muted px-2.5 py-1 font-medium text-warning">
+                  {attentionCount} needs attention
+                </span>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {items.map((c) => {
-                    const isTesting = testingIds.includes(c.id);
-                    const isActivating = activatingId === c.id;
-                    return (
-                      <Card key={c.id}>
-                        <CardHeader className="flex-row items-start justify-between space-y-0 gap-3 pb-3">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-muted text-primary">
-                              <Icon className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <CardTitle className="text-base truncate">{c.name}</CardTitle>
-                                {c.active && <StatusBadge status="Active" />}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                Last tested: {timeAgo(c.lastTestedAt)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-1.5 items-center shrink-0 flex-wrap justify-end">
-                            <StatusBadge status={c.health} />
-                            <StatusBadge status={c.reachability} />
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="rounded-md bg-muted/40 border px-3 py-2 space-y-1">
-                            {summaryRows(c).map((row) => (
-                              <div key={row.label} className="flex items-baseline justify-between gap-3 text-xs">
-                                <span className="text-muted-foreground shrink-0">{row.label}</span>
-                                <span className="font-mono truncate">{row.value}</span>
-                              </div>
-                            ))}
-                            {c.hasSecret && (
-                              <div className="flex items-baseline justify-between gap-3 text-xs">
-                                <span className="text-muted-foreground shrink-0">Secret</span>
-                                <span className="font-mono">stored (write-only)</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => runTest(c)} disabled={isTesting} title={isTesting ? "A test is in progress." : undefined}>
-                              {isTesting && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                              Test
-                            </Button>
-                            {!c.active && (
-                              <Button size="sm" variant="outline" onClick={() => requestActivate(c)} disabled={isActivating} title={isActivating ? "Activation in progress." : undefined}>
-                                {isActivating && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                                Activate
-                              </Button>
-                            )}
-                            <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
-                              <Pencil className="h-3.5 w-3.5" /> Edit
-                            </Button>
-                            {c.type === "nifi" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void checkNifiServices(c)}
-                                disabled={checkingNifiId === c.id || !c.active}
-                                title={!c.active ? "Activate this NiFi connection before checking its platform services." : "Verify and repair Kafka, Apicurio, and Redis services in NiFi."}
-                              >
-                                {checkingNifiId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                {checkingNifiId === c.id ? "Checking..." : "Check NiFi services"}
-                              </Button>
-                            )}
-                            {c.type === "apisix" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                asChild
-                                title="HTTP proxies, certificate profiles and the host allowlist live on the HTTP Proxies page."
-                              >
-                                <Link to="/apisix">
-                                  <Globe className="h-3.5 w-3.5" /> HTTP proxy resources
-                                </Link>
-                              </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive ml-auto"
-                              title={`Delete ${c.name}`}
-                              onClick={() => setDeleteTarget(c)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
+                <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">
+                  {untestedCount} not tested
+                </span>
               )}
-            </section>
-          );
-        })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            {TYPE_ORDER.map((type) => {
+              const meta = TYPE_META[type];
+              const Icon = meta.icon;
+              const c = connections.find((connection) => connection.type === type);
+
+              if (!c) {
+                return (
+                  <Card key={type} className="h-full border-dashed bg-muted/20 shadow-none">
+                    <CardContent className="flex min-h-[12rem] h-full flex-col justify-between gap-4 p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-background text-muted-foreground">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold">{meta.label}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">Not configured</p>
+                        </div>
+                      </div>
+                      <p className="text-xs leading-5 text-muted-foreground">{meta.description}</p>
+                      <Button variant="outline" size="sm" className="w-fit" onClick={() => openAdd(type)}>
+                        <Plus className="h-3.5 w-3.5" /> Add connection
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              const isTesting = testingIds.includes(c.id);
+              const isActivating = activatingId === c.id;
+              return (
+                <Card key={c.id} className="h-full overflow-hidden">
+                  <CardHeader className="flex-row items-start justify-between gap-3 space-y-0 p-4 pb-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-muted text-primary">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <CardTitle className="truncate text-sm">{c.name}</CardTitle>
+                          {c.active && <StatusBadge status="Active" />}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground" title={meta.description}>
+                          {meta.label} - Last tested {timeAgo(c.lastTestedAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      <StatusBadge status={c.health} />
+                      <StatusBadge status={c.reachability} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex min-h-[9rem] flex-col justify-between gap-3 px-4 pb-4">
+                    <div className="grid gap-1.5 rounded-lg border bg-muted/35 px-3 py-2.5">
+                      {summaryRows(c).map((row) => (
+                        <div key={row.label} className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-3 text-xs">
+                          <span className="text-muted-foreground">{row.label}</span>
+                          <span className="truncate text-right font-mono" title={row.value}>{row.value}</span>
+                        </div>
+                      ))}
+                      {c.hasSecret && (
+                        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-3 text-xs">
+                          <span className="text-muted-foreground">Secret</span>
+                          <span className="text-right font-mono">stored (write-only)</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button size="sm" variant="outline" onClick={() => runTest(c)} disabled={isTesting} title={isTesting ? "A test is in progress." : undefined}>
+                        {isTesting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Test
+                      </Button>
+                      {!c.active && (
+                        <Button size="sm" variant="outline" onClick={() => requestActivate(c)} disabled={isActivating} title={isActivating ? "Activation in progress." : undefined}>
+                          {isActivating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          Activate
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      {c.type === "nifi" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void checkNifiServices(c)}
+                          disabled={checkingNifiId === c.id || !c.active}
+                          title={!c.active ? "Activate this NiFi connection before checking its platform services." : "Verify and repair Kafka, Apicurio, and Redis services in NiFi."}
+                        >
+                          {checkingNifiId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          {checkingNifiId === c.id ? "Checking..." : "Check NiFi services"}
+                        </Button>
+                      )}
+                      {c.type === "apisix" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          asChild
+                          title="HTTP proxies, certificate profiles and the host allowlist live on the HTTP Proxies page."
+                        >
+                          <Link to="/apisix">
+                            <Globe className="h-3.5 w-3.5" /> HTTP proxy resources
+                          </Link>
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto text-destructive"
+                        title={`Delete ${c.name}`}
+                        onClick={() => setDeleteTarget(c)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
+      )}
+
 
       {/* ── Type picker (Add step 1) ─────────────────────────────────────── */}
       <Dialog open={typePickerOpen} onOpenChange={setTypePickerOpen}>
@@ -924,7 +962,7 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
             <DialogDescription>Choose the platform system to connect.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            {availableTypes.map((type) => {
+            {TYPE_ORDER.filter((type) => !connections.some((c) => c.type === type)).map((type) => {
               const meta = TYPE_META[type];
               const Icon = meta.icon;
               return (

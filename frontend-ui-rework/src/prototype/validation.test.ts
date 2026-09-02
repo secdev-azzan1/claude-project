@@ -41,23 +41,3 @@ describe("Trino JDBC table validation", () => {
     );
   });
 });
-
-describe("incremental JDBC validation", () => {
-  const services = [{ id: "db", name: "Database", retired: false, config: { dialect: "postgresql" } }] as any;
-
-  it("requires a watermark column", () => {
-    const block = { id: "jdbc-read", name: "Read", adapter: "jdbc", mode: "read", serviceId: "db", config: { table: "assets", incremental: true }, transforms: [] } as any;
-    expect(validateBlock({ blocks: [], topics: [] } as any, block, services, []).map((issue) => issue.message)).toContain(
-      "Incremental reads require a watermark column.",
-    );
-  });
-
-  it("accepts a watermark and tie-breaker", () => {
-    const block = {
-      id: "jdbc-read", name: "Read", adapter: "jdbc", mode: "read", serviceId: "db",
-      config: { table: "assets", incremental: true, watermarkColumn: "updated_at", bookmarkTieBreaker: "id" }, transforms: [],
-    } as any;
-    const messages = validateBlock({ blocks: [], topics: [] } as any, block, services, []).map((issue) => issue.message);
-    expect(messages).not.toContain("Incremental reads require a watermark column.");
-  });
-});

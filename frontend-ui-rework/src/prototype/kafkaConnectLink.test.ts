@@ -58,4 +58,9 @@ describe("Kafka Connect flow linking", () => {
     });
     expect(kafkaConnectLinkIssue(governedFlow, governed, sync({ topics: "orders-topic" }))).toBeNull();
   });
+
+  it("accepts a block without a serviceId — the sink config carries its own endpoint now", () => {
+    const noService = block({ serviceId: undefined });
+    expect(kafkaConnectLinkIssue(flow({ blocks: [noService] }), noService, sync({ topics: "orders-topic" }))).toBeNull();
+  });
 });

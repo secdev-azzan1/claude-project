@@ -13,12 +13,6 @@ from models.adapter import AppService, Flow, FlowBlock
 from services.adapter.naming import derive_topic_name
 
 
-_EXPECTED_CONNECTOR_CLASSES = {
-    "iceberg_catalog": "org.apache.iceberg.connect.IcebergSinkConnector",
-    "opensearch": "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector",
-}
-
-
 def _topic_values(value: Any) -> List[str]:
     if isinstance(value, list):
         values: List[str] = []
@@ -110,26 +104,6 @@ def validate_sync_link(
         if block_class and sync_class and block_class != sync_class:
             issues.append(
                 f"Connector class mismatch: the flow block uses '{block_class}' but the sync uses '{sync_class}'."
-            )
-
-    service_id = str((block.config or {}).get("sinkServiceId") or block.serviceId or "").strip()
-    if not service_id:
-        issues.append("Select a sink destination service on the flow block before linking a sync.")
-        service = None
-    else:
-        service = next((item for item in services if item.id == service_id), None)
-        if service is None:
-            issues.append("The selected sink destination service no longer exists.")
-        elif service.retired:
-            issues.append(f'Sink destination service "{service.name}" is retired.')
-        elif service.type != "sink_destination":
-            issues.append("The selected service is not a sink destination service.")
-
-    if service is not None:
-        expected_class = _EXPECTED_CONNECTOR_CLASSES.get(str((service.config or {}).get("kind") or ""))
-        if expected_class and sync_class and sync_class != expected_class:
-            issues.append(
-                f"Connector class '{sync_class}' does not match the destination service; expected '{expected_class}'."
             )
 
     flow_topic, topic_issues = flow_sink_topic(flow, block)

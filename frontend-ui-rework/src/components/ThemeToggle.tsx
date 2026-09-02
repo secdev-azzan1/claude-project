@@ -27,7 +27,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   return (
     <ToggleGroup
       type="single"
-      value={mounted ? (theme ?? "system") : undefined}
+      value={mounted ? (theme ?? "system") : "system"}
       onValueChange={(v) => v && setTheme(v)}
       aria-label="Colour theme"
       className={cn("w-full", className)}

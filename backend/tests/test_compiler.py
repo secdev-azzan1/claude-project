@@ -96,7 +96,33 @@ def golden_flow() -> Flow:
                 parentId="b-read",
                 serviceId="svc-iceberg",
                 entity="asset",
-                config={"sinkServiceId": "svc-iceberg"},
+                config={
+                    "sinkServiceId": "svc-iceberg",
+                    "sinkConfig": {
+                        "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+                        "topics": "raw.golden_flow.asset",
+                        "tasks.max": "1",
+                        "consumer.override.auto.offset.reset": "earliest",
+                        "iceberg.tables": "bronze.asset",
+                        "iceberg.tables.auto-create-enabled": "true",
+                        "iceberg.catalog.type": "rest",
+                        "iceberg.catalog.uri": "http://polaris.internal.corp:8181/api/catalog",
+                        "iceberg.catalog.warehouse": "bronze",
+                        "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+                        "iceberg.catalog.client.region": "us-east-1",
+                        "iceberg.catalog.s3.region": "us-east-1",
+                        "iceberg.catalog.s3.path-style-access": "true",
+                        "iceberg.control.commit.interval-ms": "60000",
+                        "value.converter": "io.apicurio.registry.utils.converter.AvroConverter",
+                        "value.converter.apicurio.registry.url": "http://apicurio.internal.corp:8081/apis/registry/v3",
+                        "value.converter.apicurio.registry.as-confluent": "true",
+                        "value.converter.apicurio.registry.find-latest": "true",
+                        "value.converter.apicurio.registry.use-id": "contentId",
+                        "value.converter.apicurio.registry.auto-register": "false",
+                        "value.converter.schemas.enable": "true",
+                        "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+                    },
+                },
                 transforms=[
                     TransformRule(id="t-3", kind="dedup", config={"identityFields": ["id"], "excludedFields": [], "windowHours": 24}),
                 ],
@@ -2250,133 +2276,84 @@ def test_no_emitted_group_violates_disposition_invariant():
 
 
 # --------------------------------------------------------------------------
-# 19. E2/E2b — connector configs (iceberg REST catalog / opensearch / registry URLs)
+# 19. sinkConfig pass-through — the compiler no longer derives connector
+# configs; every kc/kafka_kc block's config.sinkConfig goes straight to the
+# ConnectorSpec, unchanged.
 # --------------------------------------------------------------------------
 
 
-def iceberg_full_ctx() -> CompileContext:
-    ctx = golden_ctx()
-    ctx.services["svc-iceberg"] = make_service(
-        id="svc-iceberg", type="sink_destination", name="Iceberg Bronze Catalog",
-        config={"kind": "iceberg_catalog", "catalogUrl": "http://polaris.internal.corp:8181/api/catalog",
-                "warehouse": "bronze", "oauthClientId": "cid", "oauthClientSecret": "csecret",
-                "s3Endpoint": "http://minio.corp:9000", "s3AccessKey": "AK", "s3SecretKey": "SK",
-                "s3Region": "eu-west-1", "s3PathStyle": True},
-        hasSecret=True,
-    )
-    return ctx
+_FULL_ICEBERG_SINK_CONFIG = {
+    "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+    "topics": "raw.golden_flow.asset",
+    "tasks.max": "1",
+    "consumer.override.auto.offset.reset": "latest",
+    "iceberg.tables": "bronze.asset",
+    "iceberg.tables.auto-create-enabled": "true",
+    "iceberg.catalog.type": "rest",
+    "iceberg.catalog.uri": "http://polaris.internal.corp:8181/api/catalog",
+    "iceberg.catalog.warehouse": "bronze",
+    "iceberg.catalog.credential": "cid:csecret",
+    "iceberg.catalog.rest.auth.type": "oauth2",
+    "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+    "iceberg.catalog.s3.endpoint": "http://minio.corp:9000",
+    "iceberg.catalog.s3.access-key-id": "AK",
+    "iceberg.catalog.s3.secret-access-key": "SK",
+    "value.converter": "io.apicurio.registry.utils.converter.AvroConverter",
+    "value.converter.apicurio.registry.url": "http://apicurio.internal.corp:8081/apis/registry/v3",
+    "value.converter.apicurio.registry.use-id": "contentId",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "tasks.max.value": 1,  # a non-string value, to prove stringification
+}
 
 
-def test_iceberg_connector_full_property_set():
+def test_kafka_kc_connector_config_is_exact_passthrough_of_sink_config():
+    """A block whose sinkConfig holds a full, migration-authored config
+    compiles to EXACTLY that config, key for key — the compiler derives
+    nothing from the bound service any more."""
     flow = golden_flow()
     sink = next(b for b in flow.blocks if b.id == "b-sink")
-    sink.config["initialPosition"] = "new"
-    plan = compile_flow(flow, iceberg_full_ctx())
-    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
-
-    # E2: full REST-catalog config from the sink service (alpha-proven set)
-    assert cfg["connector.class"] == "org.apache.iceberg.connect.IcebergSinkConnector"
-    assert cfg["iceberg.catalog.type"] == "rest"  # HiveCatalog default = live task crash
-    assert cfg["iceberg.catalog.uri"] == "http://polaris.internal.corp:8181/api/catalog"
-    assert cfg["iceberg.catalog.warehouse"] == "bronze"
-    assert cfg["iceberg.catalog.credential"] == "cid:csecret"
-    assert cfg["iceberg.catalog.rest.auth.type"] == "oauth2"
-    assert cfg["iceberg.catalog.scope"] == "PRINCIPAL_ROLE:ALL"
-    assert cfg["iceberg.catalog.oauth2-server-uri"] == "http://polaris.internal.corp:8181/api/catalog/v1/oauth/tokens"
-    assert cfg["iceberg.catalog.io-impl"] == "org.apache.iceberg.aws.s3.S3FileIO"
-    assert cfg["iceberg.catalog.s3.endpoint"] == "http://minio.corp:9000"
-    assert cfg["iceberg.catalog.s3.access-key-id"] == "AK"
-    assert cfg["iceberg.catalog.s3.secret-access-key"] == "SK"
-    assert cfg["iceberg.catalog.s3.path-style-access"] == "true"
-    assert cfg["iceberg.catalog.s3.region"] == "eu-west-1"
-    # initialPosition "new" -> latest
-    assert cfg["consumer.override.auto.offset.reset"] == "latest"
-
-    # E2b: the Connect converter uses the NATIVE registry API...
-    assert cfg["value.converter.apicurio.registry.url"] == "http://apicurio.internal.corp:8081/apis/registry/v3"
-    assert cfg["value.converter.apicurio.registry.use-id"] == "contentId"
-    # ...while the NiFi-side ConfluentSchemaRegistry CS keeps ccompat
-    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-sink")
-    registry = next(cs for cs in group.controllerServices if cs.key == "cs_schema_registry")
-    assert registry.properties["Schema Registry URLs"] == "#{apicurio_ccompat_url}"
-    ccompat_param = next(p for p in plan.parameterContext.parameters if p.name == "apicurio_ccompat_url")
-    assert ccompat_param.value == "http://apicurio.internal.corp:8081/apis/ccompat/v7"
-
-
-def test_iceberg_connector_default_offset_reset_is_earliest():
-    plan = compile_flow(golden_flow(), golden_ctx())
-    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
-    assert cfg["consumer.override.auto.offset.reset"] == "earliest"
-    # no oauth/s3 creds configured -> no credential keys emitted
-    assert "iceberg.catalog.credential" not in cfg
-    assert "iceberg.catalog.s3.access-key-id" not in cfg
-    # but the catalog type + io-impl are always present
-    assert cfg["iceberg.catalog.type"] == "rest"
-    assert cfg["iceberg.catalog.io-impl"] == "org.apache.iceberg.aws.s3.S3FileIO"
-
-
-def test_opensearch_connector_credentials():
-    ctx = golden_ctx()
-    ctx.services["svc-iceberg"] = make_service(
-        id="svc-iceberg", type="sink_destination", name="OpenSearch Sink",
-        config={"kind": "opensearch", "url": "https://os.internal.corp:9200",
-                "username": "os_user", "password": "os_pw", "writeMode": "upsert", "indexPrefix": "sec_"},
-        hasSecret=True,
-    )
-    plan = compile_flow(golden_flow(), ctx)
-    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
-    assert cfg["connector.class"] == "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector"
-    assert cfg["connection.url"] == "https://os.internal.corp:9200"
-    assert cfg["connection.username"] == "os_user"
-    assert cfg["connection.password"] == "os_pw"
-    assert cfg["key.ignore"] == "false"  # upsert
-    assert cfg["topic.index.map"] == "raw.golden_flow.asset:sec_asset"
-    assert cfg["consumer.override.auto.offset.reset"] == "earliest"
-    assert cfg["value.converter.apicurio.registry.url"] == "http://apicurio.internal.corp:8081/apis/registry/v3"
-
-
-def test_opensearch_connector_without_credentials_omits_them():
-    ctx = golden_ctx()
-    ctx.services["svc-iceberg"] = make_service(
-        id="svc-iceberg", type="sink_destination", name="OpenSearch Sink",
-        config={"kind": "opensearch", "url": "https://os.internal.corp:9200"},
-    )
-    plan = compile_flow(golden_flow(), ctx)
-    cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
-    assert "connection.username" not in cfg
-    assert "connection.password" not in cfg
-
-
-# --------------------------------------------------------------------------
-# 20. kafka_kc sink service reference: serviceId OR config.sinkServiceId
-# --------------------------------------------------------------------------
-
-
-def test_kafka_kc_sink_service_from_service_id_only():
-    flow = golden_flow()
-    sink = next(b for b in flow.blocks if b.id == "b-sink")
-    sink.config.pop("sinkServiceId", None)  # serviceId="svc-iceberg" remains
+    sink.config["sinkConfig"] = dict(_FULL_ICEBERG_SINK_CONFIG)
     plan = compile_flow(flow, golden_ctx())
     cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
-    assert cfg["connector.class"] == "org.apache.iceberg.connect.IcebergSinkConnector"
+
+    # every value is stringified (tasks.max.value: 1 -> "1")...
+    expected = {k: str(v) for k, v in _FULL_ICEBERG_SINK_CONFIG.items()}
+    assert cfg == expected
+    # ...and the connector name is still the live-evidence convention.
+    connector = next(c for c in plan.connectors if c.ownerBlockId == "b-sink")
+    assert connector.name == "golden_flow.b-sink.kafka_kc"
 
 
-def test_kafka_kc_sink_service_from_sink_service_id_only():
-    base = golden_flow()
-    blocks = [b if b.id != "b-sink" else b.model_copy(update={"serviceId": None}) for b in base.blocks]
-    flow = base.model_copy(update={"blocks": blocks})
-    plan = compile_flow(flow, golden_ctx())  # config.sinkServiceId still set
+def test_kafka_kc_connector_config_empty_sink_config_compiles_to_empty_config():
+    """An empty sinkConfig compiles to an empty connector config — the
+    compiler doesn't refuse this; that's validation's job (see
+    validation.py::_sink_config_refusals)."""
+    flow = golden_flow()
+    sink = next(b for b in flow.blocks if b.id == "b-sink")
+    sink.config["sinkConfig"] = {}  # explicitly empty, unlike golden_flow()'s default full config
+    plan = compile_flow(flow, golden_ctx())
     cfg = next(c for c in plan.connectors if c.ownerBlockId == "b-sink").config
-    assert cfg["connector.class"] == "org.apache.iceberg.connect.IcebergSinkConnector"
+    assert cfg == {}
 
 
-def test_kafka_kc_sink_service_missing_both_raises():
-    base = golden_flow()
-    blocks = [b if b.id != "b-sink" else b.model_copy(update={"serviceId": None, "config": {}})
-              for b in base.blocks]
-    flow = base.model_copy(update={"blocks": blocks})
-    with pytest.raises(CompileError, match="sink destination service"):
-        compile_flow(flow, golden_ctx())
+def test_build_kc_connector_passthrough():
+    """`build_kc_connector` (previously untested) has the same pass-through
+    contract as `build_kafka_kc_connector`, but names the connector `.kc`."""
+    from services.adapter.compiler.connectors import build_kc_connector
+
+    flow = golden_flow()
+    block = next(b for b in flow.blocks if b.id == "b-sink").model_copy(
+        update={"adapter": "kc", "config": {"sinkConfig": {"connector.class": "com.example.Sink", "topics": "raw.x", "batch.size": 500}}}
+    )
+    ctx = golden_ctx()
+    spec = build_kc_connector(
+        flow=flow, block=block, ctx=ctx, flow_token="golden_flow", topic="raw.x", entity_token="asset",
+        topic_is_governed=True,
+    )
+    assert spec.name == "golden_flow.b-sink.kc"
+    assert spec.config == {"connector.class": "com.example.Sink", "topics": "raw.x", "batch.size": "500"}
+    assert spec.ownerBlockId == "b-sink"
+
 
 def test_http_path_normalization_join_safety():
     """User-reported live failure: {baseUrl}{path} blind concatenation. The

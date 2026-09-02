@@ -406,7 +406,14 @@ class TestValidateBlock:
         # this just confirms a plain, otherwise-valid child block hosted
         # under a terminal parent produces no *block-level* issue on its own.
         kkc = make_block(
-            id="kkc", adapter="kafka_kc", mode=None, entity="asset", serviceId="svc-1", config={"sinkServiceId": "svc-1"}
+            id="kkc", adapter="kafka_kc", mode=None, entity="asset", serviceId="svc-1",
+            config={
+                "sinkServiceId": "svc-1",
+                "sinkConfig": {
+                    "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+                    "topics": "raw.f1.asset",
+                },
+            },
         )
         schemas = [ApprovedSchema(id="s1", flowId="f1", blockId="kkc")]
         services = [AppService(id="svc-1", type="sink_destination", name="Sink", retired=False)]
@@ -580,7 +587,13 @@ class TestValidateFlow:
             parentId="b-list",
             serviceId="svc-iceberg",
             entity="asset",
-            config={"sinkServiceId": "svc-iceberg"},
+            config={
+                "sinkServiceId": "svc-iceberg",
+                "sinkConfig": {
+                    "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+                    "topics": "raw.rapid7_assets.asset",
+                },
+            },
             transforms=[],
         )
         topic = FlowTopic(id="t-sink", kind="materialized", name="raw.rapid7_assets.asset", sealed=True, writerBlockId="b-sink")

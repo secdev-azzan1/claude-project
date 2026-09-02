@@ -24,7 +24,6 @@ import {
   Pause,
   Pencil,
   Play,
-  Plug,
   Plus,
   RefreshCw,
   Rocket,
@@ -40,6 +39,7 @@ import {
 
 import { AppLayout } from "@/components/AppLayout";
 import { AdapterChip } from "@/components/AdapterChip";
+import { SyncTab } from "@/components/flow-detail/SyncTab";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -804,8 +804,8 @@ function RuntimeTab({
         )}
         {flow.blocks.some((b) => b.adapter === "kc") && (
           <p className="text-xs text-muted-foreground">
-            kc blocks generate no NiFi components — those subscriptions live entirely on Kafka Connect and appear in the
-            Connect panel below.
+            kc blocks generate no NiFi components — those subscriptions live entirely on Kafka Connect and appear on
+            this flow's Sync tab.
           </p>
         )}
       </div>
@@ -876,73 +876,8 @@ function RuntimeTab({
         )}
       </div>
 
-      {/* ── Connect panel ── */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Plug className="h-4 w-4 text-muted-foreground" />
-          Kafka Connect
-          <span className="text-xs font-normal text-muted-foreground">connector + task states, straight from the worker</span>
-        </div>
-        {runtime.connectors.length === 0 ? (
-          <EmptyState inline>No Connect-managed sinks in this flow.</EmptyState>
-        ) : (
-          runtime.connectors.map((connector) => {
-            const block = flow.blocks.find((b) => b.id === connector.blockId);
-            const failed = connector.tasks.filter((t) => t.state === "FAILED");
-            return (
-              <div key={connector.name} className="rounded-md border p-2.5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {block && <AdapterChip adapter={block.adapter} />}
-                    <span className="break-all font-mono text-xs font-medium">{connector.name}</span>
-                  </div>
-                  <StatusBadge status={connector.state} />
-                </div>
-                <div className="mt-1 break-all font-mono text-xs text-muted-foreground">{connector.connectorClass}</div>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>worker {connector.workerId}</span>
-                  <span>
-                    records sent <span className="font-mono text-foreground">{connector.recordsSent.toLocaleString()}</span>
-                  </span>
-                  <span>
-                    failed{" "}
-                    <span className={cn("font-mono", connector.recordsFailed > 0 ? "text-destructive" : "text-foreground")}>
-                      {connector.recordsFailed.toLocaleString()}
-                    </span>
-                  </span>
-                </div>
-                <div className="mt-2 space-y-1">
-                  {connector.tasks.map((task) => (
-                    <div key={task.id} className="flex flex-wrap items-center gap-2 rounded-md border px-2 py-1 text-xs">
-                      <span className="font-mono">task {task.id}</span>
-                      <StatusBadge status={task.state} />
-                      <span className="text-muted-foreground">{task.workerId}</span>
-                    </div>
-                  ))}
-                </div>
-                {failed.length > 0 && (
-                  <div className="mt-2 text-xs font-medium text-destructive">
-                    {failed.length} FAILED task{failed.length === 1 ? "" : "s"} — visible here instead of buried in the worker's log.
-                  </div>
-                )}
-                {connector.lastErrorTrace && (
-                  <div className="mt-2">
-                    <div className="text-xs font-medium">Last error (truncated)</div>
-                    <pre className="mt-1 max-h-52 overflow-auto rounded-md bg-muted/60 p-2 font-mono text-xs shadow-inner">
-                      {connector.lastErrorTrace}
-                    </pre>
-                  </div>
-                )}
-                {block?.adapter === "kc" && (
-                  <div className="mt-2 text-xs text-info">
-                    kc subscription — Save is live in the builder; its config applies without a redeploy.
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+      {/* Per-sink Kafka Connect state moved to the flow's Sync tab, so it isn't
+          shown in two places. Runtime is now purely the NiFi view. */}
 
       {/* ── Orphan ledger ── */}
       {runtime.orphans.length > 0 && (
@@ -1115,6 +1050,17 @@ export function FlowDetailSheet({
   const busy = (verb: FlowVerb) => pendingVerb === verb;
   const disableReason = queueLockReason ?? null;
 
+  // Gated on block adapters, not on fetched sync records, so the tab never
+  // flickers into existence after a network round trip.
+  const hasKafkaConnectSink = flow.blocks.some((b) => b.adapter === "kc" || b.adapter === "kafka_kc");
+
+  // Radix renders nothing when the active tab's trigger disappears. A flow can
+  // lose its last Connect sink while the panel is open, so fall back rather
+  // than leaving a blank panel.
+  useEffect(() => {
+    if (tab === "sync" && !hasKafkaConnectSink) setTab("overview");
+  }, [tab, hasKafkaConnectSink]);
+
   const primaryVerb: FlowVerb | null =
     !flow.deployedAt || flow.state === "Deploying"
       ? null
@@ -1255,6 +1201,7 @@ export function FlowDetailSheet({
           <TabsTrigger value="dlq" className="flex-1">DLQ</TabsTrigger>
           <TabsTrigger value="messages" className="flex-1">Messages</TabsTrigger>
           <TabsTrigger value="runtime" className="flex-1">Runtime</TabsTrigger>
+          {hasKafkaConnectSink && <TabsTrigger value="sync" className="flex-1">Sync</TabsTrigger>}
         </TabsList>
 
         {/* ── Overview ── */}
@@ -1651,6 +1598,12 @@ export function FlowDetailSheet({
         <TabsContent value="runtime" className="mt-4">
           <RuntimeTab flow={flow} services={services} connections={connections} onEdit={onEdit} />
         </TabsContent>
+
+        {hasKafkaConnectSink && (
+          <TabsContent value="sync" className="mt-4">
+            <SyncTab flow={flow} queueLockReason={queueLockReason ?? null} onEdit={onEdit} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* ── Clear topic confirmation (Messages tab "Clear topic" / DLQ tab "Clear DLQ") ── */}

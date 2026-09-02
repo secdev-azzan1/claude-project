@@ -110,7 +110,13 @@ def _kc_flow(flow_id: str = "flow-kc-1", **overrides):
             {
                 "id": "b2", "adapter": "kafka_kc", "name": "To Iceberg", "parentId": "b1",
                 "serviceId": "svc-iceberg", "entity": "thing",
-                "config": {"sinkServiceId": "svc-iceberg"},
+                "config": {
+                    "sinkServiceId": "svc-iceberg",
+                    "sinkConfig": {
+                        "connector.class": "org.apache.iceberg.connect.IcebergSinkConnector",
+                        "topics": "raw.kc_flow.thing",
+                    },
+                },
                 "transforms": [
                     {"id": "t1", "kind": "dedup", "config": {"identityFields": ["id"], "excludedFields": [], "windowHours": 24}},
                 ],

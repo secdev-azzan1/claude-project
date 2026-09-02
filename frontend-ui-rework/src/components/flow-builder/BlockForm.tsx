@@ -77,12 +77,18 @@ import {
   derivedTopicDefault,
   overrideMatchesDerived,
   tableName,
+  tokenize,
   topicNameCollision,
 } from "@/prototype/naming";
-import { listKafkaConnectSyncs, saveService } from "@/prototype/api";
-import { kafkaConnectLinkIssue } from "@/prototype/kafkaConnectLink";
+import {
+  adoptKafkaConnectSync,
+  linkKafkaConnectSync,
+  listKafkaConnectSyncs,
+  saveKafkaConnectSync,
+  saveService,
+} from "@/prototype/api";
+import { kafkaConnectLinkIssue, flowSinkTopic } from "@/prototype/kafkaConnectLink";
 import { getOpenApiOperationDetail } from "@/prototype/openapiClient";
-import { CONNECT_PLUGIN_CATALOG } from "@/prototype/seeds";
 import { uid } from "@/prototype/store";
 import { cn } from "@/lib/utils";
 import type {
@@ -230,6 +236,53 @@ export function BlockForm(props: BlockFormProps) {
     queryFn: listKafkaConnectSyncs,
     enabled: hasSinkConfig,
   });
+  const queryClient = useQueryClient();
+  const createSyncMutation = useMutation({
+    mutationFn: async () => {
+      // The link is validated against the flow as SAVED, not the draft in the
+      // builder. Persisting first is what makes the entity, sink service and
+      // connector class the user just picked actually visible to that check —
+      // otherwise the backend rejects the sync citing fields the user can see
+      // are filled in. Same reason the Test button does this.
+      await onEnsureSaved();
+      const sinkConfig = (block.config.sinkConfig ?? {}) as Record<string, string>;
+      const topic = flowSinkTopic(flow, block);
+      const saved = await saveKafkaConnectSync({
+        name: `${flow.name} / ${block.name}`,
+        description: `Created from the flow builder for ${block.name}.`,
+        direction: "sink",
+        connectorClass: String(sinkConfig["connector.class"] ?? ""),
+        // Must match the name the flow compiler generates for this block, or the
+        // record would point at a second connector instead of this flow's own sink.
+        connectorName: `${tokenize(flow.name)}.${block.id}.${block.adapter}`,
+        // `topics` is never persisted on the block (the platform derives it at
+        // deploy), but the sync record must carry it or the link check rejects it.
+        config: { ...sinkConfig, topics: topic ?? "" },
+        linkedFlowId: flow.id,
+        linkedBlockId: block.id,
+      });
+      await linkKafkaConnectSync(saved.id, flow.id, block.id); // backend writes syncId onto the block
+      let adopted = true;
+      try {
+        await adoptKafkaConnectSync(saved.id);
+      } catch {
+        // No connector on the cluster yet — the sync stays a draft and goes
+        // live at the flow's next deploy. Not an error.
+        adopted = false;
+      }
+      return { saved, adopted };
+    },
+    onSuccess: ({ saved, adopted }) => {
+      onPatchConfig(block.id, { syncId: saved.id });
+      queryClient.invalidateQueries({ queryKey: ["kafkaConnectSyncs"] });
+      toast.success(
+        adopted
+          ? `Managed sync created and linked to the live connector for "${block.name}".`
+          : `Managed sync created for "${block.name}" — it will go live at the next deploy.`,
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const showTransforms = hostsTransforms(flow, block);
   const showTest = hostsTest(block);
   const testAbsence = noTestReason(block);
@@ -248,29 +301,6 @@ export function BlockForm(props: BlockFormProps) {
             : null;
   const eligibleServices = services.filter((s) => s.type === serviceType && !s.retired);
   const selectedService = services.find((s) => s.id === block.serviceId);
-
-  /**
-   * The sink's destination service, rendered inside Sink configuration. It is
-   * the same control every other adapter gets in Identity — passed down rather
-   * than duplicated, so there is still exactly one picker writing `serviceId`.
-   */
-  const sinkServicePicker = hasSinkConfig && serviceType ? (
-    <ServiceSelector
-      label="Destination service"
-      serviceType={serviceType}
-      services={eligibleServices}
-      selected={selectedService}
-      locked={block.adapter === "kc" ? false : locked}
-      blockId={block.id}
-      blockName={block.name}
-      onSelect={(id) => {
-        onPatchBlock(block.id, { serviceId: id });
-        // kafka_kc keeps a copy in config for the connector payload; writing
-        // both here is what stops the two from disagreeing.
-        if (block.adapter === "kafka_kc") onPatchConfig(block.id, { sinkServiceId: id });
-      }}
-    />
-  ) : null;
 
   const descendants = useMemo(() => {
     const ids = new Set<string>([block.id]);
@@ -375,8 +405,7 @@ export function BlockForm(props: BlockFormProps) {
     const cls = sink["connector.class"];
     const keys = Object.keys(sink).filter((k) => k !== "connector.class").length;
     if (!cls) return "not configured";
-    const plugin = CONNECT_PLUGIN_CATALOG.find((p) => p.connectorClass === cls);
-    return `${plugin?.displayName ?? cls} · ${keys} key${keys === 1 ? "" : "s"}`;
+    return `${cls} · ${keys} key${keys === 1 ? "" : "s"}`;
   })();
 
   const testSummary = block.testResult
@@ -781,58 +810,69 @@ export function BlockForm(props: BlockFormProps) {
             >
               <div className="mb-4 rounded-md border border-primary/20 bg-primary-muted/20 p-3">
                 <div className="mb-1 text-sm font-medium">Managed Kafka Connect sync</div>
-                <p className="mb-2 text-xs text-muted-foreground">Link this block to a reusable sync, or create one in the Kafka Connect section.</p>
-                <Select
-                  value={(block.config.syncId as string) || "none"}
-                  disabled={locked}
-                  onValueChange={(syncId) => onPatchConfig(block.id, { syncId: syncId === "none" ? undefined : syncId })}
-                >
-                  <SelectTrigger><SelectValue placeholder="Choose a sync" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No managed sync linked</SelectItem>
-                    {kafkaConnectSyncs.map((sync) => {
-                      const linkIssue = kafkaConnectLinkIssue(flow, block, sync);
-                      return (
-                        <SelectItem key={sync.id} value={sync.id} disabled={sync.retired || Boolean(linkIssue && sync.id !== block.config.syncId)}>
-                          {sync.name} · {sync.connectorClass}{sync.retired ? " (retired)" : linkIssue ? ` - ${linkIssue}` : ""}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="mt-1 h-auto px-0 text-xs"
-                  disabled={locked}
-                  onClick={() => { window.location.href = `/kafka-connect?flow=${encodeURIComponent(flow.id)}&block=${encodeURIComponent(block.id)}`; }}
-                >
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Create or configure a sync
-                </Button>
+                <p className="mb-2 text-xs text-muted-foreground">Create a reusable sync from this block's own sink settings.</p>
+                {(() => {
+                  const linkedSyncId = typeof block.config.syncId === "string" ? block.config.syncId : undefined;
+                  const linkedSync = linkedSyncId ? kafkaConnectSyncs.find((s) => s.id === linkedSyncId) : undefined;
+                  // Deleting a sync leaves its id behind on the block — the backend keeps the
+                  // reference on purpose. So a truthy syncId does not mean a live sync exists,
+                  // and guarding the create button on the raw id alone hides it forever after
+                  // the first delete, stranding the user with no way to make a replacement.
+                  const danglingSyncRef = Boolean(linkedSyncId) && !linkedSync;
+                  return (
+                    !linkedSync && (
+                      <>
+                        {danglingSyncRef && (
+                          <p className="mt-1 flex items-start gap-1 text-xs text-warning">
+                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>The sync this block pointed at no longer exists. Create a new one to manage this sink again.</span>
+                          </p>
+                        )}
+                        {(() => {
+                          const sinkConfig = (block.config.sinkConfig ?? {}) as Record<string, string>;
+                          const connectorClass = String(sinkConfig["connector.class"] ?? "").trim();
+                          const linkIssue = kafkaConnectLinkIssue(flow, block, {
+                            direction: "sink",
+                            connectorClass,
+                            config: { ...sinkConfig, topics: flowSinkTopic(flow, block) ?? "" },
+                          });
+                          // kafkaConnectLinkIssue only catches a class MISMATCH (it compares
+                          // the sync's class against itself here, so it never fires on an
+                          // empty class) — this guard catches absence, which is what the
+                          // backend actually 422s on.
+                          const disabledReason = locked
+                            ? "The flow is deployed and frozen."
+                            : createSyncMutation.isPending
+                              ? "Creating the sync…"
+                              : !connectorClass
+                                ? "Pick a connector class below before creating a sync."
+                                : linkIssue;
+                          return (
+                            <Button
+                              type="button"
+                              variant="link"
+                              size="sm"
+                              className="mt-1 h-auto px-0 text-xs"
+                              disabled={Boolean(disabledReason)}
+                              title={disabledReason ?? undefined}
+                              onClick={() => createSyncMutation.mutate()}
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" /> Create managed sync
+                            </Button>
+                          );
+                        })()}
+                      </>
+                    )
+                  );
+                })()}
               </div>
               {block.adapter === "kafka_kc" ? (
                 // kafka_kc freezes with the rest of the flow at deploy.
-                <SinkConfigEditor
-                  flow={flow}
-                  block={block}
-                  locked={locked}
-                  services={services}
-                  onPatchConfig={onPatchConfig}
-                  onGoToNames={() => goToSection("entity")}
-                  servicePicker={sinkServicePicker}
-                />
+                <SinkConfigEditor block={block} locked={locked} onPatchConfig={onPatchConfig} />
               ) : (
                 // kc is lock-exempt: Save is live, so the sink stays editable
                 // while the flow runs. The lock is decided HERE, per call site.
-                <SinkConfigEditor
-                  flow={flow}
-                  block={block}
-                  locked={false}
-                  services={services}
-                  onPatchConfig={onPatchConfig}
-                  servicePicker={sinkServicePicker}
-                />
+                <SinkConfigEditor block={block} locked={false} onPatchConfig={onPatchConfig} />
               )}
             </Section>
           )}
@@ -1555,29 +1595,14 @@ function JdbcSettings({
             </InfoDot>
           </label>
           {cfg.incremental === true && (
-            <div className="space-y-2 pl-[3.25rem]">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pl-[3.25rem]">
               <Input
                 className="h-8 w-44 font-mono text-xs"
                 value={(cfg.watermarkColumn as string) ?? ""}
                 disabled={locked}
-                placeholder="watermark column *"
+                placeholder="watermark column"
                 onChange={(e) => onPatchConfig(block.id, { watermarkColumn: e.target.value })}
               />
-              <Select
-                value={(cfg.watermarkType as string) ?? "timestamp"}
-                disabled={locked}
-                onValueChange={(v) => onPatchConfig(block.id, { watermarkType: v })}
-              >
-                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="timestamp">Timestamp</SelectItem>
-                  <SelectItem value="bigint">Big integer</SelectItem>
-                  <SelectItem value="integer">Integer</SelectItem>
-                  <SelectItem value="date">Date</SelectItem>
-                  <SelectItem value="varchar">Text</SelectItem>
-                </SelectContent>
-              </Select>
               <Select
                 value={(cfg.initialPosition as string) ?? "oldest"}
                 disabled={locked}
@@ -1591,20 +1616,6 @@ function JdbcSettings({
                   <SelectItem value="new">First run: only new rows</SelectItem>
                 </SelectContent>
               </Select>
-              </div>
-              <Input
-                className="h-8 w-52 font-mono text-xs"
-                value={(cfg.bookmarkTieBreaker as string) ?? ""}
-                disabled={locked}
-                placeholder="optional tie-breaker (e.g. id)"
-                onChange={(e) => onPatchConfig(block.id, { bookmarkTieBreaker: e.target.value })}
-              />
-              {!String(cfg.watermarkColumn ?? "").trim() && (
-                <p className="text-xs text-destructive">A watermark column is required for incremental reads.</p>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                Each successful row advances its Redis bookmark. Redeploy keeps it; deleting the flow removes it.
-              </p>
             </div>
           )}
         </div>

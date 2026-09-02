@@ -96,8 +96,7 @@ export interface FlowBlock {
    * - http:      method, path, responseFormat, recordPath, split, pagination,
    *              `proxyId?: string | null` — reference into `state.gatewayProxies`
    *              (replaced the old boolean `proxy`), lookupJoinField
-   * - jdbc:      table, columns, incremental, watermarkColumn, watermarkType,
-   *              bookmarkTieBreaker, bookmarkTieBreakerType, initialPosition
+   * - jdbc:      table, columns, incremental, watermarkColumn, initialPosition
    * - kafka:     topicName, parseFormat, initialPosition
    * - kafka_kc:  sinkServiceId, `sinkConfig?: Record<string, string>`
    * - kc:        attachTopicId, initialPosition, `sinkConfig?: Record<string, string>`

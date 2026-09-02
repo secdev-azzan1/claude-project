@@ -155,30 +155,18 @@ def _build_compile_context(
 
 # --------------------------------------------------------------------- preflight
 
-_CONNECT_PLUGIN_CLASSES = {
-    "iceberg_catalog": "org.apache.iceberg.connect.IcebergSinkConnector",
-    "opensearch": "io.aiven.kafka.connect.opensearch.OpensearchSinkConnector",
-}
-
-
 def _needed_connector_classes(flow: Flow, services: List[AppService]) -> List[str]:
     """Connector classes this flow's kafka_kc/kc blocks need installed on
-    the live Kafka Connect cluster — mirrors
-    `services/adapter/compiler/connectors.py`'s own `kind -> connector.class`
-    mapping (duplicated here rather than imported: these are stable
-    third-party plugin class names, not compiler internals, and deriving
-    them without a full `CompileContext`/compile pass keeps this check
-    usable even when other preflight rows are still failing)."""
-    services_by_id = {s.id: s for s in services}
+    the live Kafka Connect cluster. Read straight off each block's own
+    `config.sinkConfig["connector.class"]` — every kc/kafka_kc block carries
+    a complete, user-authored connector config now, so there is no bound
+    service/`kind` to map from any more (`services` is kept in the
+    signature for call-site compatibility, but unused here)."""
     classes: List[str] = []
     for b in flow.blocks:
         if b.adapter not in ("kafka_kc", "kc"):
             continue
-        sink_service_id = (b.config or {}).get("sinkServiceId") or b.serviceId
-        svc = services_by_id.get(sink_service_id) if sink_service_id else None
-        if not svc:
-            continue
-        cls = _CONNECT_PLUGIN_CLASSES.get(str((svc.config or {}).get("kind") or ""))
+        cls = str(((b.config or {}).get("sinkConfig") or {}).get("connector.class") or "").strip()
         if cls and cls not in classes:
             classes.append(cls)
     return classes

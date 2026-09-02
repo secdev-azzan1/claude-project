@@ -13,7 +13,6 @@ import Flows from "./pages/Flows.tsx";
 import Apisix from "./pages/Apisix.tsx";
 import Audit from "./pages/Audit.tsx";
 import NotFound from "./pages/NotFound.tsx";
-import KafkaConnect from "./pages/KafkaConnect.tsx";
 import { FlowOperationQueue } from "./components/FlowOperationQueue";
 
 const queryClient = new QueryClient();
@@ -37,11 +36,12 @@ const App = () => (
             <Route path="/flow-builder/:flowId" element={<FlowBuilder />} />
             <Route path="/schemas" element={<Schemas />} />
             <Route path="/application-services" element={<AppServices />} />
-            <Route path="/kafka-connect" element={<KafkaConnect />} />
             <Route path="/audit" element={<Audit />} />
             <Route path="/connections" element={<Connections />} />
             <Route path="/apisix" element={<Apisix />} />
             {/* Legacy routes from the stream-based app */}
+            {/* Kafka Connect sinks are now operated from the Sync tab on each flow */}
+            <Route path="/kafka-connect" element={<Navigate to="/flows" replace />} />
             <Route path="/flow-designer" element={<Navigate to="/flows" replace />} />
             <Route path="/nifi-services" element={<Navigate to="/application-services" replace />} />
             <Route path="/settings" element={<Navigate to="/connections" replace />} />

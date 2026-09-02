@@ -29,6 +29,7 @@ from models.adapter.bulk_job import BULK_VERBS, TERMINAL_BULK_STATES, bulk_job_t
 from services.adapter import bulk_runner, runtime as runtime_svc
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
 from services.adapter.deployer import lifecycle
+from services.adapter.sink_secrets import SECRET_PLACEHOLDER, merge_preserving_secrets, redact_config
 from services.adapter.topic_inventory import materialize_flow_topics
 from services.runtime_recovery import APP_INSTANCE_ID
 from services.adapter.deployer.connect_apply import ConnectApplyError
@@ -85,6 +86,34 @@ async def _load_gateway(db: AsyncIOMotorDatabase) -> GatewaySnapshot:
     proxies = [GatewayProxy(**p) for p in (doc.get("proxies") or [])]
     allowlist = list(doc.get("allowlist") or [])
     return GatewaySnapshot(proxies=proxies, allowlist=allowlist)
+
+
+def _redact_flow_sink_secrets(flow_doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of a flow document with every block's `config.sinkConfig`
+    redacted for the response path.
+
+    The sinkConfig migration moved a complete Kafka Connect connector config
+    (including real credentials -- S3 secret keys, catalog OAuth credentials)
+    onto `block.config.sinkConfig` for every kc/kafka_kc block. This must
+    never reach a client in plaintext; see services/adapter/sink_secrets.py.
+    Does not mutate the document it was given.
+    """
+    blocks = flow_doc.get("blocks") or []
+    redacted_blocks = []
+    changed = False
+    for block in blocks:
+        config = (block or {}).get("config") or {}
+        sink_config = config.get("sinkConfig")
+        if not isinstance(sink_config, dict) or not sink_config:
+            redacted_blocks.append(block)
+            continue
+        changed = True
+        redacted_blocks.append(
+            {**block, "config": {**config, "sinkConfig": redact_config(sink_config)}}
+        )
+    if not changed:
+        return dict(flow_doc)
+    return {**flow_doc, "blocks": redacted_blocks}
 
 
 async def _get_flow_doc_or_404(db: AsyncIOMotorDatabase, flow_id: str) -> Dict[str, Any]:
@@ -306,12 +335,13 @@ def _get_verb_block_reason(
 @router.get("/")
 async def list_flows_v2(db: AsyncIOMotorDatabase = Depends(get_db)):
     docs = await db[COLLECTIONS.flows].find({}, {"_id": 0}).to_list(None)
-    return [materialize_flow_topics(doc) for doc in docs]
+    return [_redact_flow_sink_secrets(materialize_flow_topics(doc)) for doc in docs]
 
 
 @router.get("/{flow_id}")
 async def get_flow_v2(flow_id: str, db: AsyncIOMotorDatabase = Depends(get_db)):
-    return materialize_flow_topics(await _get_flow_doc_or_404(db, flow_id))
+    doc = materialize_flow_topics(await _get_flow_doc_or_404(db, flow_id))
+    return _redact_flow_sink_secrets(doc)
 
 
 @router.post("/")
@@ -363,6 +393,44 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
         if existing_flow.deployedAt and existing_flow.name != flow_in.name:
             raise HTTPException(status_code=409, detail="Names freeze at deploy — undeploy first to rename.")
 
+    # Resolve sinkConfig secret placeholders the same way kafka_connect.py's
+    # save_sync does: a client can only ever see "[secret]" for a redacted
+    # value, so on an ordinary edit that placeholder must be swapped back for
+    # the real stored value before it reaches Mongo. Match blocks by id since
+    # block order/count can change between saves.
+    existing_blocks_by_id = (
+        {b.get("id"): b for b in (existing.get("blocks") or [])} if existing else {}
+    )
+    for block in flow_in.blocks:
+        sink_config = block.config.get("sinkConfig") if isinstance(block.config, dict) else None
+        if not isinstance(sink_config, dict) or not sink_config:
+            continue
+        existing_block = existing_blocks_by_id.get(block.id)
+        existing_sink_config = (
+            (existing_block.get("config") or {}).get("sinkConfig") if existing_block else None
+        )
+        if not isinstance(existing_sink_config, dict):
+            existing_sink_config = {}
+        if not existing_block:
+            # No stored document to restore a placeholder from -- either this
+            # is a create, or a new block id on an existing flow. Persisting
+            # a literal "[secret]" here would ship that string to Kafka
+            # Connect as the real credential value on the next deploy.
+            placeholder_keys = sorted(
+                key for key, value in sink_config.items() if value == SECRET_PLACEHOLDER
+            )
+            if placeholder_keys:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Enter the real value for "
+                        f"{', '.join(placeholder_keys)} on block '{block.name or block.id}' -- a new "
+                        f"Kafka Connect sink cannot be saved with a '{SECRET_PLACEHOLDER}' placeholder."
+                    ),
+                )
+        else:
+            block.config["sinkConfig"] = merge_preserving_secrets(sink_config, existing_sink_config)
+
     services = await _load_services(db)
     schemas = await _load_schemas(db)
     gateway = await _load_gateway(db)
@@ -389,7 +457,8 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
         await db[COLLECTIONS.flows].insert_one(next_doc)
         await audit(db, action="Flow created", target=flow_in.name, object="Flow")
 
-    return await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
+    saved = await db[COLLECTIONS.flows].find_one({"id": flow_in.id}, {"_id": 0})
+    return _redact_flow_sink_secrets(saved)
 
 
 class FlowDeleteOptions(BaseModel):

@@ -7,7 +7,6 @@ import {
   Cable,
   Globe,
   Server,
-  ArrowLeftRight,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -29,7 +28,6 @@ const mainItems = [
   { title: "Flows", url: "/flows", icon: PlayCircle },
   { title: "Schemas", url: "/schemas", icon: FileCode2 },
   { title: "Application Services", url: "/application-services", icon: Server },
-  { title: "Kafka Connect", url: "/kafka-connect", icon: ArrowLeftRight },
   { title: "Audit Log", url: "/audit", icon: ScrollText },
 ];
 

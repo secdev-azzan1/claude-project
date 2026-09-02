@@ -138,14 +138,16 @@ _JDBC_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-
 
 
 def _sink_config_refusals(block: FlowBlock) -> List[str]:
-    """Sink-configuration sanity for kc / kafka_kc. Deliberately narrow: an
-    empty sink config is a legitimate "not configured yet" state, so only a
-    config that *says* something wrong is an issue."""
+    """Sink-configuration sanity for kc / kafka_kc. Nothing derives a
+    connector config any more (the sinkConfig migration made every block's
+    config the sole source of truth), so an empty sink config is no longer
+    a legitimate "not configured yet" state — it would silently deploy a
+    broken connector, and is refused outright."""
     if block.adapter != "kc" and block.adapter != "kafka_kc":
         return []
     sink = (block.config or {}).get("sinkConfig")
     if not isinstance(sink, dict) or len(sink) == 0:
-        return []
+        return ["Set sinkConfig — the platform no longer derives a connector config; this block needs a complete one, including connector.class and topics."]
     refusals: List[str] = []
     connector_class = sink.get("connector.class")
     if not isinstance(connector_class, str) or not connector_class.strip():
@@ -155,11 +157,9 @@ def _sink_config_refusals(block: FlowBlock) -> List[str]:
         refusals.append(
             f'connector.class "{connector_class}" is not a class name — a custom sink still needs a fully-qualified class, e.g. com.example.kafka.connect.MySinkConnector.'
         )
-    # Platform-owned keys are rendered as disabled rows and computed at render;
-    # a persisted copy goes stale the moment a name changes.
-    owned = [k for k in ("topics", "key.converter", "value.converter") if k in sink]
-    if owned:
-        refusals.append(f"The platform owns {', '.join(owned)} — remove {'them' if len(owned) > 1 else 'it'}; the value is derived at deploy.")
+    topics = sink.get("topics")
+    if not isinstance(topics, str) or not topics.strip():
+        refusals.append("Set topics — the platform no longer derives it; the connector needs to know which topic to consume.")
     return refusals
 
 
@@ -451,8 +451,6 @@ def validate_block(
     if block.adapter == "kafka_kc":
         if not any(s.flowId == flow.id and s.blockId == block.id for s in schemas):
             at("Schema ceremony required — the flow cannot deploy until this write's schema is approved.")
-        if not (block.config or {}).get("sinkServiceId") and not block.serviceId:
-            at("Select the sink destination service.")
     if block.adapter == "kc" and not (block.config or {}).get("attachTopicId"):
         at("Attach the subscription to a topic.")
     for refusal in _sink_config_refusals(block):

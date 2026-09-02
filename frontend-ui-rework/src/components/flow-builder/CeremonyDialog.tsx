@@ -126,6 +126,10 @@ export function CeremonyDialog({
   const [entity, setEntity] = useState(block.entity ?? "");
   const [provenance, setProvenance] = useState<SchemaProvenance>("sample_run");
   const [prefillId, setPrefillId] = useState<string>(NO_PREFILL);
+  // An existing approved schema is auto-selected when a ceremony is reopened.
+  // It must not hide a newer live-sample result, while an explicitly chosen
+  // template/schema should remain an intentional Review seed.
+  const [prefillTouched, setPrefillTouched] = useState(false);
   const [progress, setProgress] = useState(0);
   const [collecting, setCollecting] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -168,6 +172,7 @@ export function CeremonyDialog({
     // records that backed v1 never saw these fields.
     setProvenance(fromUrl || prefillDraft ? "manual" : "sample_run");
     setPrefillId(fromUrl ? templateOption(fromUrl) : existing && !prefillDraft ? schemaOption(existing.id) : NO_PREFILL);
+    setPrefillTouched(Boolean(fromUrl || prefillDraft));
     setProgress(0);
     setCollecting(false);
     setSampleRecords([]);
@@ -221,13 +226,14 @@ export function CeremonyDialog({
     // Evidence is retained only when the record was actually inferred from it.
     // A pre-filled record was authored elsewhere, so holding it to these samples
     // would block Approve over a disagreement the user never claimed.
-    let evidence: unknown[] = [];
-    let report: InferenceReport | null = null;
+    const evidence: unknown[] = [];
+    const report: InferenceReport | null = null;
 
-    if (selectedTemplate) record = parsePrefill(selectedTemplate.rawAvro, `template "${selectedTemplate.name}"`);
-    else if (selectedApproved) record = parsePrefill(selectedApproved.rawAvro, selectedApproved.subject);
-
-    if (!record && provenance === "sample_run" && inferenceSchema) {
+    // A completed live sample is the current evidence for this ceremony. Do
+    // not let the old approved schema that was auto-selected on reopen mask
+    // it; otherwise newly-added transform fields never reach Review. Explicit
+    // pre-fills remain intentional and continue to seed Review as before.
+    if (provenance === "sample_run" && inferenceSchema && !prefillTouched) {
       try {
         record = normalizeAvroRecord(inferenceSchema, recordName);
       } catch (error) {
@@ -235,6 +241,18 @@ export function CeremonyDialog({
       }
     }
 
+    if (!record && selectedTemplate) record = parsePrefill(selectedTemplate.rawAvro, `template "${selectedTemplate.name}"`);
+    else if (!record && selectedApproved) record = parsePrefill(selectedApproved.rawAvro, selectedApproved.subject);
+
+    // If the user explicitly cleared a pre-fill after a live run, keep using
+    // the generated result rather than falling back to a placeholder.
+    if (!record && provenance === "sample_run" && inferenceSchema) {
+      try {
+        record = normalizeAvroRecord(inferenceSchema, recordName);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "The server returned an invalid inferred schema.");
+      }
+    }
     // No pre-fill, no probe (or a hand-authored declaration): one placeholder
     // field to edit rather than an empty tree.
     if (!record) record = { type: "record", name: recordName, namespace, fields: PLACEHOLDER_FIELDS[provenance] };
@@ -304,7 +322,7 @@ export function CeremonyDialog({
         // The entity is declared in this dialog and is not written to the
         // flow until approval in the normal edit path. Save this exact target
         // declaration first so the temporary compiler derives the same topic
-        // and the same record identity the user is reviewing.
+        // and record identity the user is reviewing.
         const inferenceFlow = {
           ...flow,
           blocks: flow.blocks.map((candidate) => candidate.id === block.id ? { ...candidate, entity } : candidate),
@@ -320,7 +338,7 @@ export function CeremonyDialog({
   };
 
   // The progress indicator follows the persisted backend job, not a local
-  // timer.  This keeps the UI honest while NiFi is deploying, producing data,
+  // timer. This keeps the UI honest while NiFi is deploying, producing data,
   // or cleaning up the temporary process group and topic.
   useEffect(() => {
     if (!open || !inferenceJob || ["complete", "failed", "stopped"].includes(inferenceJob.status)) return;
@@ -348,8 +366,6 @@ export function CeremonyDialog({
           if (latest.status === "stopped") toast.info("Schema inference stopped; temporary resources were cleaned up.");
         }
       } catch (error) {
-        // A transient poll error must not erase the current job or make the
-        // dialog look complete. The next poll retries against the source of truth.
         if (!disposed) console.warn("Schema inference status poll failed", error);
       }
     };
@@ -532,7 +548,13 @@ export function CeremonyDialog({
             </div>
             <div className="space-y-1.5">
               <Label>Pre-fill the Review step (optional)</Label>
-              <Select value={prefillId} onValueChange={setPrefillId}>
+              <Select
+                value={prefillId}
+                onValueChange={(value) => {
+                  setPrefillTouched(true);
+                  setPrefillId(value);
+                }}
+              >
                 <SelectTrigger className="max-w-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -611,10 +633,10 @@ export function CeremonyDialog({
               </div>
             )}
             {provenance === "manual" && (
-              <p className="text-sm text-muted-foreground">
+              <span className="block text-sm text-muted-foreground">
                 No evidence is collected. The schema you author will carry the provenance flag{" "}
                 <Badge variant="outline" className="text-xs">manually authored — not sample-validated</Badge>.
-              </p>
+              </span>
             )}
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(0)}>

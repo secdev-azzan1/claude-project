@@ -13,6 +13,12 @@ from services.connection_resolver import resolve_connection
 from services.iceberg_sink_config import ICEBERG_CONNECTOR_CLASS
 from services.kafka_connect_client import get_cluster_info, list_connector_plugins, list_connectors_with_status
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
+from services.adapter.sink_secrets import (
+    SECRET_PLACEHOLDER,
+    is_secret_property,
+    merge_preserving_secrets,
+    redact_config,
+)
 from services.kafka_connect_link_validation import validate_sync_link
 from services.kafka_connect_client import (
     delete_connector,
@@ -48,20 +54,14 @@ class SyncLink(BaseModel):
     block_id: str
 
 
-_SECRET_KEY = re.compile(r"(pass(word)?|secret|token|credential|api.?key|access.?key|private.?key)", re.I)
-
-
 def _public_sync(doc: Dict[str, Any]) -> Dict[str, Any]:
     result = dict(doc)
     result.pop("_id", None)
     configuration_state = _configuration_state(result)
     config = dict(result.get("config") or {})
-    result["config"] = {
-        key: "[secret]" if _SECRET_KEY.search(str(key)) and value not in (None, "") else value
-        for key, value in config.items()
-    }
+    result["config"] = redact_config(config)
     result["has_secrets"] = any(
-        _SECRET_KEY.search(str(key)) and value not in (None, "", "[secret]")
+        is_secret_property(key) and value not in (None, "", SECRET_PLACEHOLDER)
         for key, value in config.items()
     )
     result["remote_present"] = bool(result.get("remote_present"))
@@ -464,13 +464,23 @@ async def save_sync(payload: SyncUpsert, db: AsyncIOMotorDatabase = Depends(get_
         # Preserve the real stored value rather than replacing it with the
         # placeholder during an ordinary edit. Also retain secret keys omitted
         # by a partial editor payload; deleting a credential must be explicit.
-        existing_config = existing.get("config") or {}
-        for key, value in list(config.items()):
-            if value == "[secret]" and key in existing_config:
-                config[key] = existing_config[key]
-        for key, value in existing_config.items():
-            if key not in config and _SECRET_KEY.search(str(key)) and value not in (None, ""):
-                config[key] = value
+        config = merge_preserving_secrets(config, existing.get("config") or {})
+    else:
+        # There is no stored document to restore a placeholder from on
+        # create. Persisting a literal "[secret]" here would ship that
+        # string to Kafka Connect as the real credential value.
+        placeholder_keys = sorted(
+            key for key, value in config.items() if value == SECRET_PLACEHOLDER
+        )
+        if placeholder_keys:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Enter the real value for "
+                    f"{', '.join(placeholder_keys)} -- a new sync cannot be created with a "
+                    f"'{SECRET_PLACEHOLDER}' placeholder."
+                ),
+            )
     config["connector.class"] = connector_class
     connector_name = (payload.connector_name or "").strip()
     if not connector_name:

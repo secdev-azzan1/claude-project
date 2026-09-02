@@ -137,16 +137,17 @@ function unresolvedPlaceholders(flow: Flow, block: FlowBlock): string[] {
 }
 
 /**
- * Sink-configuration sanity for kc / kafka_kc. Deliberately narrow: an empty
- * sink config is a legitimate "not configured yet" state (the editor's empty
- * state), so only a config that *says* something wrong is an issue.
+ * Sink-configuration sanity for kc / kafka_kc. The stored `sinkConfig` is now
+ * the WHOLE Kafka Connect connector config — nothing here is derived or
+ * platform-owned any more, so a kc/kafka_kc block must carry a non-empty
+ * config with at minimum `connector.class` and `topics` set, or the sink has
+ * no endpoint and no source.
  */
 function sinkConfigRefusals(block: FlowBlock): string[] {
   if (block.adapter !== "kc" && block.adapter !== "kafka_kc") return [];
   const sink = block.config?.sinkConfig;
-  if (!sink || typeof sink !== "object") return [];
-  const entries = sink as Record<string, unknown>;
-  if (Object.keys(entries).length === 0) return [];
+  const entries = sink && typeof sink === "object" ? (sink as Record<string, unknown>) : {};
+  if (Object.keys(entries).length === 0) return ["Set the sink's connector config — connector.class and topics are required."];
   const refusals: string[] = [];
   const connectorClass = entries["connector.class"];
   if (typeof connectorClass !== "string" || !connectorClass.trim()) {
@@ -160,11 +161,10 @@ function sinkConfigRefusals(block: FlowBlock): string[] {
       `connector.class "${connectorClass}" is not a class name — a custom sink still needs a fully-qualified class, e.g. com.example.kafka.connect.MySinkConnector.`,
     );
   }
-  // Platform-owned keys are rendered as disabled rows and computed at render;
-  // a persisted copy goes stale the moment a name changes.
-  const owned = ["topics", "key.converter", "value.converter"].filter((k) => k in entries);
-  if (owned.length > 0)
-    refusals.push(`The platform owns ${owned.join(", ")} — remove ${owned.length > 1 ? "them" : "it"}; the value is derived at deploy.`);
+  const topics = entries["topics"];
+  if (typeof topics !== "string" || !topics.trim()) {
+    refusals.push("Set topics — the platform has to know which topic this sink reads.");
+  }
   return refusals;
 }
 
@@ -289,7 +289,7 @@ export function validateBlock(
 
   if (!block.name.trim()) at("Block needs a name.");
 
-  const needsService = block.adapter === "http" || block.adapter === "jdbc" || block.adapter === "kafka_kc" || block.adapter === "kc";
+  const needsService = block.adapter === "http" || block.adapter === "jdbc";
   if (needsService && !block.serviceId) at("Select a service — hosts and credentials always come from a saved service.");
   if (block.serviceId) {
     const svc = services.find((s) => s.id === block.serviceId);
@@ -324,20 +324,7 @@ export function validateBlock(
     for (const refusal of gatewayRefusals(block, gateway, services)) at(refusal);
     for (const refusal of paginationRefusals(block)) at(refusal);
   }
-  if (block.adapter === "jdbc") {
-    if (!(block.config.table as string)) at("Pick a table.");
-    if (block.mode === "read" && block.config.incremental === true) {
-      const watermark = String(block.config.watermarkColumn ?? "").trim();
-      if (!watermark) at("Incremental reads require a watermark column.");
-      else if (!/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$/.test(watermark))
-        at("Watermark column must be a simple SQL identifier.");
-      const initialPosition = String(block.config.initialPosition ?? "oldest").trim().toLowerCase();
-      if (initialPosition !== "oldest" && initialPosition !== "new") at("Initial position must be either oldest or new.");
-      const tieBreaker = String(block.config.bookmarkTieBreaker ?? "").trim();
-      if (tieBreaker && !/^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$/.test(tieBreaker))
-        at("Bookmark tie-breaker must be a simple SQL identifier.");
-    }
-  }
+  if (block.adapter === "jdbc" && !(block.config.table as string)) at("Pick a table.");
   if (block.adapter === "kafka" && block.mode === "read" && !block.parentId && !(block.config.topicName as string))
     at("Pick a topic to consume.");
   // The override is legal on the whole kafka family (R7), so the collision
@@ -349,7 +336,6 @@ export function validateBlock(
   if (block.adapter === "kafka_kc") {
     if (!schemas.some((s) => s.flowId === flow.id && s.blockId === block.id))
       at("Schema ceremony required — the flow cannot deploy until this write's schema is approved.");
-    if (!block.config.sinkServiceId && !block.serviceId) at("Select the sink destination service.");
   }
   if (block.adapter === "kc" && !(block.config.attachTopicId as string)) at("Attach the subscription to a topic.");
   for (const refusal of sinkConfigRefusals(block)) at(refusal);

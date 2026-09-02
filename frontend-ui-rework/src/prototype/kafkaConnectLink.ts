@@ -36,8 +36,6 @@ export function kafkaConnectLinkIssue(
   if (block.adapter !== "kc" && block.adapter !== "kafka_kc") return "This is not a Kafka Connect sink block.";
   if (sync.direction !== "sink") return "Only sink-direction syncs can be linked to flow sink blocks.";
 
-  const serviceId = String(block.serviceId ?? block.config.sinkServiceId ?? "").trim();
-  if (!serviceId) return "Select a sink destination service on the flow block first.";
   if (!block.entity?.trim()) return "Set the sink entity on the flow block first.";
 
   const flowTopic = flowSinkTopic(flow, block);

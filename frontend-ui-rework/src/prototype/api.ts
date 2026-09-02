@@ -290,12 +290,6 @@ export type FlowVerb =
 
 export async function listFlows(): Promise<Flow[]> {
   const data = await request<Flow[]>("/api/v2/flows/");
-  // Keep the UI usable when talking to an older backend or when a legacy
-  // flow was stored with a Kafka writer but without its materialized topic
-  // node. The backend now performs the same reconciliation, but applying the
-  // existing pure helper here makes the client tolerant during rolling
-  // restarts and keeps the topic column/messages selector consistent.
-  data.forEach(syncFlowTopics);
   cache.flows = data;
   loaded.flows = true;
   return data;
@@ -319,9 +313,7 @@ export async function getFlow(id: string): Promise<Flow | null> {
   const staged = stagedNewFlows.get(id);
   if (staged) return { ...staged };
   try {
-    const flow = await request<Flow>(`/api/v2/flows/${id}`);
-    syncFlowTopics(flow);
-    return flow;
+    return await request<Flow>(`/api/v2/flows/${id}`);
   } catch (err) {
     if (err instanceof ApiRequestError && err.status === 404) return null;
     throw err;
@@ -674,6 +666,17 @@ export async function validateKafkaConnectSync(id: string): Promise<Record<strin
 
 export async function applyKafkaConnectSync(id: string): Promise<KafkaConnectSync> {
   const raw = await request<Record<string, unknown>>(`/api/kafka-connect/syncs/${id}/apply`, { method: "POST" });
+  return mapKafkaConnectSync(raw);
+}
+
+/**
+ * Backfills a sync from the connector that already exists on the cluster —
+ * read-only on the worker: it copies the live config into the catalog record
+ * and never starts, stops or reconfigures anything. This is how every sync in
+ * the system was originally created.
+ */
+export async function adoptKafkaConnectSync(id: string): Promise<KafkaConnectSync> {
+  const raw = await request<Record<string, unknown>>(`/api/kafka-connect/syncs/${id}/adopt`, { method: "POST" });
   return mapKafkaConnectSync(raw);
 }
 

@@ -222,7 +222,15 @@ def test_sync_link_rejects_source_direction_and_topic_mismatch():
     assert "syncId" not in db.flows_v2.docs[0]["blocks"][0]["config"]
 
 
-def test_sync_link_rejects_missing_destination_service_and_topic():
+def test_sync_link_rejects_unattached_topic_and_missing_sync_topic():
+    # Post-migration, a kc/kafka_kc block's sink config is a verbatim
+    # passthrough (compiler no longer derives it from a bound Application
+    # Service), so "Select the sink destination service." was removed as a
+    # refusal here -- linking no longer cares whether a destination service
+    # is bound, only whether the flow side has a resolvable topic and the
+    # sync side has exactly one. This covers both of those still-real checks:
+    # the block's flow-topic attachment is missing, and the sync's own
+    # config has no `topics`/`topic` at all.
     db = FakeDB()
     db.flows_v2.docs.append(
         {
@@ -234,7 +242,7 @@ def test_sync_link_rejects_missing_destination_service_and_topic():
     client = client_for(db)
     sync = client.post(
         "/api/kafka-connect/syncs",
-        json={"name": "incomplete", "connector_class": "com.example.Sink", "config": {"topics": "orders-topic"}},
+        json={"name": "incomplete", "connector_class": "com.example.Sink", "config": {}},
     ).json()
     response = client.post(
         f"/api/kafka-connect/syncs/{sync['id']}/link",
@@ -242,8 +250,53 @@ def test_sync_link_rejects_missing_destination_service_and_topic():
     )
     assert response.status_code == 422
     messages = [issue["message"] for issue in response.json()["detail"]["issues"]]
-    assert any("sink destination service" in message for message in messages)
     assert any("Attach the Kafka Connect subscription" in message for message in messages)
+    assert any("Set exactly one topic" in message for message in messages)
+
+
+def test_sync_link_rejects_connector_class_mismatch():
+    # The flow block now carries its own complete sinkConfig (including
+    # connector.class) rather than pointing at a bound sink service; linking
+    # a sync whose connector_class disagrees with the block's sinkConfig
+    # connector.class must still be refused.
+    db = FakeDB()
+    db.flows_v2.docs.append(
+        {
+            "id": "flow-1",
+            "name": "Orders",
+            "topics": [{"id": "topic-1", "name": "orders-topic", "sealed": False}],
+            "blocks": [{
+                "id": "block-1",
+                "adapter": "kc",
+                "name": "Orders sink",
+                "entity": "orders",
+                "config": {
+                    "attachTopicId": "topic-1",
+                    "sinkConfig": {"connector.class": "org.apache.iceberg.connect.IcebergSinkConnector"},
+                },
+            }],
+        }
+    )
+    client = client_for(db)
+    sync = client.post(
+        "/api/kafka-connect/syncs",
+        json={
+            "name": "mismatched-class",
+            "connector_class": "com.example.OtherSinkConnector",
+            "config": {"connector.class": "com.example.OtherSinkConnector", "topics": "orders-topic"},
+        },
+    ).json()
+    response = client.post(
+        f"/api/kafka-connect/syncs/{sync['id']}/link",
+        json={"flow_id": "flow-1", "block_id": "block-1"},
+    )
+    assert response.status_code == 422
+    messages = [issue["message"] for issue in response.json()["detail"]["issues"]]
+    assert any("Connector class mismatch" in message for message in messages)
+    assert any(
+        "org.apache.iceberg.connect.IcebergSinkConnector" in message and "com.example.OtherSinkConnector" in message
+        for message in messages
+    )
 
 
 def test_flow_builder_link_is_resolved_and_delete_requires_retirement():
@@ -404,3 +457,35 @@ def test_delete_retired_remote_sync_requires_kafka_connect(monkeypatch):
     assert response.status_code == 503
     assert "could not be confirmed" in response.json()["detail"]
     assert db.kafka_connect_syncs_v2.docs[0]["retired"] is True
+
+
+def test_enabled_toggle_is_not_redacted_but_credentials_still_are():
+    from services.adapter.sink_secrets import merge_preserving_secrets, redact_config
+
+    config = {
+        "iceberg.catalog.token-refresh-enabled": "true",
+        "iceberg.catalog.credential": "real-credential",
+        "iceberg.catalog.s3.access-key-id": "real-access-key-id",
+        "iceberg.catalog.s3.secret-access-key": "real-secret-access-key",
+    }
+
+    redacted = redact_config(config)
+    assert redacted["iceberg.catalog.token-refresh-enabled"] == "true"
+    assert redacted["iceberg.catalog.credential"] == "[secret]"
+    assert redacted["iceberg.catalog.s3.access-key-id"] == "[secret]"
+    assert redacted["iceberg.catalog.s3.secret-access-key"] == "[secret]"
+
+    # Simulate a client round trip: the boolean comes back with its true
+    # value (never redacted so never a placeholder), the credentials come
+    # back as the placeholder because the client couldn't see their values.
+    incoming = {
+        "iceberg.catalog.token-refresh-enabled": "true",
+        "iceberg.catalog.credential": "[secret]",
+        "iceberg.catalog.s3.access-key-id": "[secret]",
+        "iceberg.catalog.s3.secret-access-key": "[secret]",
+    }
+    merged = merge_preserving_secrets(incoming, config)
+    assert merged["iceberg.catalog.token-refresh-enabled"] == "true"
+    assert merged["iceberg.catalog.credential"] == "real-credential"
+    assert merged["iceberg.catalog.s3.access-key-id"] == "real-access-key-id"
+    assert merged["iceberg.catalog.s3.secret-access-key"] == "real-secret-access-key"

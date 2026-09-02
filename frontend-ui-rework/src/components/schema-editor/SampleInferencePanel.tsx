@@ -210,7 +210,7 @@ export function SampleInferencePanel({
               >
                 <FileJson className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <p className="flex flex-wrap items-center gap-1.5 text-sm">
+                  <span className="flex flex-wrap items-center gap-1.5 text-sm">
                     <span className="truncate font-mono text-xs">{file.name}</span>
                     {file.status === "reading" && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -225,7 +225,7 @@ export function SampleInferencePanel({
                         <span className="text-xs text-muted-foreground">{topLevel}</span>
                       </>
                     )}
-                  </p>
+                  </span>
                   {file.status === "error" && <p className="text-xs text-destructive">{file.error}</p>}
                   {parsed?.notes?.map((note) => (
                     <p key={note} className="text-xs text-muted-foreground">
