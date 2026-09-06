@@ -1,30 +1,40 @@
 import type { KafkaConnectSync } from "./api";
-import type { Flow } from "./types";
+import type { ConnectRunState, Flow } from "./types";
 
-export type SyncConfigurationState = "draft" | "needs_review" | "synced" | "changes_pending";
-export type SyncPrimaryAction = "create" | "apply" | null;
+/**
+ * Which runtime verbs are legal for one sink, given its LIVE state from
+ * `GET /flows/{flowId}/sink-status` — not the sync record's persisted
+ * `remotePresent`/`configurationState` flags this used to key off of. Those
+ * flags reflect what was last configured/applied, which is exactly the stale
+ * signal the live sink-status endpoint replaced: a sink can fail on the
+ * cluster and a persisted flag would keep saying it's fine.
+ *
+ * `state: null` means the cluster could not be reached (see
+ * `FlowSinkStatusResponse.reachable`) — offering Start there could create a
+ * duplicate of a connector that's simply unreachable right now, so nothing
+ * is offered.
+ */
+export type SinkVerb = "start" | "stop" | "pause" | "resume" | "restart";
 
-/** The primary configuration action is intentionally absent when nothing is pending. */
-export function syncPrimaryAction(sync: Pick<KafkaConnectSync, "remotePresent" | "configurationState" | "retired">): SyncPrimaryAction {
-  if (sync.retired) return null;
-  if (!sync.remotePresent) return "create";
-  if (sync.configurationState === "changes_pending") return "apply";
-  return null;
-}
-
-export function syncConfigurationLabel(
-  sync: Pick<KafkaConnectSync, "remotePresent" | "configurationState">,
-): string {
-  if (!sync.remotePresent || sync.configurationState === "draft") return "Draft — no connector";
-  if (sync.configurationState === "changes_pending") return "Changes pending";
-  if (sync.configurationState === "needs_review") return "Needs review";
-  return "Synced";
-}
-
-export function runtimeControlsAvailable(
-  sync: Pick<KafkaConnectSync, "enabled" | "remotePresent" | "configurationState" | "retired">,
-): boolean {
-  return sync.enabled && sync.remotePresent && !sync.retired && sync.configurationState !== "changes_pending";
+export function sinkVerbsAvailable(state: ConnectRunState | null): SinkVerb[] {
+  switch (state) {
+    case "UNDEPLOYED":
+      return ["start"];
+    case "RUNNING":
+      return ["pause", "stop", "restart"];
+    case "PAUSED":
+      return ["resume", "stop", "restart"];
+    case "STOPPED":
+      return ["start", "restart"];
+    case "FAILED":
+    case "UNASSIGNED":
+    case "RESTARTING":
+      return ["stop", "restart"];
+    case null:
+      return [];
+    default:
+      return [];
+  }
 }
 
 export function kafkaConnectSyncDeleteImpact(

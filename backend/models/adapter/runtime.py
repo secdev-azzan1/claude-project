@@ -73,7 +73,9 @@ class ControllerServiceRuntime(BaseModel):
 
 # ---------------------------------------------------------- Connect runtime
 
-ConnectRunState = Literal["RUNNING", "PAUSED", "FAILED", "UNASSIGNED", "RESTARTING"]
+ConnectRunState = Literal[
+    "RUNNING", "PAUSED", "STOPPED", "FAILED", "UNASSIGNED", "RESTARTING", "UNDEPLOYED"
+]
 
 
 class ConnectTaskRuntime(BaseModel):

@@ -720,7 +720,14 @@ function FlowMapViewInner({
         onReconnect={onReconnect}
         onReconnectEnd={onReconnectEnd}
         isValidConnection={isValidConnection}
-        onPaneClick={() => setDropMenu(null)}
+        // Clicking an empty part of the canvas clears the selected block/topic
+        // and returns the right-hand surface to flow-level settings. Keep the
+        // add menu dismissal here as well so both empty-canvas behaviours stay
+        // in sync.
+        onPaneClick={() => {
+          setDropMenu(null);
+          onSelect("flow");
+        }}
         fitView
         fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={ZOOM_FLOOR}

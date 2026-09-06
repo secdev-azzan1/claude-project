@@ -22,7 +22,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from services.adapter.common import COLLECTIONS
+from services.adapter.connector_names import connector_names_for_flow, resolve_flow_connector_names
 from services.adapter.deployer import connect_apply, lifecycle, nifi_apply, topics
+from services.adapter import runtime as runtime_mod
 from tests.resilience.conftest import FaultInjectingCollection
 
 
@@ -46,6 +48,7 @@ class FakeDB:
         self.schemas_v2 = FaultInjectingCollection()
         self.runtimes_v2 = FaultInjectingCollection()
         self.audit_v2 = FaultInjectingCollection()
+        self.kafka_connect_syncs_v2 = FaultInjectingCollection()
 
     def __getitem__(self, name):
         return getattr(self, name)
@@ -222,6 +225,20 @@ def _patch_provenance_probes(monkeypatch):
 
     monkeypatch.setattr(lifecycle, "probe_nifi_fingerprint", fake_nifi_probe)
     monkeypatch.setattr(lifecycle, "probe_kafka_connect_fingerprint", fake_connect_probe)
+
+
+def _patch_kc_reachable(monkeypatch, *, reachable: bool = True):
+    """`delete()`'s reachability guard calls the real
+    `kafka_connect_client.get_cluster_info` before doing anything
+    destructive — stub it so delete tests seeding a kafka_connect connection
+    (a fake, unreachable `https://connect.test`) stay offline and
+    deterministic instead of depending on a real DNS/connection failure."""
+    async def fake_get_cluster_info(kc_conn):
+        if reachable:
+            return {"ok": True, "reachable": True, "data": {}}
+        return {"ok": False, "reachable": False, "error": "Connect unreachable"}
+
+    monkeypatch.setattr(lifecycle.kafka_connect_client, "get_cluster_info", fake_get_cluster_info)
 
 
 def _patch_ensure_topics_ok(monkeypatch, calls: list):
@@ -419,18 +436,22 @@ async def test_undeploy_keeps_dlq_and_empties_only_owned_topics(monkeypatch):
 
     monkeypatch.setattr(topics, "empty_topic", fake_empty_topic)
 
-    delete_connectors_calls = []
+    stop_connectors_calls = []
 
-    async def fake_delete_connectors(kc_conn, names):
-        delete_connectors_calls.append(names)
+    async def fake_stop_connectors(kc_conn, names):
+        stop_connectors_calls.append(names)
         return []
 
-    monkeypatch.setattr(connect_apply, "delete_connectors", fake_delete_connectors)
+    monkeypatch.setattr(connect_apply, "stop_connectors", fake_stop_connectors)
 
     result = await lifecycle.undeploy(fake_db, flow_doc)
 
     assert delete_pg_calls == ["pg-root"]
-    assert delete_connectors_calls == []  # no connector names in scope map on this flow
+    # This flow has no kafka_kc block at all (b2 is adapter "kafka"), so the
+    # resolver legitimately finds no connectors -- see
+    # test_undeploy_stops_rather_than_deletes_kc_connectors below for the
+    # actual stop-not-delete behavior with a real kc block.
+    assert stop_connectors_calls == []
     # Exactly the owned data topic is emptied -- the DLQ ("dlq.test_flow")
     # never appears in any block's `topics` list (compile_flow gives it
     # ownerBlockId=None), so it is never a candidate here either.
@@ -443,6 +464,57 @@ async def test_undeploy_keeps_dlq_and_empties_only_owned_topics(monkeypatch):
     assert result["runtimeScopeMap"] is None
     undeployed = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow undeployed"]
     assert len(undeployed) == 1
+
+
+@async_test
+async def test_undeploy_stops_rather_than_deletes_kc_connectors(monkeypatch):
+    """KEY BEHAVIORAL CHANGE: undeploy() must STOP a flow's Kafka Connect
+    connectors, not delete them -- an undeployed flow keeps its connectors
+    (config + offsets intact) on the cluster, ready to be picked back up by
+    a redeploy. Deletion is now `delete()`'s job alone."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    flow_doc = _kc_flow(
+        flow_id="flow-u-kc1", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root",
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {}, "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka_kc", "engine": "nifi", "groupName": "to_iceberg__kafka_kc", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": ["kc_flow.b2.kafka_kc"], "topics": ["raw.kc_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    async def fake_empty_topic(kafka_conn, topic):
+        return {"ok": True, "cleared_messages": 0}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+    monkeypatch.setattr(topics, "empty_topic", fake_empty_topic)
+
+    delete_connectors_calls = []
+    stop_connectors_calls = []
+
+    async def fail_if_deleted(kc_conn, names):
+        delete_connectors_calls.append(names)
+        raise AssertionError("undeploy must not delete connectors")
+
+    async def fake_stop_connectors(kc_conn, names):
+        stop_connectors_calls.append(names)
+        assert kc_conn["endpoint"] == "https://connect.test"
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(connect_apply, "delete_connectors", fail_if_deleted)
+    monkeypatch.setattr(connect_apply, "stop_connectors", fake_stop_connectors)
+
+    result = await lifecycle.undeploy(fake_db, flow_doc)
+
+    assert delete_connectors_calls == []
+    assert stop_connectors_calls == [["kc_flow.b2.kafka_kc"]]
+    assert result["runtimeScopeMap"] is None
+    assert result["state"] == "Draft"
 
 
 # -------------------------------------------------------------- 4. stop_clear
@@ -661,6 +733,7 @@ async def test_delete_after_repair_still_deletes_connectors_and_topics(monkeypat
     (proven live -- docs/orchestration/e2e/journey-a-e.md DEFECT 6)."""
     fake_db = FakeDB()
     _seed_core_connections(fake_db, kafka_connect=True)
+    _patch_kc_reachable(monkeypatch)
     flow_doc = _kc_flow(
         flow_id="flow-repair-1", state="Draft", deployedAt=None, nifiProcessGroupId=None,
         runtimeScopeMap={
@@ -710,6 +783,7 @@ async def test_delete_after_repair_still_deletes_connectors_and_topics(monkeypat
 async def test_delete_records_orphan_when_connector_delete_fails(monkeypatch):
     fake_db = FakeDB()
     _seed_core_connections(fake_db, kafka_connect=True)
+    _patch_kc_reachable(monkeypatch)
     flow_doc = _kc_flow(
         flow_id="flow-repair-2", state="Draft", deployedAt=None, nifiProcessGroupId=None,
         runtimeScopeMap={
@@ -734,6 +808,118 @@ async def test_delete_records_orphan_when_connector_delete_fails(monkeypatch):
     assert result["orphans"] == [{"kind": "connector", "ref": "kc_flow.b2.kafka_kc", "reason": "Connect unreachable"}]
     deleted_events = [e for e in fake_db.audit_v2.docs if e["action"] == "Flow deleted"]
     assert "connector" in deleted_events[0]["details"]
+
+
+@async_test
+async def test_delete_removes_the_flows_sync_record(monkeypatch):
+    """Feature 2 happy path: deleting a flow must sweep its
+    `kafka_connect_syncs_v2` record(s), not just the connector on the
+    cluster -- otherwise the sync doc is left pointing at a `linked_flow_id`
+    that no longer exists."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    _patch_kc_reachable(monkeypatch)
+    flow_doc = _kc_flow(flow_id="flow-sync-sweep-1")
+    flow_doc["blocks"][1]["config"]["syncId"] = "sync-sweep-1"
+    fake_db.flows_v2.docs.append(flow_doc)
+    fake_db.kafka_connect_syncs_v2.docs.append(
+        {
+            "id": "sync-sweep-1",
+            "connector_name": "kc_flow.b2.kafka_kc",
+            "linked_flow_id": "flow-sync-sweep-1",
+            "linked_block_id": "b2",
+        }
+    )
+
+    async def fake_delete_connectors(kc_conn, names):
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(connect_apply, "delete_connectors", fake_delete_connectors)
+
+    async def fake_delete_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    result = await lifecycle.delete(fake_db, flow_doc)
+
+    assert result["ok"] is True
+    assert fake_db.kafka_connect_syncs_v2.docs == []
+
+
+@async_test
+async def test_delete_does_not_remove_sync_still_referenced_by_another_flow(monkeypatch):
+    """Guard 1: a sync can legally be linked (via `block.config.syncId`)
+    from several flows. Deleting one of those flows must NOT delete a sync
+    another flow still references -- the true source of truth for "who
+    references this sync" is each flow's own block.config.syncId, not the
+    sync doc's own (possibly stale) linked_flow_id/linked_block_id fields."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    _patch_kc_reachable(monkeypatch)
+
+    flow_a = _kc_flow(flow_id="flow-shared-a")
+    flow_a["blocks"][1]["config"]["syncId"] = "shared-sync"
+    flow_b = _kc_flow(flow_id="flow-shared-b")
+    flow_b["blocks"][1]["config"]["syncId"] = "shared-sync"
+    fake_db.flows_v2.docs.extend([flow_a, flow_b])
+
+    fake_db.kafka_connect_syncs_v2.docs.append(
+        {
+            "id": "shared-sync",
+            "connector_name": "kc_flow.b2.kafka_kc",
+            # Stored link only points at flow_a -- flow_b's reference lives
+            # solely in its block's config.syncId, which is exactly the case
+            # this guard must still catch.
+            "linked_flow_id": "flow-shared-a",
+            "linked_block_id": "b2",
+        }
+    )
+
+    async def fake_delete_connectors(kc_conn, names):
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(connect_apply, "delete_connectors", fake_delete_connectors)
+
+    async def fake_delete_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    result = await lifecycle.delete(fake_db, flow_a)
+
+    assert result["ok"] is True
+    # Sync survives -- flow_b (still in the DB) still references it.
+    assert [s["id"] for s in fake_db.kafka_connect_syncs_v2.docs] == ["shared-sync"]
+
+
+@async_test
+async def test_delete_refused_when_kafka_connect_unreachable(monkeypatch):
+    """Guard 2 -- the deliberate asymmetry with save_flow_v2: a flow delete
+    destroys every handle (flow doc + sync records + connectors)
+    simultaneously, so it must be refused outright if Kafka Connect cannot
+    be confirmed reachable first -- proceeding anyway would strand the
+    connector(s) with nothing left pointing at them."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    _patch_kc_reachable(monkeypatch, reachable=False)
+    flow_doc = _kc_flow(flow_id="flow-unreachable-1")
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fail_if_called(*args, **kwargs):
+        raise AssertionError("delete() must refuse before touching connectors/topics/the flow doc")
+
+    monkeypatch.setattr(connect_apply, "delete_connectors", fail_if_called)
+    monkeypatch.setattr(topics, "delete_topic", fail_if_called)
+
+    try:
+        await lifecycle.delete(fake_db, flow_doc)
+        assert False, "expected LifecycleError"
+    except lifecycle.LifecycleError as exc:
+        assert "unreachable" in str(exc).lower()
+
+    # Nothing was touched.
+    assert fake_db.flows_v2.docs == [flow_doc]
 
 
 @async_test
@@ -836,9 +1022,14 @@ async def test_undeploy_reports_bookmark_cleanup_failure(monkeypatch):
 
 @async_test
 async def test_delete_still_undeploys_when_deployed_and_records_no_double_connector_delete(monkeypatch):
-    """When the flow IS still deployed, `undeploy()` runs (and handles
-    connectors itself) -- the post-repair best-effort connector path must
-    not run a SECOND time on top of it."""
+    """When the flow IS still deployed, `undeploy()` still runs first (for
+    the NiFi PG teardown / bookmark cleanup / topic-emptying it does) --
+    this fixture has no kafka_kc block, so there is nothing for either
+    undeploy's stop step or delete's own delete step to act on either way.
+    See test_delete_deletes_connectors_even_when_flow_was_deployed below for
+    the case that actually exercises a connector: undeploy() only stops it,
+    delete()'s own always-runs delete step is what removes it -- not a
+    double delete, since the two are different operations now."""
     fake_db = FakeDB()
     _seed_core_connections(fake_db)
     flow_doc = _http_kafka_flow(
@@ -884,6 +1075,70 @@ async def test_delete_still_undeploys_when_deployed_and_records_no_double_connec
     assert result["ok"] is True
     assert set(delete_topic_calls) == {"dlq.test_flow", "raw.test_flow.thing"}
     assert result["orphans"] == []
+
+
+@async_test
+async def test_delete_deletes_connectors_even_when_flow_was_deployed(monkeypatch):
+    """CRITICAL FIX: `delete()` must always delete the flow's connectors via
+    the resolver, unconditionally -- previously this only happened in the
+    `not was_deployed` branch, relying on `undeploy()` having deleted them
+    in the other branch. Now that `undeploy()` only STOPS connectors (never
+    deletes), a delete of a still-deployed flow used to leak every one of
+    its connectors. This is that regression test: `undeploy()` runs first
+    (real, not monkeypatched) and stops the connector, then delete()'s own
+    always-runs step must still delete it."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    _patch_kc_reachable(monkeypatch)
+    flow_doc = _kc_flow(
+        flow_id="flow-del-deployed-kc1", state="Stopped", deployedAt="2026-08-01T00:00:00.000Z", nifiProcessGroupId="pg-root",
+        runtimeScopeMap={
+            "b1": {"adapter": "http", "engine": "nifi", "groupName": "fetch__http", "processGroupId": "pg-b1",
+                   "components": {}, "connectorNames": [], "topics": []},
+            "b2": {"adapter": "kafka_kc", "engine": "nifi", "groupName": "to_iceberg__kafka_kc", "processGroupId": "pg-b2",
+                   "components": {}, "connectorNames": ["kc_flow.b2.kafka_kc"], "topics": ["raw.kc_flow.thing"]},
+        },
+    )
+    fake_db.flows_v2.docs.append(flow_doc)
+
+    async def fake_delete_flow_pg(nifi_conn, pg_id):
+        return {"ok": True}
+
+    monkeypatch.setattr(nifi_apply, "delete_flow_pg", fake_delete_flow_pg)
+
+    async def fake_empty_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "empty_topic", fake_empty_topic)
+
+    async def fake_delete_topic(kafka_conn, name):
+        return {"ok": True}
+
+    monkeypatch.setattr(topics, "delete_topic", fake_delete_topic)
+
+    stop_connectors_calls = []
+    delete_connectors_calls = []
+
+    async def fake_stop_connectors(kc_conn, names):
+        stop_connectors_calls.append(list(names))
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    async def fake_delete_connectors(kc_conn, names):
+        delete_connectors_calls.append(list(names))
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(connect_apply, "stop_connectors", fake_stop_connectors)
+    monkeypatch.setattr(connect_apply, "delete_connectors", fake_delete_connectors)
+
+    result = await lifecycle.delete(fake_db, flow_doc)
+
+    # undeploy() (real, unpatched) stopped it first...
+    assert stop_connectors_calls == [["kc_flow.b2.kafka_kc"]]
+    # ...and delete()'s own always-runs step deleted it for good.
+    assert delete_connectors_calls == [["kc_flow.b2.kafka_kc"]]
+    assert result["ok"] is True
+    assert result["orphans"] == []
+    assert fake_db.flows_v2.docs == []
 
 
 # ------------------------------------------------- 7b. Journey-R teardown gap: delete after undeploy
@@ -1522,3 +1777,180 @@ async def test_deploy_redeploy_does_not_flag_its_own_prior_live_topic(monkeypatc
 
     result = await lifecycle.deploy(fake_db, flow_doc)
     assert result["state"] == "Stopped"
+
+
+# ------------------------------------------------------- 9. connector_names resolver
+#
+# `services/adapter/connector_names.py`: the union-of-two-paths source of
+# truth for a flow's connector names, deliberately independent of
+# `runtimeScopeMap`. See that module's docstring for the full rationale.
+
+
+@async_test
+async def test_resolver_prefers_recorded_sync_name_over_derived():
+    """Path 1 of the resolver (walking the flow's live blocks): when a kc
+    block has a linked `KafkaConnectSync` with a recorded `connector_name`,
+    that name wins over the deterministic derivation -- some flows carry
+    legacy names (e.g. `bronze.fortisiem.device__raw.avro__iceberg`) that
+    the current naming scheme cannot reproduce."""
+    fake_db = FakeDB()
+    flow_doc = _kc_flow(flow_id="flow-legacy-1")
+    flow_doc["blocks"][1]["config"]["syncId"] = "sync-1"
+    fake_db.kafka_connect_syncs_v2.docs.append({
+        "id": "sync-1", "name": "legacy sync", "connector_name": "bronze.fortisiem.device__raw.avro__iceberg",
+        "linked_flow_id": "flow-legacy-1", "linked_block_id": "b2",
+    })
+
+    names = await resolve_flow_connector_names(fake_db, flow_doc)
+
+    assert names == ["bronze.fortisiem.device__raw.avro__iceberg"]
+
+
+def test_connector_names_for_flow_derives_when_no_sync_recorded():
+    """Same block, but with no matching sync record at all -- falls back to
+    the deterministic `<flowToken>.<blockId>.<adapter>` derivation."""
+    flow_doc = _kc_flow(flow_id="flow-derive-1")
+
+    names = connector_names_for_flow(flow_doc, syncs=[])
+
+    assert names == ["kc_flow.b2.kafka_kc"]
+
+
+def test_connector_names_does_not_cross_flows_on_colliding_block_id():
+    """Regression for the cross-flow mis-attribution bug: block ids are only
+    unique *within* a flow, not globally. Two unrelated flows here both
+    happen to contain a block literally named `b2` (the shared id `_kc_flow`
+    always uses), each linked to its own distinct sync via `config.syncId`.
+    A lookup keyed by the sync's stored `linked_block_id` (instead of the
+    block's own `config.syncId`) would collide on that shared id and hand
+    flow A the sync belonging to flow B -- exactly what happened in
+    production between `flow-9pey8p` and `flow-s1-site` on block id
+    `b-site-avro-write`. This test must fail against that implementation."""
+    flow_a = _kc_flow(flow_id="flow-collide-a")
+    flow_a["blocks"][1]["config"]["syncId"] = "sync-a"
+    flow_b = _kc_flow(flow_id="flow-collide-b")
+    flow_b["blocks"][1]["config"]["syncId"] = "sync-b"
+
+    syncs = [
+        {
+            "id": "sync-a", "connector_name": "connector-a",
+            "linked_flow_id": "flow-collide-a", "linked_block_id": "b2",
+        },
+        {
+            # Same `linked_block_id` ("b2") as sync-a above -- this is the
+            # global collision. Processed after sync-a, so a `linked_block_id`
+            # keyed dict would have this one "win" and overwrite sync-a's
+            # entry for the shared block id.
+            "id": "sync-b", "connector_name": "connector-b",
+            "linked_flow_id": "flow-collide-b", "linked_block_id": "b2",
+        },
+    ]
+
+    names_a = connector_names_for_flow(flow_a, syncs=syncs)
+    names_b = connector_names_for_flow(flow_b, syncs=syncs)
+
+    assert names_a == ["connector-a"]
+    assert "connector-b" not in names_a
+    assert names_b == ["connector-b"]
+    assert "connector-a" not in names_b
+
+
+def test_connector_names_resolves_via_config_sync_id_not_global_linked_block_id():
+    """A block's `config.syncId` is the sole path-1 resolution key. Even when
+    some other, unrelated sync in the system claims the same
+    `linked_block_id` as this block's id, the block must resolve to the sync
+    its `config.syncId` actually names, and use that sync's recorded
+    `connector_name`."""
+    flow_doc = _kc_flow(flow_id="flow-correct-lookup-1")
+    flow_doc["blocks"][1]["config"]["syncId"] = "sync-correct"
+
+    syncs = [
+        {
+            "id": "sync-correct", "connector_name": "correct-connector",
+            "linked_flow_id": "flow-correct-lookup-1", "linked_block_id": "b2",
+        },
+        {
+            # Unrelated sync from a different flow that happens to also
+            # claim `linked_block_id` "b2" -- must be ignored entirely since
+            # this flow's block never names it via config.syncId.
+            "id": "sync-imposter", "connector_name": "imposter-connector",
+            "linked_flow_id": "some-other-flow", "linked_block_id": "b2",
+        },
+    ]
+
+    names = connector_names_for_flow(flow_doc, syncs=syncs)
+
+    assert names == ["correct-connector"]
+
+
+@async_test
+async def test_resolver_finds_sync_for_a_block_that_no_longer_exists():
+    """Path 2 of the resolver: a `KafkaConnectSync` whose stored
+    `linked_flow_id` still points at this flow, even though the block it
+    was originally linked to has since been deleted from `flow_doc.blocks`.
+    Path 1 alone (which only ever walks *current* blocks) would miss this
+    connector entirely -- exactly the gap that let connectors get orphaned
+    when a block was edited/removed while the Connect cluster was
+    unreachable."""
+    fake_db = FakeDB()
+    flow_doc = _kc_flow(flow_id="flow-orphan-block-1")
+    flow_doc["blocks"] = [b for b in flow_doc["blocks"] if b["id"] != "b2"]  # block b2 deleted
+    fake_db.kafka_connect_syncs_v2.docs.append({
+        "id": "sync-2", "name": "orphaned sync", "connector_name": "kc_flow.b2.kafka_kc",
+        "linked_flow_id": "flow-orphan-block-1", "linked_block_id": "b2",
+    })
+
+    names = await resolve_flow_connector_names(fake_db, flow_doc)
+
+    assert names == ["kc_flow.b2.kafka_kc"]
+
+
+@async_test
+async def test_resolver_works_when_runtime_scope_map_is_null():
+    """The entire point of this resolver: it must not depend on
+    `runtimeScopeMap` at all. A flow that has never been deployed (map is
+    null) but already has kc blocks + sync records still resolves correctly."""
+    fake_db = FakeDB()
+    flow_doc = _kc_flow(flow_id="flow-never-deployed-1")
+    assert flow_doc["runtimeScopeMap"] is None
+
+    names = await resolve_flow_connector_names(fake_db, flow_doc)
+
+    assert names == ["kc_flow.b2.kafka_kc"]
+
+
+@async_test
+async def test_read_connectors_reports_undeployed_for_missing_connector_not_unassigned(monkeypatch):
+    """A connector name the resolver returns but that the cluster listing
+    doesn't know about at all (never created on this cluster, or deleted
+    out from under the flow) must be reported as UNDEPLOYED -- NOT
+    UNASSIGNED, which is Kafka Connect's own term for a connector that
+    exists but hasn't had a task scheduled yet. A connector that IS present
+    in the listing but reports no run state is left alone as the genuine
+    UNASSIGNED case."""
+    fake_db = FakeDB()
+    _seed_core_connections(fake_db, kafka_connect=True)
+    connections = await lifecycle._load_connections(fake_db)
+    flow_doc = {
+        "id": "flow-rt-1",
+        "name": "RT Flow",
+        "blocks": [
+            {"id": "b2", "adapter": "kafka_kc", "config": {}},
+            {"id": "b3", "adapter": "kafka_kc", "config": {}},
+        ],
+        "runtimeScopeMap": None,
+    }
+
+    async def fake_list_connectors_with_status(kc_conn):
+        # "rt_flow.b2.kafka_kc" is entirely absent (never created / deleted
+        # out from under the flow); "rt_flow.b3.kafka_kc" is present but its
+        # status carries no connector state at all.
+        return {"ok": True, "data": {"rt_flow.b3.kafka_kc": {"status": {"connector": {}}, "info": {"config": {}}}}}
+
+    monkeypatch.setattr(runtime_mod.kafka_connect_client, "list_connectors_with_status", fake_list_connectors_with_status)
+
+    result = await runtime_mod._read_connectors(fake_db, connections, flow_doc)
+
+    by_name = {r["name"]: r["state"] for r in result}
+    assert by_name["rt_flow.b2.kafka_kc"] == "UNDEPLOYED"
+    assert by_name["rt_flow.b3.kafka_kc"] == "UNASSIGNED"

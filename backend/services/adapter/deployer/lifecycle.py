@@ -49,6 +49,7 @@ from models.adapter import AppService, ApprovedSchema, Flow, FlowBlock, GatewayP
 from services import kafka_connect_client
 from services.adapter.common import COLLECTIONS, audit, now_iso
 from services.adapter.compiler import CompileContext, CompileError, DeploymentPlan, compile_flow
+from services.adapter.connector_names import resolve_flow_connector_names
 from services.adapter.legality import root_block
 from services.adapter.naming import dlq_name
 from services.adapter.validation import GatewaySnapshot, deploy_preflight
@@ -582,6 +583,27 @@ async def _deploy_impl(
             await connect_apply.create_connectors(_kafka_connect_conn_dict(kc_conn_doc), plan.connectors)
         except connect_apply.ConnectApplyError as exc:
             await nifi_apply.delete_flow_pg(nifi_conn, applied.process_group_id)
+            if exc.surviving_names:
+                # The partial-create rollback in connect_apply couldn't
+                # delete every connector it had already made -- they're
+                # still live on the cluster even though this deploy as a
+                # whole failed and the flow stays Draft. Stamp them onto
+                # `drift` (same field/shape services.py uses for "your
+                # running state no longer matches what's saved") so they
+                # are visible instead of silently orphaned.
+                await db[COLLECTIONS.flows].update_one(
+                    {"id": flow.id},
+                    {
+                        "$set": {
+                            "drift": (
+                                "Deploy failed partway through and left connector(s) behind on "
+                                f"Kafka Connect that could not be cleaned up: {', '.join(exc.surviving_names)}. "
+                                "They must be removed manually or reclaimed by a future deploy of this flow."
+                            ),
+                            "updatedAt": now_iso(),
+                        }
+                    },
+                )
             await audit(db, action="Flow deploy failed", target=flow.name, status="Failed", details=str(exc), object="Flow")
             raise LifecycleError(str(exc)) from exc
 
@@ -636,14 +658,6 @@ async def redeploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
 # ------------------------------------------------------------------- run verbs
 
 
-def _all_connector_names(flow_doc: Dict[str, Any]) -> List[str]:
-    scope_map = flow_doc.get("runtimeScopeMap") or {}
-    names: List[str] = []
-    for entry in scope_map.values():
-        names.extend((entry or {}).get("connectorNames") or [])
-    return names
-
-
 # The plan `key`s that identify a root block's trigger/ingest processor(s),
 # by adapter convention: "trigger" (http root — GenerateFlowFile,
 # compiler-spec.md §3.1), "query" (jdbc root — QueryDatabaseTableRecord
@@ -680,11 +694,19 @@ async def start(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     if not result.get("ok"):
         raise LifecycleError(result.get("error") or "Failed to start the NiFi process group.")
 
-    connector_names = _all_connector_names(flow_doc)
+    connector_names = await resolve_flow_connector_names(db, flow_doc)
     if connector_names:
         kc_conn_doc = _active_connection(connections, "kafka_connect")
         if kc_conn_doc:
-            await connect_apply.start_connectors(_kafka_connect_conn_dict(kc_conn_doc), connector_names)
+            start_results = await connect_apply.start_connectors(_kafka_connect_conn_dict(kc_conn_doc), connector_names)
+            # Chosen: raise rather than silently record, matching this
+            # function's own nifi_apply.start_pg check three lines up --
+            # a flow whose connectors failed to start is not actually
+            # "Running" in any honest sense, so it must not be persisted
+            # as such just because the NiFi side alone succeeded.
+            failed = [r["name"] for r in start_results if not r.get("ok")]
+            if failed:
+                raise LifecycleError(f"NiFi process group started, but failed to start connector(s): {', '.join(failed)}")
 
     now = now_iso()
     await db[COLLECTIONS.flows].update_one({"id": flow.id}, {"$set": {"state": "Running", "lastRunAt": now, "updatedAt": now}})
@@ -742,7 +764,7 @@ async def stop(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     if not result.get("ok"):
         raise LifecycleError(result.get("error") or "Failed to stop the NiFi process group.")
 
-    connector_names = _all_connector_names(flow_doc)
+    connector_names = await resolve_flow_connector_names(db, flow_doc)
     if connector_names:
         kc_conn_doc = _active_connection(connections, "kafka_connect")
         if kc_conn_doc:
@@ -769,7 +791,7 @@ async def stop_clear(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     if not result.get("ok"):
         raise LifecycleError(result.get("error") or "Failed to stop the NiFi process group.")
 
-    connector_names = _all_connector_names(flow_doc)
+    connector_names = await resolve_flow_connector_names(db, flow_doc)
     if connector_names:
         kc_conn_doc = _active_connection(connections, "kafka_connect")
         if kc_conn_doc:
@@ -859,10 +881,17 @@ async def undeploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     if pg_id and nifi_conn_doc:
         await nifi_apply.delete_flow_pg(_nifi_conn_dict(nifi_conn_doc), pg_id)
 
-    connector_names = _all_connector_names(flow_doc)
+    # KEY BEHAVIORAL CHANGE: undeploy no longer deletes the flow's
+    # connectors -- it stops them, same as `stop`/`stop_clear`. An
+    # undeployed flow keeps its connectors (config + offsets intact) on
+    # the cluster, ready to be picked back up by a redeploy; `delete` is
+    # the verb that actually removes them for good. This also means
+    # connector identity can no longer depend on `runtimeScopeMap` (nulled
+    # below) -- the resolver is what makes that possible.
+    connector_names = await resolve_flow_connector_names(db, flow_doc)
     kc_conn_doc = _active_connection(connections, "kafka_connect")
     if connector_names and kc_conn_doc:
-        await connect_apply.delete_connectors(_kafka_connect_conn_dict(kc_conn_doc), connector_names)
+        await connect_apply.stop_connectors(_kafka_connect_conn_dict(kc_conn_doc), connector_names)
 
     owned_topics = _owned_data_topic_names(flow_doc)
     kafka_conn_doc = _active_connection(connections, "kafka")
@@ -917,6 +946,25 @@ async def undeploy(db, flow_doc: Dict[str, Any]) -> Dict[str, Any]:
     return result_doc
 
 
+async def _flow_ids_referencing_sync(db, sync_id: str, *, exclude_flow_id: str) -> List[str]:
+    """Every OTHER flow whose block config still carries `syncId ==
+    sync_id`. Mirrors `routers/kafka_connect.py`'s `_linked_sync_flow_docs`
+    query (block config is the dependency source of truth, not the sync
+    doc's own `linked_flow_id`/`linked_block_id` convenience fields, which
+    can go stale) rather than importing it, to keep this module -- the only
+    one in `services/adapter/deployer` that touches Mongo -- independent of
+    the routers layer. A sync can legally be linked from several flows'
+    blocks, so `delete()` must never remove one still claimed elsewhere."""
+    flows = await db[COLLECTIONS.flows].find(
+        {"id": {"$ne": exclude_flow_id}}, {"_id": 0, "id": 1, "blocks": 1}
+    ).to_list(10000)
+    return [
+        f.get("id")
+        for f in flows
+        if any((b.get("config") or {}).get("syncId") == sync_id for b in f.get("blocks") or [])
+    ]
+
+
 async def delete(
     db,
     flow_doc: Dict[str, Any],
@@ -930,31 +978,47 @@ async def delete(
     all dedup namespaces (`clearCache=True`); omitted options preserve the
     historical delete behaviour.
 
-    E7 fix: `undeploy()` above is the ONLY place that deletes this flow's
-    Kafka Connect connectors, and it only runs when `deployedAt` /
-    `nifiProcessGroupId` are still set. After `runtime.repair_runtime`
-    force-clears both (returning the flow to Draft) while deliberately
-    KEEPING `runtimeScopeMap` — including its `connectorNames` — a delete
-    right after a repair used to skip `undeploy()` entirely and leave the
-    flow's connectors permanently orphaned (proven live,
-    docs/orchestration/e2e/journey-a-e.md DEFECT 6). Connectors (and, for
-    symmetry/robustness, the topic deletes below) are now always
-    best-effort attempted regardless of whether `undeploy()` ran, and any
-    individual failure is recorded as an orphan entry rather than silently
-    dropped (`lifecycle.py` MINOR 13 in the review: `delete_topic` failures
-    used to be swallowed outright).
+    CRITICAL: `undeploy()` no longer deletes this flow's Kafka Connect
+    connectors — it stops them (see undeploy's docstring/comment). That
+    means `delete()` itself is now the ONLY place that ever deletes them,
+    and it must do so unconditionally via the resolver, regardless of
+    whether `was_deployed`/`undeploy()` ran above. (This also subsumes the
+    older E7 gap this comment used to describe: `runtime.repair_runtime`
+    force-clearing `deployedAt`/`nifiProcessGroupId` while keeping
+    `runtimeScopeMap` used to make a delete-right-after-repair skip
+    `undeploy()`'s connector cleanup entirely and orphan the connectors,
+    docs/orchestration/e2e/journey-a-e.md DEFECT 6 — moot now that identity
+    comes from the resolver, not the scope map, and deletion always runs
+    here.) Topic deletes below are, for the same symmetry/robustness
+    reasoning, also always best-effort attempted regardless of whether
+    `undeploy()` ran, and any individual failure is recorded as an orphan
+    entry rather than silently dropped (`lifecycle.py` MINOR 13 in the
+    review: `delete_topic` failures used to be swallowed outright).
 
     Journey-R teardown gap: owned data topics are derived via
     `_delete_candidate_data_topics` (scope map UNION naming walk) rather
     than the scope map alone, so a delete AFTER undeploy (scope map already
-    nulled) still removes the flow's `raw.*` topics."""
+    nulled) still removes the flow's `raw.*` topics.
+
+    ASYMMETRIC WITH `save_flow_v2`'s block-removal cleanup ON PURPOSE: there,
+    a connector delete failure still lets the edit save (the sync record is
+    kept as the connector's last remaining name). Here, EVERY handle --
+    flow doc, sync records, connectors -- is about to be destroyed in the
+    same operation, so if Kafka Connect cannot be confirmed reachable before
+    any of that starts, the whole delete is refused outright rather than
+    risk stranding a connector with nothing left naming it. This is checked
+    up front, before `undeploy()` or any other destructive step below runs.
+    Sync records are then swept the same way: a flow's own sync record is
+    removed once its connector is confirmed gone, UNLESS another flow's
+    block still references that same sync id (one sync may legally be
+    linked from several flows)."""
     flow = Flow(**flow_doc)
     options = delete_options or {}
     delete_topics = bool(options.get("deleteTopics", options.get("delete_topics", True)))
     clear_cache = bool(options.get("clearCache", options.get("clear_cache", False)))
     owned_topics = _delete_candidate_data_topics(flow_doc)
     dlq_topic = _dlq_topic_name(flow_doc)
-    connector_names = _all_connector_names(flow_doc)
+    connector_names = await resolve_flow_connector_names(db, flow_doc)
     orphans: List[Dict[str, Any]] = []
     retained_topics: List[str] = []
     cache_block_count = sum(
@@ -963,6 +1027,26 @@ async def delete(
         for transform in block.transforms
         if transform.kind == "dedup"
     )
+
+    connections = await _load_connections(db)
+
+    # Reachability guard -- see the docstring's "ASYMMETRIC" paragraph. Only
+    # matters when there is actually something to protect: a flow with no
+    # kc/kafka_kc connectors at all has no orphan risk here.
+    kc_conn_doc: Optional[PlatformConnection] = None
+    if connector_names:
+        kc_conn_doc = _active_connection(connections, "kafka_connect")
+        if not kc_conn_doc:
+            raise LifecycleError(
+                "This flow has Kafka Connect connector(s) but no active Kafka Connect connection is "
+                "configured -- cannot confirm they would be removed. Configure one and retry."
+            )
+        cluster_info = await kafka_connect_client.get_cluster_info(_kafka_connect_conn_dict(kc_conn_doc))
+        if not cluster_info.get("reachable"):
+            raise LifecycleError(
+                "Kafka Connect is unreachable -- refusing to delete this flow so its connector(s) and the "
+                "sync record(s) that name them are not stranded. Retry once Kafka Connect is reachable."
+            )
 
     was_deployed = bool(flow_doc.get("deployedAt") or flow_doc.get("nifiProcessGroupId"))
     undeploy_result: Optional[Dict[str, Any]] = None
@@ -1002,8 +1086,6 @@ async def delete(
             object="Flow",
         )
 
-    connections = await _load_connections(db)
-
     incremental_block_ids = [
         block.id
         for block in flow.blocks
@@ -1031,18 +1113,60 @@ async def delete(
                     "reason": bookmark_result.get("error") or "Incremental bookmark cleanup failed.",
                 })
 
-    if connector_names and not was_deployed:
-        # `undeploy()` above already best-effort deletes connectors when it
-        # runs — only reached when it did NOT (the post-repair gap E7 fixes).
-        kc_conn_doc = _active_connection(connections, "kafka_connect")
-        if kc_conn_doc:
-            results = await connect_apply.delete_connectors(_kafka_connect_conn_dict(kc_conn_doc), connector_names)
-            for r in results:
-                if not r.get("ok"):
-                    orphans.append({"kind": "connector", "ref": r.get("name"), "reason": r.get("error") or "Connector delete failed."})
-        else:
-            for name in connector_names:
-                orphans.append({"kind": "connector", "ref": name, "reason": "No active kafka_connect connection is configured."})
+    failed_connector_names: set = set()
+    if connector_names:
+        # Always runs, regardless of `was_deployed`/whether `undeploy()` ran
+        # above — undeploy only ever stops connectors now, never deletes
+        # them, so this is the sole place that removes them for good.
+        # `kc_conn_doc` is guaranteed set here (the reachability guard above
+        # raises before this point when `connector_names` is non-empty and
+        # no active/reachable connection exists).
+        results = await connect_apply.delete_connectors(_kafka_connect_conn_dict(kc_conn_doc), connector_names)
+        for r in results:
+            if not r.get("ok"):
+                orphans.append({"kind": "connector", "ref": r.get("name"), "reason": r.get("error") or "Connector delete failed."})
+                failed_connector_names.add(r.get("name"))
+
+    # Sweep this flow's Kafka Connect sync records. Once the flow document
+    # itself is gone, a sync record is the only thing left naming a
+    # connector (connector_names.py's module docstring, path 2) -- leaving
+    # it behind here would be exactly the kind of orphan save_flow_v2's own
+    # block-removal cleanup goes out of its way to avoid creating. A sync
+    # whose connector delete failed above is deliberately left alone (same
+    # reasoning as that Save path: the record is the only recoverable
+    # pointer to a connector that is still actually live), and a sync
+    # another flow's block still references is left alone regardless of
+    # this flow's own outcome (one sync may legally be linked from several
+    # flows -- deleting it here would silently break that other flow).
+    #
+    # Candidate sync ids are the same two-path union the resolver itself
+    # uses for names: live blocks' `config.syncId`, PLUS every sync whose
+    # stored `linked_flow_id` is this flow even if its block is already
+    # gone (e.g. a prior save's block-removal cleanup left the sync record
+    # behind after a failed connector delete) -- a full flow delete must
+    # not let that stray record survive just because path 1 alone would
+    # never find it.
+    all_syncs = await db[COLLECTIONS.kafka_connect_syncs].find({}, {"_id": 0}).to_list(None)
+    candidate_sync_ids = {
+        str((block.config or {}).get("syncId") or "").strip()
+        for block in flow.blocks
+        if (block.config or {}).get("syncId")
+    }
+    candidate_sync_ids.update(
+        s.get("id") for s in all_syncs if s.get("linked_flow_id") == flow.id and s.get("id")
+    )
+    syncs_by_id = {s.get("id"): s for s in all_syncs}
+    for sync_id in candidate_sync_ids:
+        sync_doc = syncs_by_id.get(sync_id)
+        if not sync_doc:
+            continue
+        connector_name = sync_doc.get("connector_name")
+        if connector_name and connector_name in failed_connector_names:
+            continue
+        other_flow_ids = await _flow_ids_referencing_sync(db, sync_id, exclude_flow_id=flow.id)
+        if other_flow_ids:
+            continue
+        await db[COLLECTIONS.kafka_connect_syncs].delete_one({"id": sync_id})
 
     all_topics = [dlq_topic] + owned_topics
     if delete_topics:

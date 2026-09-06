@@ -209,15 +209,25 @@ def _compile_read_terminal(
     AFTER `transforms.build_chain()` already ran) rather than in
     `compile_entry()`.
 
-    `ConsumeKafka` property names/allowed-values below are NOT confirmed
-    against any reference flow — none of the 5 reference exports
-    (`docs/orchestration/analysis/nifi-reference-flows.md`) use `ConsumeKafka`
-    at all (only `PublishKafka`). Flagged explicitly for live E2E
-    verification: "Kafka Connection Service", "Group ID", "Topics",
-    "Topic Format", "Auto Offset Reset" are this module's best-known NiFi
-    2.9 Kafka3-family property names, by analogy with `PublishKafka`'s own
-    confirmed "Kafka Connection Service" property and long-standing NiFi
-    Kafka-consumer convention, but are unverified here.
+    `ConsumeKafka`'s property names are now CONFIRMED against a live NiFi
+    2.9.0 `nifi-kafka-nar` (read back from
+    `/nifi-api/flow/processor-definition/...`), replacing the earlier
+    by-analogy guesses that had never been deployed.
+
+    The trap that guessing walked into: NiFi keys a property by its *name*,
+    which is not always its *displayName*. Four of these five happen to be
+    identical in both — but the offset one is `auto.offset.reset` (lowercase,
+    dotted) with displayName "Auto Offset Reset". Sending the display form
+    made NiFi refuse the whole deploy with "'Auto Offset Reset' ... is not a
+    supported property or has no Validator associated with it", which reads
+    like the property is unsupported when it is really just misspelled.
+    Allowed values are `earliest` / `latest` / `none`.
+
+    `Processing Strategy` is deliberately left at its default `FLOW_FILE`:
+    one Kafka message becomes one FlowFile and the record split happens
+    downstream in this function. That default also keeps `Record Reader` /
+    `Record Writer` inapplicable — they only take effect (and only become
+    required) when `Processing Strategy` is `RECORD`.
     """
     parse_format = str(block.config.get("parseFormat", "json"))
     topic = _resolve_topic(flow, block)
@@ -235,7 +245,9 @@ def _compile_read_terminal(
                 "Group ID": f"{flow_token}__{block.id}",
                 "Topic Format": "names",
                 "Topics": f"#{{topic_{block.id}}}",
-                "Auto Offset Reset": offset_reset,
+                # NOT "Auto Offset Reset" -- that is the displayName; the
+                # property NAME is dotted-lowercase. See the docstring.
+                "auto.offset.reset": offset_reset,
             },
         )
     )

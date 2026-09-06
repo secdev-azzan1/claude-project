@@ -303,7 +303,6 @@ const CASCADE_LABEL: Record<CascadeTarget["kind"], string> = {
   schema: "schema",
   service: "application service",
   proxy: "gateway proxy",
-  kafka_connect_sync: "Kafka Connect sync",
 };
 
 const BULK_LABEL: Record<BulkAction, string> = {
@@ -395,7 +394,7 @@ function GuardedMenuItem({
   children: React.ReactNode;
 }) {
   return (
-    <div title={reason ?? undefined}>
+    <div title={reason ?? undefined} onClick={(event) => event.stopPropagation()}>
       <DropdownMenuItem
         disabled={Boolean(reason)}
         onSelect={onSelect}
@@ -1079,7 +1078,7 @@ export function FlowDetailSheet({
   );
 
   return (
-    <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
+    <SheetContent className="w-full overflow-y-auto sm:w-1/2 sm:max-w-none">
       <SheetHeader>
         <SheetTitle className="flex flex-wrap items-center gap-2">
           {flow.name}
@@ -1201,7 +1200,7 @@ export function FlowDetailSheet({
           <TabsTrigger value="dlq" className="flex-1">DLQ</TabsTrigger>
           <TabsTrigger value="messages" className="flex-1">Messages</TabsTrigger>
           <TabsTrigger value="runtime" className="flex-1">Runtime</TabsTrigger>
-          {hasKafkaConnectSink && <TabsTrigger value="sync" className="flex-1">Sync</TabsTrigger>}
+          {hasKafkaConnectSink && <TabsTrigger value="sync" className="flex-1">Sink</TabsTrigger>}
         </TabsList>
 
         {/* ── Overview ── */}
@@ -2167,6 +2166,14 @@ const Flows = () => {
 
   const openFlow = openId ? flows.find((f) => f.id === openId) ?? null : null;
 
+  const isRowControl = (target: EventTarget | null) =>
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest(
+        "button, a, input, select, textarea, [role='button'], [role='checkbox'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio']",
+      ),
+    );
+
   // ── mutations ──
   const verbMut = useMutation({
     mutationFn: ({ flow, verb }: { flow: Flow; verb: FlowVerb }) => startBulkJob(verb, [flow.id]),
@@ -2470,11 +2477,11 @@ const Flows = () => {
                     <TableHead className="w-[44px]">
                       <Checkbox checked={headerChecked} onCheckedChange={toggleAllVisible} aria-label="Select all visible flows" />
                     </TableHead>
-                    <TableHead className="w-[72px]">State</TableHead>
-                    <TableHead className="w-[260px]">Flow Name</TableHead>
-                    <TableHead className="w-[180px]">Entities</TableHead>
-                    <TableHead className="w-[230px]">Topics</TableHead>
-                    <TableHead className="w-[160px]">Schema</TableHead>
+                    <TableHead className="w-[112px] text-sm">State</TableHead>
+                    <TableHead className="w-[260px] text-sm">Flow Name</TableHead>
+                    <TableHead className="w-[180px] text-sm">Entities</TableHead>
+                    <TableHead className="w-[230px] text-sm">Topics</TableHead>
+                    <TableHead className="w-[160px] text-sm">Schema</TableHead>
                     <TableHead className="w-[236px] px-1 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -2497,12 +2504,28 @@ const Flows = () => {
                             : "start";
                     const deployVerb: FlowVerb = flow.deployedAt ? "redeploy" : "deploy";
                     const canStop = flow.state === "Running" || flow.state === "Paused" || flow.state === "Degraded";
-                    const editLocked =
-                      flow.state === "Running" || flow.state === "Paused" || flow.state === "Degraded" || flow.state === "Deploying" || !!flowQueueLockReason(flow.id);
 
                     return (
-                      <TableRow key={flow.id} className={selectedIds.has(flow.id) ? "bg-muted/40" : undefined}>
-                        <TableCell className="py-3">
+                      <TableRow
+                        key={flow.id}
+                        tabIndex={0}
+                        aria-label={`Open ${flow.name} in the flow builder`}
+                        onClick={(event) => {
+                          if (!isRowControl(event.target)) navigate(`/flow-builder/${flow.id}`);
+                        }}
+                        onKeyDown={(event) => {
+                          if (isRowControl(event.target)) return;
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`/flow-builder/${flow.id}`);
+                          }
+                        }}
+                        className={cn(
+                          "h-16 cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                          selectedIds.has(flow.id) && "bg-muted/40",
+                        )}
+                      >
+                        <TableCell className="py-4">
                           <Checkbox
                             checked={selectedIds.has(flow.id)}
                             onCheckedChange={() =>
@@ -2516,9 +2539,9 @@ const Flows = () => {
                             aria-label={`Select ${flow.name}`}
                           />
                         </TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="py-4">
                           <div className="flex items-center gap-1">
-                            <StatusBadge status={flow.state} compact />
+                            <StatusBadge status={flow.state} />
                             {flow.drift && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -2531,9 +2554,9 @@ const Flows = () => {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="py-4">
                           <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-medium" title={flow.name}>{flow.name}</span>
+                            <span className="truncate text-base font-semibold" title={flow.name}>{flow.name}</span>
                             {updates.length > 0 && (
                               <span title={`Service update available: ${updates.map((s) => s.name).join(", ")} — adopts at next deploy`}>
                                 <StatusBadge status="Update available" className="shrink-0" />
@@ -2551,21 +2574,21 @@ const Flows = () => {
                             )}
                           </div>
                           {flow.description && (
-                            <div className="mt-0.5 truncate text-xs text-muted-foreground" title={flow.description}>
+                            <div className="mt-1 truncate text-sm text-muted-foreground" title={flow.description}>
                               {flow.description}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="py-3">
-                          <span className="text-xs" title={entities.join(", ") || undefined}>
+                        <TableCell className="py-4">
+                          <span className="text-sm" title={entities.join(", ") || undefined}>
                             {summarize(entities)}
                           </span>
                         </TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="py-4">
                           {topics.length === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : (
-                            <div className="text-xs" title={topics.join("\n")}>
+                            <div className="text-sm" title={topics.join("\n")}>
                               <code className="block truncate">{topics[0]}</code>
                               {topics.length > 1 && (
                                 <span className="text-muted-foreground">+{topics.length - 1} more</span>
@@ -2573,20 +2596,20 @@ const Flows = () => {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="py-4">
                           {schema.required === 0 ? (
                             <span className="text-xs text-muted-foreground">—</span>
                           ) : schema.approved === schema.required ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                            <span className="inline-flex items-center gap-1 text-sm font-medium text-success">
                               <CheckCircle2 className="h-3.5 w-3.5" /> {schema.approved}/{schema.required} approved
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+                            <span className="inline-flex items-center gap-1 text-sm font-medium text-warning">
                               <AlertTriangle className="h-3.5 w-3.5" /> {schema.approved}/{schema.required} — ceremony required
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="px-1 py-3 text-right">
+                        <TableCell className="px-1 py-4 text-right">
                           <div className="flex justify-end gap-0.5">
                             <GuardedIconButton
                               label="Overview"
@@ -2619,24 +2642,13 @@ const Flows = () => {
                               spinning={pending === deployVerb}
                               onClick={() => runVerb(flow, deployVerb)}
                             />
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="inline-flex">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    aria-label="Edit flow"
-                                    disabled={editLocked}
-                                    onClick={() => navigate(`/flow-builder/${flow.id}`)}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                {editLocked ? "Opens read-only — stop to edit" : "Edit flow"}
-                              </TooltipContent>
-                            </Tooltip>
+                            <GuardedIconButton
+                              label={flow.enabled ? "Disable" : "Enable"}
+                              reason={flowQueueLockReason(flow.id)}
+                              icon={flow.enabled ? XCircle : CheckCircle2}
+                              spinning={enableMut.isPending && enableMut.variables?.flow.id === flow.id}
+                              onClick={() => enableMut.mutate({ flow, enabled: !flow.enabled })}
+                            />
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button size="sm" variant="ghost" aria-label="More actions">
@@ -2665,18 +2677,6 @@ const Flows = () => {
                                   </GuardedMenuItem>
                                 )}
                                 <DropdownMenuSeparator />
-                                {flow.enabled ? (
-                                  <GuardedMenuItem
-                                    reason={flowQueueLockReason(flow.id)}
-                                    onSelect={() => enableMut.mutate({ flow, enabled: false })}
-                                  >
-                                    <XCircle className="mr-2 h-3.5 w-3.5" /> Disable
-                                  </GuardedMenuItem>
-                                ) : (
-                                  <GuardedMenuItem reason={null} onSelect={() => enableMut.mutate({ flow, enabled: true })}>
-                                    <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Enable
-                                  </GuardedMenuItem>
-                                )}
                                 <GuardedMenuItem reason={null} onSelect={() => setConnectorFlow(flow)}>
                                   <Package className="mr-2 h-3.5 w-3.5" /> Save as Connector
                                 </GuardedMenuItem>

@@ -41,6 +41,7 @@ from models.adapter import AppService, Flow, FlowBlock, GatewayProxy, PlatformCo
 from services import kafka_client, kafka_connect_client, nifi_flow_manager
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
 from services.adapter.deployer import topics as topics_mod
+from services.adapter.connector_names import resolve_flow_connector_names
 from services.adapter.deployer.lifecycle import (
     _active_connection,
     _kafka_conn_dict,
@@ -86,14 +87,6 @@ def _as_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
-
-
-def _all_connector_names(flow_doc: Dict[str, Any]) -> List[str]:
-    scope_map = flow_doc.get("runtimeScopeMap") or {}
-    names: List[str] = []
-    for entry in scope_map.values():
-        names.extend((entry or {}).get("connectorNames") or [])
-    return names
 
 
 def _owned_topic_names(flow_doc: Dict[str, Any]) -> set:
@@ -829,8 +822,10 @@ async def _read_components(nifi_conn: Dict[str, Any], flow_doc: Dict[str, Any]) 
     return components, controller_services
 
 
-async def _read_connectors(connections: List[PlatformConnection], flow_doc: Dict[str, Any]) -> List[Dict[str, Any]]:
-    connector_names = _all_connector_names(flow_doc)
+async def _read_connectors(
+    db, connections: List[PlatformConnection], flow_doc: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    connector_names = await resolve_flow_connector_names(db, flow_doc)
     if not connector_names:
         return []
     kc_conn_doc = _active_connection(connections, "kafka_connect")
@@ -851,6 +846,7 @@ async def _read_connectors(connections: List[PlatformConnection], flow_doc: Dict
 
     out: List[Dict[str, Any]] = []
     for name in connector_names:
+        present = name in data
         info = data.get(name) or {}
         status = info.get("status") or {}
         connector_status = status.get("connector") or {}
@@ -866,12 +862,23 @@ async def _read_connectors(connections: List[PlatformConnection], flow_doc: Dict
             for t in tasks_raw
         ]
         failed_trace = next((t["lastErrorTrace"] for t in tasks if t["state"] == "FAILED" and t["lastErrorTrace"]), None)
+        # A name this resolver returned but the cluster listing doesn't even
+        # know about is a genuinely different situation from a connector
+        # that exists but reports no run state: it was never (re)created on
+        # this cluster, or it has since been deleted out from under the
+        # flow. Reporting that as "UNASSIGNED" (Connect's own term for "task
+        # not yet scheduled") would be a lie -- UNDEPLOYED says plainly that
+        # there is nothing to observe.
+        if not present:
+            state = "UNDEPLOYED"
+        else:
+            state = str(connector_status.get("state") or "UNASSIGNED").upper()
         out.append(
             {
                 "name": name,
                 "blockId": name_to_block.get(name, ""),
                 "connectorClass": info_cfg.get("connector.class", ""),
-                "state": str(connector_status.get("state") or "UNASSIGNED").upper(),
+                "state": state,
                 "workerId": connector_status.get("worker_id") or connector_status.get("workerId") or "",
                 "tasks": tasks,
                 # Kafka Connect's REST API exposes no per-connector record
@@ -969,7 +976,7 @@ async def read_runtime(db, flow_doc: Dict[str, Any]) -> Optional[Dict[str, Any]]
         components, controller_services = await _read_components(nifi_conn, flow_doc)
         drift.extend(_rename_drift(pg_check, flow_doc, where=flow_doc.get("name") or flow_id, now=now))
 
-    connectors = await _read_connectors(connections, flow_doc)
+    connectors = await _read_connectors(db, connections, flow_doc)
 
     runtime_doc = {
         "flowId": flow_id,
@@ -1002,7 +1009,7 @@ async def _persist_unreachable(
 ) -> Dict[str, Any]:
     # Connect is a different system -- still probed independently even when
     # NiFi itself could not be reached.
-    connectors = await _read_connectors(connections, flow_doc)
+    connectors = await _read_connectors(db, connections, flow_doc)
     runtime_doc = {
         "flowId": flow_doc["id"],
         "nifiConnectionId": nifi_connection_id,

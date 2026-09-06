@@ -21,6 +21,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 const mainItems = [
@@ -37,13 +39,21 @@ const systemItems = [
 ];
 
 export function AppSidebar() {
+  const { toggleSidebar } = useSidebar();
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="px-2 py-3">
         <div className="flex items-center gap-2.5 px-1">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label="Toggle navigation"
+            title="Toggle navigation"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+          >
             <Database className="h-[18px] w-[18px]" />
-          </div>
+          </button>
           <div className="flex min-w-0 flex-col leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-semibold tracking-tight">Data Mobility</span>
             <span className="truncate text-2xs text-muted-foreground">Adapter platform</span>
@@ -116,6 +126,7 @@ export function AppSidebar() {
           </div>
         </div>
       </SidebarFooter>
+      <SidebarRail />
     </Sidebar>
   );
 }

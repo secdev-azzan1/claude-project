@@ -173,6 +173,111 @@ def test_adopt_existing_connector_sets_baseline_without_lifecycle_call(monkeypat
     assert not any(call[0] == "upsert" for call in calls)
 
 
+def test_adopt_writes_config_into_linked_block_sink_config(monkeypatch):
+    # Adoption reads the real config off the cluster; that config must also
+    # land in the linked block's sinkConfig (with `name` stripped) so
+    # `authoritative_sink_config`'s block-wins rule doesn't push the block's
+    # old, poorer config back over the connector that was just adopted --
+    # see `migrations/repair_sync_configs.py` for how that drift happened.
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    db.kafka_connect_syncs_v2.docs.append(
+        {
+            "id": "sync-1",
+            "name": "Orders sink",
+            "description": "",
+            "direction": "sink",
+            "connector_class": "com.example.Sink",
+            "connector_name": "orders-connector",
+            "config": {"connector.class": "com.example.Sink", "topics": "orders-topic"},
+            "enabled": False,
+            "retired": False,
+            "remote_present": False,
+            "remote_config_hash": None,
+            "linked_flow_id": "flow-1",
+            "linked_block_id": "block-1",
+            "last_status": None,
+            "last_error": None,
+            "created_at": "2026-08-30T00:00:00.000Z",
+            "updated_at": "2026-08-30T00:00:00.000Z",
+        }
+    )
+    db.flows_v2.docs[0]["blocks"][0]["config"]["syncId"] = "sync-1"
+    client = client_for(db)
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_config(_conn, name):
+        return {
+            "ok": True,
+            "data": {
+                "name": name,
+                "connector.class": "com.example.Sink",
+                "topics": "orders-topic",
+                "tasks.max": "2",
+                "iceberg.catalog": "rest",
+            },
+        }
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "get_connector_config", fake_config)
+
+    adopted = client.post("/api/kafka-connect/syncs/sync-1/adopt")
+    assert adopted.status_code == 200, adopted.text
+
+    block_sink_config = db.flows_v2.docs[0]["blocks"][0]["config"]["sinkConfig"]
+    assert block_sink_config == {
+        "connector.class": "com.example.Sink",
+        "topics": "orders-topic",
+        "tasks.max": "2",
+        "iceberg.catalog": "rest",
+    }
+    assert "name" not in block_sink_config
+
+    # `name` is only stripped from what's written into the block -- the
+    # sync record's own stored config still keeps it, matching the existing,
+    # unchanged behaviour of adopt updating the sync record from the remote
+    # snapshot verbatim.
+    stored = db.kafka_connect_syncs_v2.docs[0]
+    assert stored["config"]["name"] == "orders-connector"
+    assert stored["config"]["tasks.max"] == "2"
+    assert stored["remote_present"] is True
+
+
+def test_adopt_with_no_linked_block_still_works_and_touches_no_flow(monkeypatch):
+    db = FakeDB()
+    client = client_for(db)
+    sync = client.post(
+        "/api/kafka-connect/syncs",
+        json={
+            "name": "unlinked-sync",
+            "connector_name": "unlinked-connector",
+            "connector_class": "com.example.Sink",
+            "config": {"connector.class": "com.example.Sink", "topics": "orders-topic"},
+        },
+    ).json()
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_config(_conn, name):
+        return {
+            "ok": True,
+            "data": {"name": name, "connector.class": "com.example.Sink", "topics": "orders-topic"},
+        }
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "get_connector_config", fake_config)
+
+    adopted = client.post(f"/api/kafka-connect/syncs/{sync['id']}/adopt")
+    assert adopted.status_code == 200, adopted.text
+    assert adopted.json()["enabled"] is True
+    assert adopted.json()["remote_present"] is True
+    # No linked block -- nothing in flows_v2 to touch, and nothing was.
+    assert db.flows_v2.docs == []
+
+
 def test_sync_rejects_non_kafka_connect_block():
     db = FakeDB()
     db.flows_v2.docs.append({"id": "flow-1", "blocks": [{"id": "block-1", "adapter": "http", "config": {}}]})
@@ -299,7 +404,10 @@ def test_sync_link_rejects_connector_class_mismatch():
     )
 
 
-def test_flow_builder_link_is_resolved_and_delete_requires_retirement():
+def test_flow_builder_link_is_resolved_and_delete_retires_atomically():
+    # `delete_sync` now retires-then-deletes in one call instead of refusing
+    # a non-retired sync: the old two-step UI flow (retire, then delete)
+    # could strand a sync permanently RETIRED if the second call failed.
     db = FakeDB()
     client = client_for(db)
     sync = client.post(
@@ -314,19 +422,47 @@ def test_flow_builder_link_is_resolved_and_delete_requires_retirement():
     assert resolved.status_code == 200
     assert resolved.json()["linked_flow_id"] == "flow-2"
 
-    active_delete = client.delete(f"/api/kafka-connect/syncs/{sync['id']}")
-    assert active_delete.status_code == 409
-    assert "Retire the sync first" in active_delete.json()["detail"]
-
-    retired = client.post(f"/api/kafka-connect/syncs/{sync['id']}/retire")
-    assert retired.status_code == 200
-    assert retired.json()["retired"] is True
-
     deleted = client.delete(f"/api/kafka-connect/syncs/{sync['id']}")
-    assert deleted.status_code == 200
+    assert deleted.status_code == 200, deleted.text
+    assert not any(doc["id"] == sync["id"] for doc in db.kafka_connect_syncs_v2.docs)
     # Like Application Service deletion, the dependent flow retains its
     # reference so validation can present an explicit replacement warning.
     assert db.flows_v2.docs[0]["blocks"][0]["config"]["syncId"] == sync["id"]
+
+
+def test_delete_sync_un_retires_on_remote_delete_failure(monkeypatch):
+    db = FakeDB()
+    client = client_for(db)
+    sync = client.post(
+        "/api/kafka-connect/syncs",
+        json={
+            "name": "flaky-sync",
+            "connector_name": "flaky-connector",
+            "connector_class": "com.example.Sink",
+            "config": {"connector.class": "com.example.Sink"},
+        },
+    ).json()
+    db.kafka_connect_syncs_v2.docs[0].update({"enabled": True, "remote_present": True})
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_pause(_conn, name):
+        return {"ok": True, "data": None}
+
+    async def failing_delete(_conn, name):
+        return {"ok": False, "error": "cluster rejected the delete", "error_code": None}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "pause_connector", fake_pause)
+    monkeypatch.setattr(kafka_connect, "delete_connector", failing_delete)
+
+    response = client.delete(f"/api/kafka-connect/syncs/{sync['id']}")
+    assert response.status_code == 502
+    # The sync was retired as part of this same delete call and must be
+    # restored to not-retired since the delete itself failed -- otherwise
+    # it would be stuck RETIRED with no controls and no way back.
+    assert db.kafka_connect_syncs_v2.docs[0]["retired"] is False
 
 
 def test_sync_lifecycle_actions_persist_live_status_and_retirement(monkeypatch):
@@ -489,3 +625,324 @@ def test_enabled_toggle_is_not_redacted_but_credentials_still_are():
     assert merged["iceberg.catalog.credential"] == "real-credential"
     assert merged["iceberg.catalog.s3.access-key-id"] == "real-access-key-id"
     assert merged["iceberg.catalog.s3.secret-access-key"] == "real-secret-access-key"
+
+
+# ------------------------------------------------------ flow+block sink API
+
+def _flow_with_kc_block(flow_id="flow-1", block_id="block-1", flow_name="Orders"):
+    return {
+        "id": flow_id,
+        "name": flow_name,
+        "blocks": [
+            {
+                "id": block_id,
+                "adapter": "kafka_kc",
+                "name": "Orders sink",
+                "config": {"sinkConfig": {"connector.class": "com.example.Sink", "topics": "orders-topic"}},
+            }
+        ],
+    }
+
+
+def test_flow_sink_status_reports_undeployed_for_missing_connector(monkeypatch):
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    client = client_for(db)
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_listing(_conn):
+        return {"ok": True, "reachable": True, "data": {}}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "list_connectors_with_status", fake_listing)
+
+    response = client.get("/api/kafka-connect/flows/flow-1/sink-status")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ok"] is True
+    assert body["reachable"] is True
+    assert len(body["sinks"]) == 1
+    sink = body["sinks"][0]
+    assert sink["blockId"] == "block-1"
+    assert sink["state"] == "UNDEPLOYED"
+    assert sink["syncId"] is None
+
+
+def test_flow_sink_status_unreachable_reports_null_state_not_undeployed(monkeypatch):
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    client = client_for(db)
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_listing(_conn):
+        return {"ok": False, "reachable": False, "error": "Cannot connect to Kafka Connect."}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "list_connectors_with_status", fake_listing)
+
+    response = client.get("/api/kafka-connect/flows/flow-1/sink-status")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["reachable"] is False
+    assert len(body["sinks"]) == 1
+    assert body["sinks"][0]["state"] is None
+
+
+def test_flow_sink_start_pushes_block_config_not_stale_sync_copy(monkeypatch):
+    # Regression for the bug where Start pushed `sync["config"]` -- a legacy
+    # 2-key copy made when the sync record was created -- and silently
+    # overwrote a working connector built from the block's full sinkConfig.
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    flow_sink_config = db.flows_v2.docs[0]["blocks"][0]["config"]["sinkConfig"]
+    db.kafka_connect_syncs_v2.docs.append(
+        {
+            "id": "sync-1",
+            "name": "Orders sink",
+            "description": "",
+            "direction": "sink",
+            "connector_class": "com.example.Sink",
+            "connector_name": "orders-connector",
+            # Deliberately stale/smaller than the block's sinkConfig.
+            "config": {"connector.class": "com.example.Sink", "topics": "orders-topic"},
+            "enabled": False,
+            "retired": False,
+            "remote_present": False,
+            "remote_config_hash": None,
+            "linked_flow_id": "flow-1",
+            "linked_block_id": "block-1",
+            "last_status": None,
+            "last_error": None,
+            "created_at": "2026-08-30T00:00:00.000Z",
+            "updated_at": "2026-08-30T00:00:00.000Z",
+        }
+    )
+    db.flows_v2.docs[0]["blocks"][0]["config"]["syncId"] = "sync-1"
+    client = client_for(db)
+    pushed = []
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_upsert(_conn, name, config):
+        pushed.append(config)
+        return {"ok": True, "data": None}
+
+    async def fake_start(_conn, name):
+        return {"ok": True, "data": None}
+
+    async def fake_status(_conn, name):
+        return {"ok": True, "data": {"name": name, "connector": {"state": "RUNNING"}, "tasks": []}}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "upsert_connector", fake_upsert)
+    monkeypatch.setattr(kafka_connect, "start_connector", fake_start)
+    monkeypatch.setattr(kafka_connect, "get_connector_status", fake_status)
+
+    response = client.post("/api/kafka-connect/flows/flow-1/sinks/block-1/start")
+    assert response.status_code == 200, response.text
+
+    # The connector was pushed the block's config, not the sync's stale copy.
+    assert pushed == [flow_sink_config]
+
+    stored = db.kafka_connect_syncs_v2.docs[0]
+    assert stored["config"] == flow_sink_config
+    assert stored["remote_config_hash"] == kafka_connect._config_fingerprint(flow_sink_config)
+
+
+def test_apply_sync_pushes_block_config_not_stale_sync_copy(monkeypatch):
+    # Same regression as above, for the `apply_sync` push path.
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    flow_sink_config = db.flows_v2.docs[0]["blocks"][0]["config"]["sinkConfig"]
+    db.kafka_connect_syncs_v2.docs.append(
+        {
+            "id": "sync-1",
+            "name": "Orders sink",
+            "description": "",
+            "direction": "sink",
+            "connector_class": "com.example.Sink",
+            "connector_name": "orders-connector",
+            "config": {"connector.class": "com.example.Sink", "topics": "orders-topic"},
+            "enabled": False,
+            "retired": False,
+            "remote_present": False,
+            "remote_config_hash": None,
+            "linked_flow_id": "flow-1",
+            "linked_block_id": "block-1",
+            "last_status": None,
+            "last_error": None,
+            "created_at": "2026-08-30T00:00:00.000Z",
+            "updated_at": "2026-08-30T00:00:00.000Z",
+        }
+    )
+    db.flows_v2.docs[0]["blocks"][0]["config"]["syncId"] = "sync-1"
+    client = client_for(db)
+    pushed = []
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_upsert(_conn, name, config):
+        pushed.append(config)
+        return {"ok": True, "data": None}
+
+    async def fake_status(_conn, name):
+        return {"ok": True, "data": {"name": name, "connector": {"state": "RUNNING"}, "tasks": []}}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "upsert_connector", fake_upsert)
+    monkeypatch.setattr(kafka_connect, "get_connector_status", fake_status)
+
+    response = client.post("/api/kafka-connect/syncs/sync-1/apply")
+    assert response.status_code == 200, response.text
+
+    assert pushed == [flow_sink_config]
+    stored = db.kafka_connect_syncs_v2.docs[0]
+    assert stored["config"] == flow_sink_config
+    assert stored["remote_config_hash"] == kafka_connect._config_fingerprint(flow_sink_config)
+
+
+def test_flow_sink_start_falls_back_to_sync_config_when_no_block_sink_config(monkeypatch):
+    # A sync with no linked block (adopted/unlinked) -- or a linked block
+    # whose sinkConfig is empty -- must keep pushing its own stored config.
+    db = FakeDB()
+    own_config = {"connector.class": "com.example.Sink", "topics": "orders-topic", "tasks.max": "3"}
+    sync = client_for(db).post(
+        "/api/kafka-connect/syncs",
+        json={
+            "name": "unlinked-sync",
+            "connector_name": "unlinked-connector",
+            "connector_class": "com.example.Sink",
+            "config": own_config,
+        },
+    ).json()
+    client = client_for(db)
+    pushed = []
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_upsert(_conn, name, config):
+        pushed.append(config)
+        return {"ok": True, "data": None}
+
+    async def fake_status(_conn, name):
+        return {"ok": True, "data": {"name": name, "connector": {"state": "RUNNING"}, "tasks": []}}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "upsert_connector", fake_upsert)
+    monkeypatch.setattr(kafka_connect, "get_connector_status", fake_status)
+
+    response = client.post(f"/api/kafka-connect/syncs/{sync['id']}/apply")
+    assert response.status_code == 200, response.text
+    assert pushed == [own_config]
+
+
+def test_flow_sink_start_creates_connector_and_sync_record(monkeypatch):
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    client = client_for(db)
+    calls = []
+
+    async def fake_resolve(_db, _kind, required=False):
+        return {"endpoint": "http://connect:8083", "auth_type": "NONE"}
+
+    async def fake_upsert(_conn, name, config):
+        calls.append(("upsert", name))
+        return {"ok": True, "data": None}
+
+    async def fake_start(_conn, name):
+        calls.append(("start", name))
+        return {"ok": True, "data": None}
+
+    async def fake_status(_conn, name):
+        return {"ok": True, "data": {"name": name, "connector": {"state": "RUNNING"}, "tasks": []}}
+
+    monkeypatch.setattr(kafka_connect, "resolve_connection", fake_resolve)
+    monkeypatch.setattr(kafka_connect, "upsert_connector", fake_upsert)
+    monkeypatch.setattr(kafka_connect, "start_connector", fake_start)
+    monkeypatch.setattr(kafka_connect, "get_connector_status", fake_status)
+
+    assert db.kafka_connect_syncs_v2.docs == []
+    response = client.post("/api/kafka-connect/flows/flow-1/sinks/block-1/start")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["enabled"] is True
+    assert body["remote_present"] is True
+    assert body["linked_flow_id"] == "flow-1"
+    assert body["linked_block_id"] == "block-1"
+    assert body["connector_class"] == "com.example.Sink"
+
+    assert len(db.kafka_connect_syncs_v2.docs) == 1
+    stored = db.kafka_connect_syncs_v2.docs[0]
+    assert stored["linked_flow_id"] == "flow-1"
+    assert stored["linked_block_id"] == "block-1"
+    assert stored["connector_name"] == body["connector_name"]
+    assert [c[0] for c in calls] == ["upsert", "start"]
+
+
+def test_flow_sink_verb_refused_while_flow_has_queued_operation():
+    db = FakeDB()
+    db.flows_v2.docs.append(_flow_with_kc_block())
+    db.bulk_jobs_v2.docs.append(
+        {
+            "id": "bulk-1",
+            "status": "queued",
+            "verb": "deploy",
+            "created_at": "2026-08-30T00:00:00.000Z",
+            "items": [{"flow_id": "flow-1", "status": "pending"}],
+        }
+    )
+    client = client_for(db)
+
+    response = client.post("/api/kafka-connect/flows/flow-1/sinks/block-1/start")
+    assert response.status_code == 409
+    assert "locked by queued operation" in response.json()["detail"]
+    # No sync record must be created while the flow is locked.
+    assert db.kafka_connect_syncs_v2.docs == []
+
+
+def _sink_entry_for(connector_state, task_states):
+    """Build the `cluster_data` shape `_build_sink_entry` expects and run it,
+    with a fixed block/connector name -- only `state` on the connector and
+    the per-task states vary between cases."""
+    block = _flow_with_kc_block()["blocks"][0]
+    tasks = [{"id": i, "state": s} for i, s in enumerate(task_states)]
+    cluster_data = {
+        "conn-1": {
+            "status": {"connector": {"state": connector_state}, "tasks": tasks},
+            "info": {"config": {}},
+        }
+    }
+    return kafka_connect._build_sink_entry(block, None, "conn-1", True, cluster_data)
+
+
+def test_build_sink_entry_reports_failed_when_running_but_all_tasks_failed():
+    entry = _sink_entry_for("RUNNING", ["FAILED", "FAILED"])
+    assert entry["state"] == "FAILED"
+    # The per-task detail and trace still reflect Connect's own view --
+    # only the top-line state is overridden.
+    assert [t["state"] for t in entry["tasks"]] == ["FAILED", "FAILED"]
+
+
+def test_build_sink_entry_stays_running_when_some_tasks_failed():
+    entry = _sink_entry_for("RUNNING", ["RUNNING", "FAILED", "RUNNING"])
+    assert entry["state"] == "RUNNING"
+    assert [t["state"] for t in entry["tasks"]] == ["RUNNING", "FAILED", "RUNNING"]
+
+
+def test_build_sink_entry_stays_running_when_no_tasks_at_all():
+    entry = _sink_entry_for("RUNNING", [])
+    assert entry["state"] == "RUNNING"
+    assert entry["tasks"] == []
+
+
+def test_build_sink_entry_leaves_paused_state_alone_even_if_all_tasks_failed():
+    entry = _sink_entry_for("PAUSED", ["FAILED", "FAILED"])
+    assert entry["state"] == "PAUSED"
+    assert [t["state"] for t in entry["tasks"]] == ["FAILED", "FAILED"]

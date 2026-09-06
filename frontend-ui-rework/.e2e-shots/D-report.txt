@@ -1,0 +1,164 @@
+[console:debug] [vite] connecting...
+[console:debug] [vite] connected.
+[console:info] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+[console:warning] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+[console:warning] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+[console:warning] ToggleGroup is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+Collapsed floating widget.
+[console:warning] ToggleGroup is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+Opened existing flow "ZZZ E2E D - DummyJSON Topic then KC" for editing via the "Edit flow" pencil-icon button (row-level, not name text).
+Task Step 3: Filled kafka write Entity label = "product_raw". Derived topic name shown: Resolves to raw.zzz_e2e_d_dummyjson_topic_then_kc.product_raw
+Routing
+nothing fo
+Root http block panel snapshot (for verification): CONNECTION
+what this block is, and what it talks to
+Identity
+Block name
+Service
+Existing
+Set up here
+Codex DummyJSON E2E · rev 1
+rev 1
+Healthy
+Adapter settings
+
+API documentation
+
+Upload an OpenAPI 3.0/3.1 JSON document to pick Method and Path from it below — optional.
+
+Upload
+Method
+GET
+Path
+→ https://dummyjson.com/products
+Response parsing
+JSON
+split into records
+Advanced
+headers · query · body · pagination · gateway proxy
+RECORDS
+what happens to each record on the way through
+Generic transformations
+none
+Test
+Not tested
+DESTINATION
+where the records end up, and what follows
+Routing
+1 BRANCH
+all records
+kafka
+·write
+New kafka write
+
+Every record takes this branch. Add a rule to send only some of them.
+
+Add rule
+
+"New kafka write" has no rules, so it receives every record — including the ones the other branches also take.
+
+Deleting takes 3 downstream nodes with it.
+
+Delete block
+Task Step 4: Clicked Save. Post-save text snippets: ["saved"]
+Topic name(s) visible on canvas after save: ["raw.zzz_e2e_d_dummyjson_topic_then_kc.product_raw","raw.zzz_e2e_d_dummyjson_topic_then_kc.product_raw"]
+Attempting to interact with topic node with text: raw.zzz_e2e_d_dummyjson_topic_then_kc.product_raw
+Does a "New kc" node already exist on the canvas from the earlier partial run? true
+Task Step 5: kc child was already attached to the topic node from the earlier partial run. Reporting options is retroactive: earlier run captured plus-icon options on the topic node as: ["kafka · read - Continue the chain from this topic (continuous consumer)", "kc · sink subscription - Deliver this topic's bytes untouched into an installed Connect sink"] (verbatim from prior successful click in this same session).
+Clicked "New kc" node on canvas to select it and switch the config panel.
+Step 6: Full kc block panel text (verbatim, for field inventory): CONNECTION
+what this block is, and what it talks to
+Identity
+
+Select a service — hosts and credentials always come from a saved service.
+
+No write without an entity, ever — this subscription delivers records, so it needs an entity label.
+
+Block name
+Adapter settings
+Subscribed topic
+raw.zzz_e2e_d_dummyjson_topic_then_kc.product_raw
+Entity label
+Initial position
+From the oldest message (default)
+Save is live
+Subscription-only sink over the topic's bytes — untouched, no transforms, no schema surface. Saving creates or updates the sink independently of flow deploys, and it never blocks the chain.
+RECORDS
+what happens to each record on the way through
+DESTINATION
+where the records end up, and what follows
+Sink configuration
+Managed Kafka Connect sync
+
+Link this block to a reusable sync, or create one from this block's own sink settings.
+
+No managed sync linked
+Create managed sync
+Destination service
+Existing
+Set up here
+Select a service…
+
+Without a destination service this sink has no endpoint and no credentials, so it cannot be created.
+
+connector.class
+Pick an installed Connect plugin…
+Upload .json
+Connector properties
+
+Bound to the topic this subscription is attached to — change the subscription above and this follows.
+
+A kc subscription delivers the topic's bytes untouched — no transforms, no schema surface, so no decoding converter.
+
+Add property
+
+Locked rows are computed when the sink is created and are deliberately absent from what gets saved.
+
+Nothing depends on this block.
+
+Delete block
+Step 6: kc block form <label> elements: ["Block name","Subscribed topic","Entity label","Initial position","Destination service","connector.class","Connector properties"]
+Step 6: Number of "Select a service…" comboboxes visible in kc form: 1
+Step 6: Sink service picker options: ["ice polaris · rev 1"]
+Selected "ice polaris" as sink service.
+Screenshot D-01-kc-form.png taken.
+Step 7: "Start ceremony" button count: 0 - any "ceremony" text on page: []
+Step 7 CONCLUSION: kc block does NOT show a "Start ceremony" button - schema ceremony does not appear required for this subscription type.
+Step 8: Occurrences of "Sink configuration" heading: 1
+Step 8: Count of "Create managed sync" buttons: 1
+Step 8: "Create managed sync" disabled? true title: Pick a connector class below before creating a sync. aria-disabled: null
+Step 8: Button present but disabled. title/tooltip: Pick a connector class below before creating a sync.
+Step 9: After final Save, relevant text snippets: ["saved","issue","saved. Credentials come from \"ice polaris\" — its stored secret — never from a property here."]
+[console:debug] [vite] connecting...
+[console:debug] [vite] connected.
+[console:info] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold
+[console:warning] ⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+[console:warning] ⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+[console:warning] ToggleGroup is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+Found flow row "ZZZ E2E D - DummyJSON Topic then KC" in flows list for verification.
+Clicked eye/view icon for the flow row.
+Clicked "Sync" tab.
+Sync tab content (verbatim excerpt): last run never
+· deployed never
+Deploy
+Edit
+Save as Connector
+Overview
+Metrics
+DLQ
+Messages
+Runtime
+Sync
+Kafka Connect sinks
+
+Per-sink operational control — pause, resume, restart or delete one connector at a time. Configuration lives in the flow builder.
+
+kc
+New kc
+No state reported
+Not managed yet
+
+This sink is not managed yet — open the flow builder to create a managed sync for it. Open flow builder
+
+Close
+Screenshot D-02-synctab.png taken.

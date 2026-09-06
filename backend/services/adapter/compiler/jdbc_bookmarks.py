@@ -33,6 +33,80 @@ if TYPE_CHECKING:  # pragma: no cover
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 
 
+# Groovy body for the watermark type probe (see `attach_watermark_type_probe`).
+#
+# Deliberately free of any `${...}` sequence: NiFi does not evaluate Expression
+# Language in `Script Body`, but keeping the text EL-free means the script
+# survives being round-tripped through anything that does.
+#
+# Every input arrives as a dynamic property rather than being interpolated into
+# the source, so the same body compiles once and is reused by every incremental
+# flow, and the values stay visible/editable in the NiFi UI.
+#
+# `getColumns` is tried three ways because catalog/schema mean different things
+# per driver: Trino reports catalog=`gold`, schema=`cmdb`; MySQL puts the
+# database in *catalog* and leaves schema null; PostgreSQL uses schema only.
+# Narrowing first and widening on a miss gets the right answer everywhere
+# without the compiler having to know which dialect it is talking to.
+_WATERMARK_TYPE_PROBE_GROOVY = """\
+import org.apache.nifi.dbcp.DBCPService
+
+def ff = session.get()
+if (!ff) return
+
+def prop = { n -> def p = context.getProperty(n); p == null ? null : p.getValue() }
+def blank = { s -> s == null || s.trim().isEmpty() }
+
+// java.sql.Types codes NiFi's own `sql.args.N.type` handling knows how to
+// bind. Anything outside this set reaches the driver as a raw string literal,
+// which is how a perfectly correct type code can still break the query.
+def BINDABLE = [-16, -15, -9, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 91, 92, 93, 2005, 2011] as Set
+// Types a driver may legitimately report that NiFi cannot bind, mapped to the
+// closest one it can. Trino reports `timestamp(6) with time zone` as 2014
+// (TIMESTAMP_WITH_TIMEZONE); NiFi has no branch for it, so it passes the epoch
+// through verbatim and Trino rejects "'1787480137525' is not a valid TIMESTAMP
+// literal". Narrowing to 93 makes NiFi parse the epoch into a real
+// java.sql.Timestamp and bind it properly.
+def ALIAS = [2014: 93, 2013: 92, 70: 12, 1111: 12]
+def bindable = { code ->
+    if (code == null) return null
+    def n = code as Integer
+    n = BINDABLE.contains(n) ? n : ALIAS[n]
+    return n == null ? null : String.valueOf(n)
+}
+
+def fallback = prop('dmp.watermark.fallback.type')
+def column = prop('dmp.watermark.column')
+def table = prop('dmp.watermark.table')
+def schema = prop('dmp.watermark.schema')
+def catalog = prop('dmp.watermark.catalog')
+def resolved = fallback
+
+try {
+    def dbcp = context.controllerServiceLookup.getControllerService(prop('dmp.dbcp.service.id')) as DBCPService
+    def conn = dbcp.getConnection()
+    try {
+        def find = { cat, sch ->
+            def rs = conn.getMetaData().getColumns(blank(cat) ? null : cat, blank(sch) ? null : sch, table, column)
+            try {
+                return rs.next() ? bindable(rs.getInt('DATA_TYPE')) : null
+            } finally {
+                rs.close()
+            }
+        }
+        resolved = find(catalog, schema) ?: find(null, schema) ?: find(null, null) ?: fallback
+    } finally {
+        conn.close()
+    }
+} catch (Exception e) {
+    log.warn('dmp watermark type probe failed for ' + table + '.' + column + '; falling back to JDBC type ' + fallback, e)
+    resolved = fallback
+}
+
+session.transfer(session.putAttribute(ff, 'jdbc.bookmark.type', resolved), REL_SUCCESS)
+"""
+
+
 @dataclass(frozen=True)
 class BookmarkSource:
     """The source cursor metadata propagated to a terminal block."""
@@ -131,6 +205,18 @@ def source_for_block(flow: Any, block: "FlowBlock") -> Optional[BookmarkSource]:
 
 def bookmark_key(flow_id: str, block_id: str) -> str:
     return f"dmp:jdbc:bookmark:{flow_id}:{block_id}"
+
+
+def bookmark_key_param(block_id: str) -> str:
+    """The NiFi parameter reference holding this block's Redis cache key.
+
+    Both the fetch and the commit must address the *same* entry, so both go
+    through this one helper. They previously disagreed in mechanism -- the
+    fetch read the `jdbc.bookmark.key` FlowFile attribute while the commit
+    used the parameter -- which resolved to the same string in a clean deploy
+    but let the two drift apart the moment either side was edited.
+    """
+    return f"#{{jdbc_bookmark_key_{block_id}}}"
 
 
 def _bookmark_cache(builder: "BlockBuilder", ctx: "CompileContext", *, add_param, flow_id: str, source: BookmarkSource) -> str:
@@ -275,12 +361,37 @@ def attach_bookmark_commit(
 ) -> tuple[str, str]:
     """Commit the candidate cursor after a terminal processor succeeds."""
     cache_key = _bookmark_cache(builder, ctx, add_param=add_param, flow_id=flow_id, source=source)
+    guard_key = f"{key_prefix}__bookmark_guard"
     payload_key = f"{key_prefix}__bookmark_payload"
     put_key = f"{key_prefix}__bookmark_commit"
     replacement_value = '{"watermark":"${jdbc.bookmark.candidate:escapeJson()}'
     if source.tie_breaker:
         replacement_value += '","tie":"${jdbc.bookmark.tie:escapeJson()}'
     replacement_value += '"}'
+    # A run that returns no rows is the normal steady state once the flow has
+    # caught up, and `bookmark_capture` uses "Path Not Found Behavior: skip",
+    # so `jdbc.bookmark.candidate` is simply absent on those runs. Without this
+    # guard the payload writer below -- "Always Replace", so it fires
+    # regardless -- would emit `{"watermark":""}` and the `replace` cache
+    # strategy would overwrite a perfectly good cursor with an empty one. The
+    # next run then binds '' as the watermark and dies in ExecuteSQLRecord
+    # before it can ever write a better bookmark, wedging the flow permanently.
+    # Dropping the FlowFile here leaves the stored cursor untouched, which is
+    # the at-least-once contract this module's docstring describes.
+    builder.add_processor(
+        ProcessorSpec(
+            key=guard_key,
+            name=guard_key,
+            type="org.apache.nifi.processors.standard.RouteOnAttribute",
+            properties={
+                "Routing Strategy": "Route to Property name",
+                "commit": "${jdbc.bookmark.candidate:isEmpty():not()}",
+            },
+            autoTerminate=["unmatched"],
+        )
+    )
+    builder.link(tail[0], guard_key, [tail[1]] if tail[1] else [])
+    builder.to_dlq(guard_key, "failure")
     builder.add_processor(
         ProcessorSpec(
             key=payload_key,
@@ -294,7 +405,7 @@ def attach_bookmark_commit(
             },
         )
     )
-    builder.link(tail[0], payload_key, [tail[1]] if tail[1] else [])
+    builder.link(guard_key, payload_key, ["commit"])
     builder.to_dlq(payload_key, "failure")
     builder.add_processor(
         ProcessorSpec(
@@ -302,7 +413,7 @@ def attach_bookmark_commit(
             name=put_key,
             type="org.apache.nifi.processors.standard.PutDistributedMapCache",
             properties={
-                "Cache Entry Identifier": f"#{{jdbc_bookmark_key_{source.block_id}}}",
+                "Cache Entry Identifier": bookmark_key_param(source.block_id),
                 "Cache Update Strategy": "replace",
                 "Distributed Cache Service": cache_key,
             },
@@ -312,6 +423,71 @@ def attach_bookmark_commit(
     builder.link(payload_key, put_key, ["success"])
     builder.to_dlq(put_key, "failure")
     return put_key, "success"
+
+
+def _table_parts(raw: str) -> tuple[str, str, str]:
+    """Split a configured table reference into (catalog, schema, table).
+
+    Read right-to-left so every supported shape works without knowing the
+    dialect: `asset_groups`, `cmdb.asset_groups`, `gold.cmdb.asset_groups`.
+    Missing levels come back empty and the probe simply widens its search.
+    """
+    parts = [p for p in str(raw or "").split(".") if p]
+    table = parts[-1] if parts else ""
+    schema = parts[-2] if len(parts) >= 2 else ""
+    catalog = parts[-3] if len(parts) >= 3 else ""
+    return catalog, schema, table
+
+
+def attach_watermark_type_probe(
+    builder: "BlockBuilder", *, block: "FlowBlock", source: BookmarkSource, db_pool: str, tail: tuple[str, str]
+) -> tuple[str, str]:
+    """Ask the JDBC driver for the watermark column's real type.
+
+    `sql.args.1.type` has to name the JDBC type NiFi should bind the stored
+    cursor as. The only other source for it is `config.watermarkType`, which
+    nothing in the product ever writes -- not the block form, not validation,
+    not any stored flow -- so it always fell back to 93/TIMESTAMP and every
+    non-timestamp watermark (an integer id, a date, a text column) was bound
+    as a timestamp and failed.
+
+    `DatabaseMetaData.getColumns().DATA_TYPE` is the driver's own answer, so
+    it is correct for Trino, PostgreSQL and MySQL alike with no dialect
+    specific SQL and no type-name mapping to maintain. Running it inside NiFi
+    -- which already holds the pooled connection built in `blocks_jdbc.py` --
+    keeps this backend free of database drivers and of any network path to
+    the customer's database.
+
+    One metadata round trip per scheduled run: stateless, nothing to
+    invalidate, and still right if the column is later re-typed. On any
+    failure the script logs and falls back to `source.watermark_type`, so a
+    driver that refuses metadata degrades to today's behaviour instead of
+    stalling the flow.
+    """
+    catalog, schema, table = _table_parts(str((block.config or {}).get("table") or block.entity or ""))
+    key = "bookmark_type_probe"
+    builder.add_processor(
+        ProcessorSpec(
+            key=key,
+            name=key,
+            type="org.apache.nifi.processors.script.ExecuteScript",
+            properties={
+                "Script Engine": "Groovy",
+                "Script Body": _WATERMARK_TYPE_PROBE_GROOVY,
+                # Exactly a controller-service plan key, so `_resolve_component_refs`
+                # in deployer/nifi_apply.py swaps it for the pool's real NiFi id.
+                "dmp.dbcp.service.id": db_pool,
+                "dmp.watermark.catalog": catalog,
+                "dmp.watermark.schema": schema,
+                "dmp.watermark.table": table,
+                "dmp.watermark.column": source.watermark_column.split(".")[-1],
+                "dmp.watermark.fallback.type": str(source.watermark_type),
+            },
+        )
+    )
+    builder.link(tail[0], key, [tail[1]] if tail[1] else [])
+    builder.to_dlq(key, "failure")
+    return key, "success"
 
 
 def add_incremental_source(
@@ -332,7 +508,7 @@ def add_incremental_source(
     cache_key = _bookmark_cache(builder, ctx, add_param=add_param, flow_id=flow.id, source=source)
     batch_writer_key = _ensure_incremental_json_writer(builder)
     period, strategy = cron
-    key_param = f"#{{jdbc_bookmark_key_{source.block_id}}}"
+    key_param = bookmark_key_param(source.block_id)
 
     builder.add_processor(
         ProcessorSpec(
@@ -349,7 +525,8 @@ def add_incremental_source(
             key="bookmark_fetch", name="bookmark_fetch",
             type="org.apache.nifi.processors.standard.FetchDistributedMapCache",
             properties={
-                "Cache Entry Identifier": "${jdbc.bookmark.key}",
+                # Same parameter the commit writes to -- see `bookmark_key_param`.
+                "Cache Entry Identifier": key_param,
                 "Distributed Cache Service": cache_key,
                 "Put Cache Value In Attribute": "jdbc.bookmark.raw",
                 "Max Length To Put In Attribute": "4096",
@@ -454,21 +631,53 @@ def add_incremental_source(
         query_seed_tail = ("bookmark_extract_tie", "matched")
     else:
         query_seed_tail = ("bookmark_extract", "matched")
+
+    # A cached entry can exist and still carry no usable cursor: an earlier
+    # build committed `{"watermark":""}` on every zero-row run, and
+    # `bookmark_extract` skips a missing path rather than failing. Feeding that
+    # into the parameterised query binds '' and throws inside ExecuteSQLRecord,
+    # and because the run dies before reaching the commit the flow can never
+    # repair itself. Treat an empty cursor as "no bookmark" and fall through to
+    # the seed branch built above, so a corrupt entry costs one replay instead
+    # of permanent downtime.
+    seed_key = "bookmark_initial_seed" if initial_is_new else "bookmark_oldest"
+    builder.add_processor(
+        ProcessorSpec(
+            key="bookmark_resume",
+            name="bookmark_resume",
+            type="org.apache.nifi.processors.standard.RouteOnAttribute",
+            properties={
+                "Routing Strategy": "Route to Property name",
+                "resume": "${jdbc.bookmark.value:isEmpty():not()}",
+            },
+        )
+    )
+    builder.link(query_seed_tail[0], "bookmark_resume", [query_seed_tail[1]])
+    builder.link("bookmark_resume", seed_key, ["unmatched"])
+    builder.to_dlq("bookmark_resume", "failure")
+
+    probe_tail = attach_watermark_type_probe(
+        builder, block=block, source=source, db_pool=db_pool, tail=("bookmark_resume", "resume")
+    )
+    # `sql.args.N.type` is resolved per run by the probe above rather than
+    # frozen at compile time; `source.watermark_type` survives as the script's
+    # fallback, so a flow that does set `watermarkType` still gets it.
+    watermark_type_el = "${jdbc.bookmark.type}"
     existing_query_tail = _update_attributes(
         builder,
         "bookmark_existing_query",
         {
             "jdbc.query": incremental_query_sql(block, source, with_cursor=True),
-            "sql.args.1.type": str(source.watermark_type),
+            "sql.args.1.type": watermark_type_el,
             "sql.args.1.value": "${jdbc.bookmark.value}",
             **({
-                "sql.args.2.type": str(source.watermark_type),
+                "sql.args.2.type": watermark_type_el,
                 "sql.args.2.value": "${jdbc.bookmark.value}",
                 "sql.args.3.type": str(source.tie_breaker_type),
                 "sql.args.3.value": "${jdbc.bookmark.tie}",
             } if source.tie_breaker else {}),
         },
-        tail=query_seed_tail,
+        tail=probe_tail,
     )
     builder.link(existing_query_tail[0], "query", [existing_query_tail[1]])
     if initial_is_new:

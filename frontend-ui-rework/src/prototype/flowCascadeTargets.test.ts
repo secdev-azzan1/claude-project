@@ -128,25 +128,16 @@ describe("flowCascadeTargets", () => {
     expect(targets[0].needsRetire).toBe(false);
   });
 
-  it("finds a Kafka Connect sync referenced by a flow block", () => {
+  it("no longer offers Kafka Connect syncs as a cascade target", () => {
+    // Deleting a flow now removes its connectors and sync records
+    // automatically on the backend, so a tickable cascade choice here would
+    // just be a second, redundant (and easy to un-tick, orphan-leaving) door.
+    // A block referencing a sync and nothing else (no service, no schema)
+    // used to produce exactly one "kafka_connect_sync" target; now it
+    // produces none.
     const f = flow({ blocks: [block({ adapter: "kafka_kc", config: { syncId: "sync-1" } })] });
     const targets = flowCascadeTargets(f, state({ flows: [f] }), [sync()]);
-    expect(targets).toEqual([
-      expect.objectContaining({
-        kind: "kafka_connect_sync",
-        id: "sync-1",
-        name: "bronze.flow.entity",
-        sharedWith: [],
-        needsRetire: true,
-      }),
-    ]);
-  });
-
-  it("protects a Kafka Connect sync shared by another flow", () => {
-    const mine = flow({ blocks: [block({ adapter: "kafka_kc", config: { syncId: "sync-1" } })] });
-    const other = flow({ id: "f2", name: "other flow", blocks: [block({ id: "b9", adapter: "kafka_kc", config: { syncId: "sync-1" } })] });
-    const targets = flowCascadeTargets(mine, state({ flows: [mine, other] }), [sync()]);
-    expect(targets.find((target) => target.kind === "kafka_connect_sync")?.sharedWith).toEqual(["other flow"]);
+    expect(targets).toEqual([]);
   });
 
   it("never sets needsRetire on schemas or proxies", () => {

@@ -37,6 +37,7 @@ import type {
   FlowBlock,
   FlowMetrics,
   FlowRuntime,
+  FlowSinkStatusResponse,
   GatewayCertProfile,
   GatewayProxy,
   GatewayResources,
@@ -693,9 +694,39 @@ export async function refreshKafkaConnectSyncStatus(id: string): Promise<KafkaCo
   return mapKafkaConnectSync(raw);
 }
 
+/**
+ * Live sink status for every kc/kafka_kc block in a flow, read straight off
+ * the cluster in one call — this is what replaced the cached `last_status`
+ * poll (`listKafkaConnectSyncs`) on the Sync tab. One entry per sink block,
+ * whether or not it has a sync record; see `FlowSinkStatusEntry` for the
+ * reachable-vs-UNDEPLOYED distinction.
+ */
+export async function getFlowSinkStatus(flowId: string): Promise<FlowSinkStatusResponse> {
+  return request<FlowSinkStatusResponse>(`/api/kafka-connect/flows/${flowId}/sink-status`);
+}
+
+/**
+ * Operate one sink by flow+block id rather than by sync id — works even when
+ * the block has no sync record yet (`start` creates the connector from the
+ * block's stored `sinkConfig` and creates the sync record too). Backend
+ * enforces the flow's queue lock for every verb here, same as the sync-id
+ * verbs.
+ */
+export async function flowSinkAction(
+  flowId: string,
+  blockId: string,
+  verb: "start" | "stop" | "pause" | "resume" | "restart" | "refresh",
+): Promise<KafkaConnectSync> {
+  const raw = await request<Record<string, unknown>>(
+    `/api/kafka-connect/flows/${flowId}/sinks/${blockId}/${verb}`,
+    { method: "POST" },
+  );
+  return mapKafkaConnectSync(raw);
+}
+
 // -------------------------------------------------- flow cascade deletion
 
-export type CascadeKind = "schema" | "service" | "proxy" | "kafka_connect_sync";
+export type CascadeKind = "schema" | "service" | "proxy";
 
 export interface CascadeTarget {
   kind: CascadeKind;
@@ -704,24 +735,26 @@ export interface CascadeTarget {
   /** Names of OTHER flows that also use this. Non-empty means it cannot be
    *  deleted along with this flow without breaking them. */
   sharedWith: string[];
-  /** Services and Kafka Connect syncs: the resource is still active, and its
-   *  delete endpoint refuses an active resource. Deleting it here has to
-   *  retire it first -- the same way deleting a deployed flow has to undeploy
-   *  first. */
+  /** Services: the resource is still active, and its delete endpoint refuses
+   *  an active resource. Deleting it here has to retire it first -- the same
+   *  way deleting a deployed flow has to undeploy first. */
   needsRetire?: boolean;
 }
 
 /**
  * Everything that hangs off one flow and could be deleted with it.
  *
- * The three associations are each expressed differently, which is why this
- * has to be computed rather than read off the flow:
+ * The associations are each expressed differently, which is why this has to
+ * be computed rather than read off the flow:
  *   - schemas: reverse pointer, ApprovedSchema.flowId -> flow
  *   - services: block.serviceId OR block.config.sinkServiceId
  *   - proxies: two hops, block.serviceId -> AppService.config.proxyId,
  *              with the legacy block.config.proxyId still honoured
- *   - Kafka Connect syncs: block.config.syncId, with shared references
- *     discovered from every flow in the current catalog
+ *
+ * Kafka Connect syncs are deliberately NOT offered here any more: deleting a
+ * flow now removes its connectors and sync records automatically on the
+ * backend (see the flow-delete sweep), so an unticked cascade box would leave
+ * an invisible orphan rather than a real choice.
  *
  * Anything shared with another flow is returned with a populated `sharedWith`
  * so the dialog can show it but refuse to delete it.
@@ -774,29 +807,6 @@ export function flowCascadeTargets(
     targets.push({ kind: "proxy", id: proxy.id, name: proxy.name, sharedWith });
   }
 
-  const syncIds = new Set<string>();
-  for (const block of flow.blocks) {
-    const syncId = block.config?.syncId;
-    if (typeof syncId === "string" && syncId.trim()) syncIds.add(syncId.trim());
-  }
-  for (const syncId of syncIds) {
-    const sync = kafkaConnectSyncs.find((candidate) => candidate.id === syncId);
-    if (!sync) continue;
-    const sharedWith = s.flows
-      .filter((candidate) => candidate.id !== flow.id)
-      .filter((candidate) =>
-        candidate.blocks.some((block) => block.config?.syncId === syncId),
-      )
-      .map((candidate) => candidate.name);
-    targets.push({
-      kind: "kafka_connect_sync",
-      id: sync.id,
-      name: sync.name,
-      sharedWith,
-      needsRetire: !sync.retired,
-    });
-  }
-
   return targets;
 }
 
@@ -815,10 +825,6 @@ export async function deleteCascadeTarget(target: CascadeTarget): Promise<void> 
   if (target.kind === "service") {
     if (target.needsRetire) await retireService(target.id);
     return deleteService(target.id);
-  }
-  if (target.kind === "kafka_connect_sync") {
-    if (target.needsRetire) await retireKafkaConnectSync(target.id);
-    return deleteKafkaConnectSync(target.id);
   }
   return deleteGatewayProxy(target.id);
 }

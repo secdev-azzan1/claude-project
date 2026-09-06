@@ -1508,16 +1508,24 @@ function JdbcSettings({
         )}
         {!isTrino && <p className="text-xs text-muted-foreground">No custom SQL — everything is generated from picked tables and columns.</p>}
       </div>
-      <div className="grid gap-1.5">
-        <Label>Columns</Label>
-        <Input
-          className="font-mono text-xs"
-          value={columns.join(", ")}
-          disabled={locked}
-          placeholder="asset_id, hostname, updated_at"
-          onChange={(e) => onPatchConfig(block.id, { columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
-        />
-      </div>
+      {/* Columns is a read-side projection only. A write never consults it:
+          PutDatabaseRecord matches record fields to table columns itself, so
+          `_compile_write` (backend compiler/blocks_jdbc.py) produces a
+          byte-identical processor whether this is set or not. Showing it on a
+          write implied you could restrict which columns get written, which
+          was never true. */}
+      {block.mode !== "write" && (
+        <div className="grid gap-1.5">
+          <Label>Columns</Label>
+          <Input
+            className="font-mono text-xs"
+            value={columns.join(", ")}
+            disabled={locked}
+            placeholder="asset_id, hostname, updated_at"
+            onChange={(e) => onPatchConfig(block.id, { columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+          />
+        </div>
+      )}
       {block.mode === "lookup" && (
         <div className="grid gap-1.5">
           <Label>Join field</Label>

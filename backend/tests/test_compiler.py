@@ -593,7 +593,9 @@ def test_jdbc_read_incremental_golden_checks():
     assert batch_writer.type == "org.apache.nifi.json.JsonRecordSetWriter"
     assert batch_writer.properties["Output Grouping"] == "output-array"
     query_seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
-    assert query_seed.properties["sql.args.1.type"] == "93"
+    # Resolved per run by `bookmark_type_probe` rather than frozen at compile
+    # time, so a non-timestamp watermark is not bound as a timestamp.
+    assert query_seed.properties["sql.args.1.type"] == "${jdbc.bookmark.type}"
     assert query_seed.properties["sql.args.1.value"] == "${jdbc.bookmark.value}"
     assert "WHERE updated_at > ?" in query_seed.properties["jdbc.query"]
 
@@ -633,6 +635,135 @@ def test_jdbc_read_incremental_golden_checks():
     assert dlq_from_capture and dlq_from_capture[0].relationships == ["failure"]
 
 
+def test_jdbc_write_to_trino_forces_autocommit_and_unbatched():
+    """Trino's Iceberg catalogs reject PutDatabaseRecord's transactional default.
+
+    A live run against `gold.api_test.posts` failed every batch with
+    "Catalog only supports writes using autocommit: gold" and landed zero
+    rows. NiFi additionally refuses to validate the processor unless
+    `Maximum Batch Size` is 0 whenever autocommit is on, so the two move
+    together.
+    """
+    flow = jdbc_flow()
+    flow.blocks[0].config["table"] = "gold.api_test.src"
+    flow.blocks[1].config["table"] = "gold.api_test.posts"
+    ctx = jdbc_ctx()
+    ctx.services["svc-db"] = make_service(
+        id="svc-db", type="database", name="Trino",
+        config={"dialect": "trino", "url": "https://trino.internal", "username": "svc"},
+    )
+    plan = compile_flow(flow, ctx)
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    write = next(p for p in group.processors if p.key == "write")
+
+    assert write.properties["Database Session AutoCommit"] == "true"
+    assert write.properties["Maximum Batch Size"] == "0"
+    # Only the leaf name reaches the processor; catalog+schema ride in the URL.
+    assert write.properties["Table Name"] == "posts"
+
+
+def test_jdbc_write_to_postgres_keeps_nifi_transactional_default():
+    """The Trino override must not leak onto other dialects.
+
+    postgresql/mysql keep NiFi's default, where a failed batch rolls back
+    instead of leaving behind the rows it happened to write first.
+    """
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    write = next(p for p in group.processors if p.key == "write")
+
+    assert "Database Session AutoCommit" not in write.properties
+    assert "Maximum Batch Size" not in write.properties
+
+
+def test_jdbc_incremental_never_commits_an_empty_cursor():
+    """A zero-row run must leave the stored bookmark alone.
+
+    `bookmark_capture` skips a not-found path, so `jdbc.bookmark.candidate` is
+    simply absent once a flow has caught up. The payload writer is "Always
+    Replace" and the cache strategy is "replace", so without a guard that run
+    would blank a perfectly good cursor -- and the next run would bind '' and
+    die in ExecuteSQLRecord before it could ever write a better one.
+    """
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    payload = next(p for p in group.processors if p.key == "jdbc_write__bookmark_payload")
+    inbound = [c for c in group.connections if c.to == payload.key]
+    assert len(inbound) == 1
+    guard = next(p for p in group.processors if p.key == inbound[0].from_)
+    assert guard.type == "org.apache.nifi.processors.standard.RouteOnAttribute"
+    # The empty case is dropped, not routed onward to the commit.
+    assert "unmatched" in guard.autoTerminate
+    assert not any(c.from_ == guard.key and "unmatched" in c.relationships for c in group.connections)
+
+
+def test_jdbc_incremental_empty_bookmark_reseeds_instead_of_wedging():
+    """An entry that exists but holds no cursor must fall back to the seed query."""
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    resume = next(p for p in group.processors if p.key == "bookmark_resume")
+    assert resume.properties["resume"] == "${jdbc.bookmark.value:isEmpty():not()}"
+    # Empty cursor -> the same processor the "no bookmark at all" path uses.
+    assert any(
+        c.from_ == "bookmark_resume" and c.to == "bookmark_oldest" and c.relationships == ["unmatched"]
+        for c in group.connections
+    )
+    assert any(
+        c.from_ == "bookmark_fetch" and c.to == "bookmark_oldest" and c.relationships == ["not-found"]
+        for c in group.connections
+    )
+    # A non-empty cursor still reaches the parameterised query.
+    assert any(c.from_ == "bookmark_resume" and c.relationships == ["resume"] for c in group.connections)
+
+
+def test_jdbc_incremental_probes_the_watermark_type_through_nifi():
+    """The JDBC type comes from the driver at run time, not from a compile-time guess."""
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+
+    probe = next(p for p in group.processors if p.key == "bookmark_type_probe")
+    assert probe.type == "org.apache.nifi.processors.script.ExecuteScript"
+    assert probe.properties["Script Engine"] == "Groovy"
+    # Exactly the plan key, so the deployer swaps it for the pool's real id.
+    assert probe.properties["dmp.dbcp.service.id"] == "cs_db_pool"
+    assert probe.properties["dmp.watermark.column"] == "updated_at"
+    assert probe.properties["dmp.watermark.table"] == "cmdb_assets"
+    # Unqualified table -> nothing invented for the levels that were not given.
+    assert probe.properties["dmp.watermark.schema"] == ""
+    assert probe.properties["dmp.watermark.catalog"] == ""
+    # `watermarkType` survives as the script's fallback rather than being dropped.
+    assert probe.properties["dmp.watermark.fallback.type"] == "93"
+    assert "${" not in probe.properties["Script Body"]
+
+    query_seed = next(p for p in group.processors if p.key == "bookmark_existing_query")
+    assert any(c.from_ == "bookmark_type_probe" and c.to == query_seed.key for c in group.connections)
+    assert any(c.from_ == "bookmark_type_probe" and c.to == "dlq" for c in group.connections)
+
+
+def test_watermark_type_probe_splits_qualified_tables_right_to_left():
+    """catalog/schema/table, read from the right so every dialect shape works."""
+    from services.adapter.compiler.jdbc_bookmarks import _table_parts
+
+    assert _table_parts("gold.cmdb.asset_groups") == ("gold", "cmdb", "asset_groups")
+    assert _table_parts("public.assets") == ("", "public", "assets")
+    assert _table_parts("assets") == ("", "", "assets")
+    assert _table_parts("") == ("", "", "")
+
+
+def test_jdbc_incremental_fetch_and_commit_address_the_same_key():
+    """Both sides go through the parameter; a drifting pair silently desyncs."""
+    plan = compile_flow(jdbc_flow(), jdbc_ctx())
+    read = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    write = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+
+    fetch = next(p for p in read.processors if p.key == "bookmark_fetch")
+    commit = next(p for p in write.processors if p.key == "jdbc_write__bookmark_commit")
+    assert fetch.properties["Cache Entry Identifier"] == "#{jdbc_bookmark_key_b-read}"
+    assert fetch.properties["Cache Entry Identifier"] == commit.properties["Cache Entry Identifier"]
+
+
 def test_jdbc_incremental_requires_redis_at_compile_time():
     ctx = jdbc_ctx()
     del ctx.connections["redis"]
@@ -655,7 +786,16 @@ def test_jdbc_write():
     assert commit.type == "org.apache.nifi.processors.standard.PutDistributedMapCache"
     assert commit.properties["Distributed Cache Service"] == "cs_jdbc_bookmark_cache"
     assert "success" in commit.autoTerminate
-    assert any(c.from_ == "write" and c.to == payload.key and c.relationships == ["success"] for c in group.connections)
+    # The terminal writer no longer feeds the payload builder directly -- it
+    # goes through the guard, which is the only thing standing between a
+    # zero-row run and an empty cursor overwriting a good one.
+    guard = next(p for p in group.processors if p.key == "jdbc_write__bookmark_guard")
+    assert guard.type == "org.apache.nifi.processors.standard.RouteOnAttribute"
+    assert guard.properties["commit"] == "${jdbc.bookmark.candidate:isEmpty():not()}"
+    assert "unmatched" in guard.autoTerminate
+    assert any(c.from_ == "write" and c.to == guard.key and c.relationships == ["success"] for c in group.connections)
+    assert any(c.from_ == guard.key and c.to == payload.key and c.relationships == ["commit"] for c in group.connections)
+    assert not any(c.from_ == "write" and c.to == payload.key for c in group.connections)
     assert any(c.from_ == payload.key and c.to == commit.key and c.relationships == ["success"] for c in group.connections)
 
     assert "retry" in write.autoTerminate
@@ -925,7 +1065,9 @@ def test_kafka_read_json_split_and_offset_reset():
     consume = next(p for p in group.processors if p.key == "consume")
     assert consume.type == "org.apache.nifi.kafka.processors.ConsumeKafka"
     assert consume.properties["Group ID"] == "kafka_read_flow__b-kread"
-    assert consume.properties["Auto Offset Reset"] == "latest"  # initialPosition "new"
+    # Dotted-lowercase is the NiFi property NAME; "Auto Offset Reset" is only its
+    # displayName, and sending that made NiFi refuse the whole deploy.
+    assert consume.properties["auto.offset.reset"] == "latest"  # initialPosition "new"
 
     topic_param = next(p for p in plan.parameterContext.parameters if p.name == "topic_b-kread")
     assert topic_param.value == "partner.threatfeed.indicators"  # adopted topic's own name, not config.topicName
@@ -955,7 +1097,9 @@ def test_kafka_read_raw_no_transforms_or_split():
 
     assert "split" not in keys and "convert" not in keys  # R8: byte passthrough, no record processing
     consume = next(p for p in group.processors if p.key == "consume")
-    assert consume.properties["Auto Offset Reset"] == "earliest"  # initialPosition "beginning"
+    assert consume.properties["auto.offset.reset"] == "earliest"  # initialPosition "beginning"
+    # Guard against the displayName creeping back in: NiFi rejects it outright.
+    assert "Auto Offset Reset" not in consume.properties
     assert "success" in consume.autoTerminate  # nothing downstream -- auto-terminated tail
 
 

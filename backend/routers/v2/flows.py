@@ -28,7 +28,9 @@ from models.adapter import AppService, ApprovedSchema, Flow, GatewayProxy, Platf
 from models.adapter.bulk_job import BULK_VERBS, TERMINAL_BULK_STATES, bulk_job_to_response
 from services.adapter import bulk_runner, runtime as runtime_svc
 from services.adapter.common import COLLECTIONS, audit, new_id, now_iso
-from services.adapter.deployer import lifecycle
+from services.adapter.connector_names import connector_names_for_flow
+from services.adapter.deployer import connect_apply, lifecycle
+from services.adapter.deployer import topics as deployer_topics
 from services.adapter.sink_secrets import SECRET_PLACEHOLDER, merge_preserving_secrets, redact_config
 from services.adapter.topic_inventory import materialize_flow_topics
 from services.runtime_recovery import APP_INSTANCE_ID
@@ -444,9 +446,137 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
         issues += sync_link_issues
         raise HTTPException(status_code=422, detail={"issues": issues})
 
+    # A kc/kafka_kc block removed from the payload leaves its connector
+    # running on the cluster forever unless we tear it down here -- once
+    # this save lands, `existing`'s block is gone and nothing else will ever
+    # name that connector again except its sync record (if one is linked).
+    # See services/adapter/connector_names.py's module docstring for why
+    # identity must never be read off `runtimeScopeMap`.
+    drift_messages: List[str] = []
+    if existing:
+        payload_block_ids = {b.id for b in flow_in.blocks}
+        removed_block_ids = {
+            block_id for block_id in existing_blocks_by_id if block_id not in payload_block_ids
+        }
+        removed_kc_blocks = [
+            block
+            for block_id, block in existing_blocks_by_id.items()
+            if block_id in removed_block_ids and block.get("adapter") in ("kc", "kafka_kc")
+        ]
+        if removed_kc_blocks:
+            syncs = await db[COLLECTIONS.kafka_connect_syncs].find({}, {"_id": 0}).to_list(None)
+            connections = await _load_connections(db)
+            kc_conn_doc = next((c for c in connections if c.type == "kafka_connect" and c.active), None)
+            kc_conn = lifecycle._kafka_connect_conn_dict(kc_conn_doc) if kc_conn_doc else None
+            undeletable: List[str] = []
+            for block in removed_kc_blocks:
+                block_id = block.get("id")
+                # Reuse the resolver's own path-1 logic (prefer the linked
+                # sync's recorded name, else derive `{tokenize}.{blockId}.
+                # {adapter}`) by feeding it a single-block synthetic flow doc
+                # whose id cannot collide with any real sync's
+                # `linked_flow_id` -- that keeps the resolver's path 2 (every
+                # sync stored against the REAL flow id) from also pulling in
+                # names that belong to blocks other than the one being
+                # removed here.
+                synthetic_flow = {
+                    "id": f"__removed_block__{flow_in.id}__{block_id}",
+                    "name": existing.get("name") or "",
+                    "blocks": [block],
+                }
+                names = connector_names_for_flow(synthetic_flow, syncs)
+                if not names:
+                    continue
+                connector_name = names[0]
+                linked_sync = next((s for s in syncs if s.get("linked_block_id") == block_id), None)
+
+                deleted_ok = False
+                if kc_conn is not None:
+                    await connect_apply.stop_connectors(kc_conn, [connector_name])
+                    delete_results = await connect_apply.delete_connectors(kc_conn, [connector_name])
+                    deleted_ok = bool(delete_results) and all(r.get("ok") for r in delete_results)
+
+                if deleted_ok:
+                    if linked_sync and linked_sync.get("id"):
+                        await db[COLLECTIONS.kafka_connect_syncs].delete_one({"id": linked_sync["id"]})
+                else:
+                    # Cluster unreachable/refused the delete: the edit still
+                    # saves (the block is already gone from the payload), but
+                    # the sync record is KEPT -- once the block is gone, that
+                    # record is the ONLY thing left naming the still-live
+                    # connector. Losing it would strand the connector
+                    # permanently; a retained record is recoverable.
+                    undeletable.append(connector_name)
+
+            if undeletable:
+                drift_messages.append(
+                    "Removed block(s) left connector(s) still live on Kafka Connect because the delete "
+                    f"could not be completed: {', '.join(undeletable)}. Their sync record(s) were kept so "
+                    "the connector(s) can still be found -- retry once Kafka Connect is reachable."
+                )
+
+        # A removed kafka/kafka_kc write block leaves its topic behind on the
+        # cluster forever unless we drop it here -- undeploy only empties
+        # topics and a whole-flow delete removes them, but block removal did
+        # neither. Look at `existing`'s topics, not `flow_in`'s: the incoming
+        # payload has already had the removed block's FlowTopic node stripped
+        # out (Flow Builder's `syncFlowTopics` keeps `flow.topics` in sync
+        # with live writer blocks), so by the time this save reaches here the
+        # only remaining record of that topic's name is the stored document.
+        removed_topics = [
+            topic
+            for topic in (existing.get("topics") or [])
+            # Exclusion 1: an adopted topic is never ours to delete -- the
+            # platform did not create it and does not own its lifecycle.
+            # `syncFlowTopics` on the frontend refuses to drop these from
+            # `flow.topics` for exactly the same reason; mirror that here.
+            if topic.get("kind") == "materialized"
+            # Exclusion 2 (implicit): the flow's DLQ topic is flow-level, not
+            # tied to any block, so it is never stored in `flow.topics` and
+            # can never match this filter -- it survives block removal (and
+            # undeploy) by design, only a whole-flow delete removes it.
+            and topic.get("writerBlockId") in removed_block_ids
+            # Exclusion 3: match on the block that WROTE the topic, never on
+            # its name. A name-diff would also fire when an entity is
+            # renamed -- the derived name changes, the old name vanishes from
+            # `flow.topics`, and a name-diff would misread that as a deletion
+            # and destroy a topic nobody asked to remove.
+        ]
+        if removed_topics:
+            connections = await _load_connections(db)
+            kafka_conn_doc = next((c for c in connections if c.type == "kafka" and c.active), None)
+            kafka_conn = lifecycle._kafka_conn_dict(kafka_conn_doc) if kafka_conn_doc else None
+            undeletable_topics: List[str] = []
+            for topic in removed_topics:
+                topic_name = topic.get("name")
+                if not topic_name:
+                    continue
+                deleted_ok = False
+                if kafka_conn is not None:
+                    result = await deployer_topics.delete_topic(kafka_conn, topic_name)
+                    deleted_ok = bool(result.get("ok"))
+                if not deleted_ok:
+                    # Kafka unreachable/refused the delete: the edit still
+                    # saves (the block and its FlowTopic node are already
+                    # gone from the payload), but the flow's drift is
+                    # stamped so the orphaned topic is not silently lost --
+                    # same shape/tone as the connector-delete failure above.
+                    undeletable_topics.append(topic_name)
+
+            if undeletable_topics:
+                drift_messages.append(
+                    "Removed block(s) left topic(s) still live on Kafka because the delete could not be "
+                    f"completed: {', '.join(undeletable_topics)}. Retry once Kafka is reachable, or clear/"
+                    "delete them manually."
+                )
+
+    drift_message = " ".join(drift_messages) if drift_messages else None
+
     now = now_iso()
     next_doc = flow_in.model_dump()
     next_doc["updatedAt"] = now
+    if drift_message:
+        next_doc["drift"] = drift_message
 
     if existing:
         next_doc["createdAt"] = existing.get("createdAt") or now

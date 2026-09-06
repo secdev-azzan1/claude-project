@@ -45,6 +45,11 @@ class FakeDB:
         self.audit_v2 = FaultInjectingCollection()
         self.openapi_specs_v2 = FaultInjectingCollection()
         self.kafka_connect_syncs_v2 = FaultInjectingCollection()
+        # Only needed by the save-time block-removal connector-cleanup tests
+        # below (`_load_connections` reads this to find an active
+        # kafka_connect connection) -- absent from every other test in this
+        # file, which never touch that code path (no kc/kafka_kc blocks).
+        self.connections_v2 = FaultInjectingCollection()
 
     def __getitem__(self, name):
         return getattr(self, name)
@@ -352,6 +357,359 @@ def test_save_rename_of_never_deployed_draft_flow_allowed():
         resp = client.post("/api/v2/flows/", json=renamed)
         assert resp.status_code == 200, resp.text
         assert resp.json()["name"] == "Renamed While Draft"
+    finally:
+        _clear_overrides()
+
+
+def _flow_with_kc_block(flow_id: str = "flow-kc-1", **overrides):
+    """`_valid_flow` plus a third block: a kafka_kc sink hanging off the
+    kafka-write block, linked to a `KafkaConnectSync` doc via `syncId` --
+    the shape the save-time block-removal cleanup targets."""
+    flow = _valid_flow(flow_id=flow_id, **overrides)
+    flow["blocks"].append(
+        {
+            "id": "b3",
+            "adapter": "kafka_kc",
+            "mode": "write",
+            "name": "Iceberg Sink",
+            "parentId": "b2",
+            "serviceId": None,
+            "entity": None,
+            "config": {"syncId": "sync-kc-1"},
+            "transforms": [],
+        }
+    )
+    return flow
+
+
+def _seed_kc_sync(fake_db: FakeDB, *, flow_id: str, block_id: str = "b3", sync_id: str = "sync-kc-1"):
+    fake_db.kafka_connect_syncs_v2.docs.append(
+        {
+            "id": sync_id,
+            "direction": "sink",
+            "enabled": True,
+            "remote_present": True,
+            "retired": False,
+            "connector_name": "recorded.connector.name",
+            "last_status": {"connector": {"state": "RUNNING"}},
+            "linked_flow_id": flow_id,
+            "linked_block_id": block_id,
+        }
+    )
+
+
+def _seed_active_kafka_connect_connection(fake_db: FakeDB):
+    fake_db.connections_v2.docs.append(
+        {
+            "id": "conn-kc",
+            "type": "kafka_connect",
+            "name": "Connect",
+            "active": True,
+            "health": "Healthy",
+            "reachability": "Reachable",
+            "lastTestedAt": None,
+            "config": {"url": "https://connect.test"},
+            "hasSecret": False,
+        }
+    )
+
+
+def test_save_removing_kc_block_deletes_its_connector_and_sync_record(monkeypatch):
+    """Feature 1 happy path: a kc block dropped from the payload on save
+    must have its (recorded) connector name stopped+deleted on the cluster,
+    and -- only once that delete succeeds -- its linked sync record removed
+    from kafka_connect_syncs_v2."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connect_connection(fake_db)
+    existing = _flow_with_kc_block()
+    fake_db.flows_v2.docs.append(existing)
+    _seed_kc_sync(fake_db, flow_id=existing["id"])
+
+    stop_calls = []
+    delete_calls = []
+
+    async def fake_stop_connectors(kc_conn, names):
+        stop_calls.append(list(names))
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    async def fake_delete_connectors(kc_conn, names):
+        delete_calls.append(list(names))
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(v2_flows.connect_apply, "stop_connectors", fake_stop_connectors)
+    monkeypatch.setattr(v2_flows.connect_apply, "delete_connectors", fake_delete_connectors)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        updated["blocks"] = [b for b in existing["blocks"] if b["id"] != "b3"]  # drop the kc block
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        assert stop_calls == [["recorded.connector.name"]]
+        assert delete_calls == [["recorded.connector.name"]]
+
+        assert fake_db.kafka_connect_syncs_v2.docs == []
+        assert [b["id"] for b in fake_db.flows_v2.docs[0]["blocks"]] == ["b1", "b2"]
+        assert not fake_db.flows_v2.docs[0].get("drift")
+    finally:
+        _clear_overrides()
+
+
+def test_save_removing_kc_block_keeps_sync_and_stamps_drift_when_delete_fails(monkeypatch):
+    """Feature 1 failure path: if the cluster refuses/can't complete the
+    connector delete, the save must still succeed (the block is already gone
+    from the payload) but the sync record must be KEPT -- it is the only
+    remaining thing naming the still-live connector -- and the flow's
+    `drift` field must be stamped so the situation is visible."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connect_connection(fake_db)
+    existing = _flow_with_kc_block(flow_id="flow-kc-2")
+    fake_db.flows_v2.docs.append(existing)
+    _seed_kc_sync(fake_db, flow_id=existing["id"])
+
+    async def fake_stop_connectors(kc_conn, names):
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    async def fake_delete_connectors(kc_conn, names):
+        return [{"name": n, "ok": False, "error": "cluster unreachable"} for n in names]
+
+    monkeypatch.setattr(v2_flows.connect_apply, "stop_connectors", fake_stop_connectors)
+    monkeypatch.setattr(v2_flows.connect_apply, "delete_connectors", fake_delete_connectors)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        updated["blocks"] = [b for b in existing["blocks"] if b["id"] != "b3"]
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        assert [s["id"] for s in fake_db.kafka_connect_syncs_v2.docs] == ["sync-kc-1"]
+        saved = fake_db.flows_v2.docs[0]
+        assert saved.get("drift")
+        assert "recorded.connector.name" in saved["drift"]
+    finally:
+        _clear_overrides()
+
+
+# ------------------------------------------------- Feature 2: topic cleanup
+
+def _seed_active_kafka_connection(fake_db: FakeDB):
+    fake_db.connections_v2.docs.append(
+        {
+            "id": "c-kafka",
+            "type": "kafka",
+            "name": "Kafka",
+            "active": True,
+            "health": "Healthy",
+            "config": {"bootstrapServers": "kafka:9092", "mode": "native", "securityProtocol": "PLAINTEXT"},
+        }
+    )
+
+
+def _seed_kc_block_removal_prereqs(fake_db: FakeDB, monkeypatch, existing):
+    """Every test below drops the flow's kc/kafka_kc block (`b3`), which
+    also triggers the existing (Feature 1) connector-cleanup path. Give that
+    path everything it needs to succeed cleanly so these tests can assert on
+    the topic-cleanup outcome alone, unpolluted by a connector-delete drift
+    message."""
+    _seed_active_kafka_connect_connection(fake_db)
+    _seed_kc_sync(fake_db, flow_id=existing["id"])
+
+    async def fake_stop_connectors(kc_conn, names):
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    async def fake_delete_connectors(kc_conn, names):
+        return [{"name": n, "ok": True, "error": None} for n in names]
+
+    monkeypatch.setattr(v2_flows.connect_apply, "stop_connectors", fake_stop_connectors)
+    monkeypatch.setattr(v2_flows.connect_apply, "delete_connectors", fake_delete_connectors)
+
+
+def test_save_removing_kafka_kc_block_deletes_its_materialized_topic(monkeypatch):
+    """Feature 2 happy path: a kafka_kc block dropped from the payload on
+    save must have its materialized topic (from the stored `existing` doc,
+    matched by `writerBlockId`) deleted from Kafka."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connection(fake_db)
+    existing = _flow_with_kc_block(flow_id="flow-topic-1")
+    existing["topics"] = [
+        {"id": "t-b3", "kind": "materialized", "name": "iceberg.thing", "sealed": True, "writerBlockId": "b3"},
+    ]
+    fake_db.flows_v2.docs.append(existing)
+    _seed_kc_block_removal_prereqs(fake_db, monkeypatch, existing)
+
+    delete_calls = []
+
+    async def fake_delete_topic(kafka_conn, topic):
+        delete_calls.append(topic)
+        return {"ok": True, "topic": topic}
+
+    monkeypatch.setattr(v2_flows.deployer_topics, "delete_topic", fake_delete_topic)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        updated["blocks"] = [b for b in existing["blocks"] if b["id"] != "b3"]  # drop the kafka_kc block
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        assert delete_calls == ["iceberg.thing"]
+        assert not fake_db.flows_v2.docs[0].get("drift")
+    finally:
+        _clear_overrides()
+
+
+def test_save_removing_block_never_deletes_an_adopted_topic(monkeypatch):
+    """The platform does not own an adopted topic's lifecycle -- removing
+    the block that references it must never delete it from Kafka, mirroring
+    the frontend's `syncFlowTopics`, which refuses to drop these from
+    `flow.topics` for the same reason."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connection(fake_db)
+    existing = _flow_with_kc_block(flow_id="flow-topic-2")
+    existing["topics"] = [
+        {"id": "t-b3", "kind": "adopted", "name": "external.owned.topic", "sealed": True, "writerBlockId": "b3"},
+    ]
+    fake_db.flows_v2.docs.append(existing)
+    _seed_kc_block_removal_prereqs(fake_db, monkeypatch, existing)
+
+    delete_calls = []
+
+    async def fake_delete_topic(kafka_conn, topic):
+        delete_calls.append(topic)
+        return {"ok": True, "topic": topic}
+
+    monkeypatch.setattr(v2_flows.deployer_topics, "delete_topic", fake_delete_topic)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        updated["blocks"] = [b for b in existing["blocks"] if b["id"] != "b3"]
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        assert delete_calls == []
+    finally:
+        _clear_overrides()
+
+
+def test_save_removing_block_never_deletes_the_dlq_topic(monkeypatch):
+    """The DLQ topic is flow-level, not block-level, and survives undeploy
+    by design -- it is never stored in `flow.topics` with a `writerBlockId`,
+    so a block removal must never touch it. Simulate the flow-level entry a
+    stray/legacy doc might carry (no `writerBlockId`) and confirm it's
+    skipped because it can never match a removed block id."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connection(fake_db)
+    existing = _flow_with_kc_block(flow_id="flow-topic-3")
+    existing["topics"] = [
+        {"id": "t-dlq", "kind": "materialized", "name": "dlq.flow_topic_3", "sealed": True, "writerBlockId": None},
+    ]
+    fake_db.flows_v2.docs.append(existing)
+    _seed_kc_block_removal_prereqs(fake_db, monkeypatch, existing)
+
+    delete_calls = []
+
+    async def fake_delete_topic(kafka_conn, topic):
+        delete_calls.append(topic)
+        return {"ok": True, "topic": topic}
+
+    monkeypatch.setattr(v2_flows.deployer_topics, "delete_topic", fake_delete_topic)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        updated["blocks"] = [b for b in existing["blocks"] if b["id"] != "b3"]
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        assert delete_calls == []
+    finally:
+        _clear_overrides()
+
+
+def test_save_renaming_blocks_entity_deletes_no_topics(monkeypatch):
+    """Renaming a block's entity changes the derived topic name -- the old
+    name disappears from `flow.topics` on this same save (materialize_flow_
+    topics refreshes it in place) -- but the block itself is NOT removed, so
+    `writerBlockId` never lands in `removed_block_ids` and nothing is
+    deleted. A name-diff would have wrongly read this as a deletion."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connection(fake_db)
+    existing = _flow_with_kc_block(flow_id="flow-topic-4")
+    # Drop b3's syncId link -- irrelevant to this test, and keeping it would
+    # require satisfying `_flow_sync_link_issues`'s full sync-completeness
+    # checks just to get past validation.
+    for block in existing["blocks"]:
+        if block["id"] == "b3":
+            block["config"] = {}
+    existing["topics"] = [
+        {"id": "t-b3", "kind": "materialized", "name": "iceberg.old_entity", "sealed": True, "writerBlockId": "b3"},
+    ]
+    fake_db.flows_v2.docs.append(existing)
+
+    delete_calls = []
+
+    async def fake_delete_topic(kafka_conn, topic):
+        delete_calls.append(topic)
+        return {"ok": True, "topic": topic}
+
+    monkeypatch.setattr(v2_flows.deployer_topics, "delete_topic", fake_delete_topic)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        # b2 is the kafka-family write block whose entity feeds the derived
+        # name; rename it in place -- no block id changes, no block is
+        # removed.
+        updated["blocks"] = [
+            {**b, "entity": "renamed_thing"} if b["id"] == "b2" else b for b in existing["blocks"]
+        ]
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        assert delete_calls == []
+    finally:
+        _clear_overrides()
+
+
+def test_save_removing_kafka_kc_block_topic_delete_failure_still_saves_and_stamps_drift(monkeypatch):
+    """Feature 2 failure path: if Kafka is unreachable/refuses the topic
+    delete, the save must still succeed but `drift` must name the topic(s)
+    that could not be removed -- same shape/tone as the connector-delete
+    failure path above."""
+    fake_db = FakeDB()
+    _seed_valid_service(fake_db)
+    _seed_active_kafka_connection(fake_db)
+    existing = _flow_with_kc_block(flow_id="flow-topic-5")
+    existing["topics"] = [
+        {"id": "t-b3", "kind": "materialized", "name": "iceberg.thing", "sealed": True, "writerBlockId": "b3"},
+    ]
+    fake_db.flows_v2.docs.append(existing)
+    _seed_kc_block_removal_prereqs(fake_db, monkeypatch, existing)
+
+    async def fake_delete_topic(kafka_conn, topic):
+        return {"ok": False, "error": "cluster unreachable"}
+
+    monkeypatch.setattr(v2_flows.deployer_topics, "delete_topic", fake_delete_topic)
+
+    client = _make_client(fake_db)
+    try:
+        updated = dict(existing)
+        updated["blocks"] = [b for b in existing["blocks"] if b["id"] != "b3"]
+        resp = client.post("/api/v2/flows/", json=updated)
+        assert resp.status_code == 200, resp.text
+
+        saved = fake_db.flows_v2.docs[0]
+        assert saved.get("drift")
+        assert "iceberg.thing" in saved["drift"]
     finally:
         _clear_overrides()
 

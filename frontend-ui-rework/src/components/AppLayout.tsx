@@ -1,11 +1,14 @@
 import { ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { cn } from "@/lib/utils";
 
 interface Props {
   title: string;
   description?: string;
   actions?: ReactNode;
+  shellClassName?: string;
+  mainClassName?: string;
   children: ReactNode;
 }
 
@@ -19,12 +22,12 @@ interface Props {
  * is most of what makes a window feel like an application rather than a
  * document.
  */
-export function AppLayout({ title, description, actions, children }: Props) {
+export function AppLayout({ title, description, actions, shellClassName, mainClassName, children }: Props) {
   return (
     <SidebarProvider>
-      <div className="flex min-h-svh w-full bg-background">
+      <div className={cn("flex min-h-svh w-full bg-background", shellClassName)}>
         <AppSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className={cn("flex min-w-0 flex-1 flex-col", mainClassName && "min-h-0")}>
           <header className="material-regular sticky top-0 z-30 border-b border-border/60">
             <div className="flex w-full items-center gap-3 px-4 py-3 md:px-6 lg:px-8 2xl:px-10">
               <SidebarTrigger className="-ml-1 shrink-0 md:hidden" />
@@ -37,7 +40,15 @@ export function AppLayout({ title, description, actions, children }: Props) {
               {actions && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
             </div>
           </header>
-          <main className="w-full flex-1 px-4 py-6 md:px-6 md:py-8 lg:px-8 2xl:px-10">{children}</main>
+          <main
+            className={cn(
+              "w-full flex-1 px-4 py-6 md:px-6 md:py-8 lg:px-8 2xl:px-10",
+              mainClassName && "min-h-0",
+              mainClassName,
+            )}
+          >
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>

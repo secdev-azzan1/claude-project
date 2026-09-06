@@ -1,11 +1,9 @@
 // The per-block form — the primary configuration surface of the builder, and
 // the single dominant surface on the screen (elevation role: shadow-md).
 //
-// It is ONE accordion, not a stack of seven always-open cards. The verdict on
-// the previous build was "everything seems congested", so the governing rule
-// here is that net visible surface goes DOWN even as capability goes up:
-// sections carry a one-line summary when closed and only open when they have
-// something to say.
+// Sections stay visible as one continuous form. The compact selector above
+// provides orientation and jump-to-section navigation without hiding fields
+// behind a disclosure control.
 //
 // The second rule, added in the redesign: rule text does not get a line of its
 // own. Every "no write without an entity, ever" / "names freeze at deploy" /
@@ -27,7 +25,7 @@
 // persisted per block: the selected block changes on every add, and stale
 // per-block open state makes sections appear to jump.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -324,6 +322,20 @@ export function BlockForm(props: BlockFormProps) {
     return [...ids];
   }, [flow, block.id]);
 
+  // Deleting a block deletes its whole subtree, and the backend deletes every
+  // materialized topic owned by any block in that subtree on save, not just
+  // the one the user clicked -- that must not be a surprise buried in the
+  // generic subtree list below. Adopted topics are never listed here: the
+  // platform doesn't own them and deleting the block does not touch them.
+  const removalSet = useMemo(() => new Set([block.id, ...descendants]), [block.id, descendants]);
+  const ownedTopics = useMemo(
+    () =>
+      flow.topics.filter(
+        (t) => t.kind === "materialized" && !!t.writerBlockId && removalSet.has(t.writerBlockId),
+      ),
+    [flow.topics, removalSet],
+  );
+
   // ------------------------------------------------------------- derived names
   const derived = deriveTopicName(flow, block);
   // Re-typing the name the platform would have derived anyway is not a custom
@@ -353,26 +365,52 @@ export function BlockForm(props: BlockFormProps) {
     return forced;
   }, [issues.length, isWrite, nameWarning, collision, block.adapter]);
 
-  const defaultSections = useMemo(() => {
-    const open = ["identity", "adapter"];
-    if (showBranches && branchCount > 0) open.push("branches");
-    if (isWrite) open.push("entity");
-    if (block.adapter === "kafka_kc") open.push("schema");
-    if (hasSinkConfig) open.push("sink");
-    return open;
-  }, [showBranches, branchCount, isWrite, block.adapter, hasSinkConfig]);
+  const sectionItems = useMemo(
+    () => [
+      { id: "identity", label: "Identity", title: "Identity", group: "Connection", icon: <IdCard className="h-3.5 w-3.5" />, attention: issues.length > 0 },
+      { id: "adapter", label: "Adapter", title: "Adapter settings", group: "Connection", icon: <Sliders className="h-3.5 w-3.5" /> },
+      ...(block.adapter !== "kc"
+        ? [{ id: "transforms", label: "Transforms", title: "Generic transformations", group: "Records", icon: <Fingerprint className="h-3.5 w-3.5" /> }]
+        : []),
+      ...(showTest
+        ? [{ id: "test", label: "Test", title: "Test", group: "Records", icon: <FlaskConical className="h-3.5 w-3.5" /> }]
+        : []),
+      ...(isWrite
+        ? [{ id: "entity", label: "Entity", title: "Entity & derived names", group: "Destination", icon: <Tags className="h-3.5 w-3.5" />, attention: Boolean(nameWarning || collision) }]
+        : []),
+      ...(block.adapter === "kafka_kc"
+        ? [{ id: "schema", label: "Schema", title: "Schema", group: "Destination", icon: <ShieldCheck className="h-3.5 w-3.5" />, attention: !approved }]
+        : []),
+      ...(hasSinkConfig
+        ? [{ id: "sink", label: "Sink", title: "Sink configuration", group: "Destination", icon: <Settings2 className="h-3.5 w-3.5" /> }]
+        : []),
+      ...(showBranches
+        ? [{ id: "branches", label: "Routing", title: "Routing", group: "Destination", icon: <Shuffle className="h-3.5 w-3.5" /> }]
+        : []),
+    ],
+    [issues.length, block.adapter, showTest, isWrite, nameWarning, collision, approved, hasSinkConfig, showBranches],
+  );
 
-  const [openState, setOpenState] = useState<{ blockId: string; values: string[] } | null>(null);
-  const base = openState?.blockId === block.id ? openState.values : defaultSections;
-  const open = useMemo(() => [...new Set([...base, ...forcedSections])], [base, forcedSections]);
-  const setOpen = (values: string[]) =>
-    setOpenState({ blockId: block.id, values: [...new Set([...values, ...forcedSections])] });
+  // Section content is rendered one page at a time. Keep the list for the
+  // selector and for the existing section call sites.
+  const [activeSection, setActiveSection] = useState("identity");
+
+  useEffect(() => {
+    setActiveSection(sectionItems[0]?.id ?? "identity");
+  }, [block.id, sectionItems]);
+
+  const activeSectionItem = sectionItems.find((item) => item.id === activeSection) ?? sectionItems[0];
+  const visibleSection = activeSectionItem?.id ?? "identity";
+  const activeGroup = activeSectionItem?.group ?? "Connection";
+  const activeGroupHint =
+    activeGroup === "Connection"
+      ? "what this block is, and what it talks to"
+      : activeGroup === "Records"
+        ? "what happens to each record on the way through"
+        : "where the records end up, and what follows";
+
   const goToSection = (id: string) => {
-    setOpen([...open, id]);
-    // The accordion animates open; scroll once the panel has height.
-    window.setTimeout(() => {
-      document.getElementById(`${SECTION_ID_PREFIX}${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
+    setActiveSection(id);
   };
 
   // ------------------------------------------------------------------ summaries
@@ -478,14 +516,16 @@ export function BlockForm(props: BlockFormProps) {
           )}
         </div>
 
-        <GroupHeading label="Connection" hint="what this block is, and what it talks to" />
-        <Accordion type="multiple" value={open} onValueChange={setOpen} className="px-4">
+        <SectionNav sections={sectionItems} activeId={visibleSection} onSelect={goToSection} />
+
+        <GroupHeading label={activeGroup} hint={activeGroupHint} />
+        <div className={cn("px-4", activeGroup !== "Connection" && "hidden")}>
           {/* -------------------------------------------------------- identity */}
           <Section
             value="identity"
             title="Identity"
             icon={<IdCard className="h-4 w-4 text-muted-foreground" />}
-            open={open.includes("identity")}
+            open={visibleSection === "identity"}
             forced={forcedSections.includes("identity")}
             forcedHint={forcedSections.includes("identity") ? "Kept open while this block has issues" : undefined}
             summary={block.name}
@@ -553,7 +593,7 @@ export function BlockForm(props: BlockFormProps) {
             value="adapter"
             title="Adapter settings"
             icon={<Sliders className="h-4 w-4 text-muted-foreground" />}
-            open={open.includes("adapter")}
+            open={visibleSection === "adapter"}
             summary={adapterSummary}
           >
             {block.adapter === "http" && (
@@ -580,17 +620,16 @@ export function BlockForm(props: BlockFormProps) {
               <KcSettings flow={flow} block={block} locked={locked} onPatchBlock={onPatchBlock} onPatchConfig={onPatchConfig} />
             )}
           </Section>
-        </Accordion>
+        </div>
 
-        <GroupHeading label="Records" hint="what happens to each record on the way through" />
-        <Accordion type="multiple" value={open} onValueChange={setOpen} className="px-4">
+        <div className={cn("px-4", activeGroup !== "Records" && "hidden")}>
           {/* ---------------------------------------------------- transforms */}
           {block.adapter !== "kc" && (
             <Section
               value="transforms"
               title="Generic transformations"
               icon={<Fingerprint className="h-4 w-4 text-muted-foreground" />}
-              open={open.includes("transforms")}
+              open={visibleSection === "transforms"}
               summary={transformSummary}
               info="Applied in order, after the adapter's parsing. Dropped records are intentional outcomes — counted, never errors."
             >
@@ -620,7 +659,7 @@ export function BlockForm(props: BlockFormProps) {
               value="test"
               title="Test"
               icon={<FlaskConical className="h-4 w-4 text-muted-foreground" />}
-              open={open.includes("test")}
+              open={visibleSection === "test"}
               summary={testSummary}
               info="Per block, never per flow — one bounded probe feeds the field pickers downstream."
             >
@@ -660,23 +699,22 @@ export function BlockForm(props: BlockFormProps) {
 
           {/* Test removed, not missing: one line in its place, on the same rhythm
               as a section header so the form does not appear to skip a beat. */}
-          {testAbsence && (
+          {testAbsence && visibleSection === "transforms" && (
             <div className="flex items-start gap-2.5 border-b border-border/60 py-3 text-xs leading-relaxed text-muted-foreground last:border-b-0">
               <FlaskConicalOff className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
               <span>{testAbsence}</span>
             </div>
           )}
-        </Accordion>
+        </div>
 
-        <GroupHeading label="Destination" hint="where the records end up, and what follows" />
-        <Accordion type="multiple" value={open} onValueChange={setOpen} className="px-4">
+        <div className={cn("px-4", activeGroup !== "Destination" && "hidden")}>
           {/* ------------------------------------------------ entity & names */}
           {isWrite && (
             <Section
               value="entity"
               title="Entity & derived names"
               icon={<Tags className="h-4 w-4 text-muted-foreground" />}
-              open={open.includes("entity")}
+              open={visibleSection === "entity"}
               forced={forcedSections.includes("entity")}
               forcedHint={forcedSections.includes("entity") ? "Kept open while a name is in conflict" : undefined}
               summary={entitySummary}
@@ -763,7 +801,7 @@ export function BlockForm(props: BlockFormProps) {
               value="schema"
               title="Schema"
               icon={<ShieldCheck className={cn("h-4 w-4", approved ? "text-success" : "text-warning")} />}
-              open={open.includes("schema")}
+              open={visibleSection === "schema"}
               forced
               forcedHint="Always reachable — the ceremony's only entry point"
               summary={approved ? `Approved #${approved.registryGlobalId}` : "Ceremony required"}
@@ -805,7 +843,7 @@ export function BlockForm(props: BlockFormProps) {
               value="sink"
               title="Sink configuration"
               icon={<Settings2 className="h-4 w-4 text-muted-foreground" />}
-              open={open.includes("sink")}
+              open={visibleSection === "sink"}
               summary={sinkSummary}
             >
               <div className="mb-4 rounded-md border border-primary/20 bg-primary-muted/20 p-3">
@@ -883,7 +921,7 @@ export function BlockForm(props: BlockFormProps) {
               value="branches"
               title="Routing"
               icon={<Shuffle className="h-4 w-4 text-muted-foreground" />}
-              open={open.includes("branches")}
+              open={visibleSection === "branches"}
               summary={branchBadge ?? "nothing follows yet"}
             >
               <BranchesCard
@@ -895,7 +933,7 @@ export function BlockForm(props: BlockFormProps) {
               />
             </Section>
           )}
-        </Accordion>
+        </div>
 
         {/* Delete is one button on the footer rail, not a section of its own —
             the confirm dialog already lists exactly what goes with it, which is
@@ -922,7 +960,31 @@ export function BlockForm(props: BlockFormProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete "{block.name}"?</AlertDialogTitle>
-            <AlertDialogDescription>This removes the block and its entire subtree.</AlertDialogDescription>
+            <AlertDialogDescription asChild>
+              <div className="space-y-1">
+                <p>This removes the block and its entire subtree.</p>
+                {ownedTopics.length === 1 && (
+                  <p className="font-medium text-destructive">
+                    This also destroys its Kafka topic <code className="text-xs">{ownedTopics[0].name}</code> and everything in
+                    it.
+                  </p>
+                )}
+                {ownedTopics.length > 1 && (
+                  <div className="space-y-1">
+                    <p className="font-medium text-destructive">
+                      This also destroys {ownedTopics.length} Kafka topics and everything in them:
+                    </p>
+                    <ul className="ml-4 list-disc space-y-0.5">
+                      {ownedTopics.map((t) => (
+                        <li key={t.id} className="font-medium text-destructive">
+                          <code className="text-xs">{t.name}</code>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="rounded-lg bg-muted/60 p-3">
             <ul className="space-y-1">
@@ -974,7 +1036,64 @@ function GroupHeading({ label, hint }: { label: string; hint: string }) {
   );
 }
 
-// ------------------------------------------------------------ the disclosure
+type SectionNavItem = {
+  id: string;
+  label: string;
+  title: string;
+  group: string;
+  icon: React.ReactNode;
+  attention?: boolean;
+};
+
+function SectionNav({
+  sections,
+  activeId,
+  onSelect,
+}: {
+  sections: SectionNavItem[];
+  activeId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <nav
+      aria-label="Block configuration sections"
+      className="sticky top-0 z-10 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur"
+    >
+      <div className="flex min-w-max items-center gap-1 overflow-x-auto">
+        {sections.map((section, index) => {
+          const previous = sections[index - 1];
+          const separated = previous && previous.group !== section.group;
+
+          return (
+            <span
+              key={section.id}
+              className={cn("inline-flex", separated && "ml-1 border-l border-border/60 pl-2")}
+            >
+              <button
+                type="button"
+                title={section.title}
+                aria-current={activeId === section.id ? "location" : undefined}
+                onClick={() => onSelect(section.id)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                  activeId === section.id
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {section.icon}
+                <span>{section.label}</span>
+                {section.attention && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warning" />}
+              </button>
+            </span>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+// ---------------------------------------------------------- section content
 
 function Section({
   value,
@@ -1000,8 +1119,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <AccordionItem value={value} id={`${SECTION_ID_PREFIX}${value}`} disabled={forced} className="border-border/60 last:border-b-0">
-      <AccordionTrigger className={cn("py-3", forced && "cursor-default [&>svg]:hidden")}>
+    <section
+      id={`${SECTION_ID_PREFIX}${value}`}
+      hidden={!open}
+      data-open={open ? "true" : "false"}
+      className="scroll-mt-14 border-b border-border/60 py-3 last:border-b-0"
+    >
+      <div className="flex min-w-0 items-center gap-2 text-left">
         <span className="flex min-w-0 flex-1 items-center gap-2 pr-3 text-left">
           {icon}
           <span className="shrink-0 text-sm font-semibold">{title}</span>
@@ -1018,12 +1142,12 @@ function Section({
               <TooltipContent>{forcedHint}</TooltipContent>
             </Tooltip>
           )}
-          {!open && summary && (
+          {summary && (
             <span className="ml-auto truncate text-xs font-normal text-muted-foreground">{summary}</span>
           )}
         </span>
-      </AccordionTrigger>
-      <AccordionContent className="pb-5 pt-0">
+      </div>
+      <div className="pb-2 pt-3">
         {/* Section-level rule text stays inline rather than going behind a ⓘ:
             there is at most one per section and it only renders while the
             section is open, so it costs one line a few times — unlike the
@@ -1035,8 +1159,8 @@ function Section({
           </p>
         )}
         {children}
-      </AccordionContent>
-    </AccordionItem>
+      </div>
+    </section>
   );
 }
 
@@ -1340,7 +1464,7 @@ function HttpSettings({
 
         <Field
           label="Path"
-          className="min-w-[16rem] flex-1"
+          className="w-full min-w-0 flex-1 sm:min-w-[16rem]"
           // Answers the reported confusion directly — "aren't we already giving
           // the url in the application services?" — without spending two
           // permanent lines on it.
@@ -1562,15 +1686,23 @@ function JdbcSettings({
         )}
       </Field>
 
-      <Field label="Columns">
-        <Input
-          className="font-mono text-xs"
-          value={columns.join(", ")}
-          disabled={locked}
-          placeholder="asset_id, hostname, updated_at"
-          onChange={(e) => onPatchConfig(block.id, { columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
-        />
-      </Field>
+      {/* Columns is a read-side projection only. A write never consults it:
+          PutDatabaseRecord matches record fields to table columns itself, so
+          `_compile_write` (backend compiler/blocks_jdbc.py) produces a
+          byte-identical processor whether this is set or not. Showing it on a
+          write implied you could restrict which columns get written, which
+          was never true. */}
+      {block.mode !== "write" && (
+        <Field label="Columns">
+          <Input
+            className="font-mono text-xs"
+            value={columns.join(", ")}
+            disabled={locked}
+            placeholder="asset_id, hostname, updated_at"
+            onChange={(e) => onPatchConfig(block.id, { columns: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+          />
+        </Field>
+      )}
 
       {block.mode === "lookup" && (
         <Field label="Join field">

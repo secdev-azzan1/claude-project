@@ -12,9 +12,10 @@
 // the cycle guard â€” so the map, the outline and the form cannot drift apart, and
 // a new surface cannot forget a guard.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -36,7 +38,6 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { FlowMapView } from "@/components/flow-builder/FlowMapView";
 import { BlockForm } from "@/components/flow-builder/BlockForm";
 import { FlowSettingsForm } from "@/components/flow-builder/FlowSettingsForm";
-import { DestinationsPanel } from "@/components/flow-builder/DestinationsPanel";
 import { PreflightDialog } from "@/components/flow-builder/PreflightDialog";
 import { CeremonyDialog } from "@/components/flow-builder/CeremonyDialog";
 import { cn } from "@/lib/utils";
@@ -71,8 +72,7 @@ import { dlqName, tokenize } from "@/prototype/naming";
 import type { BranchCondition, Flow, FlowBlock } from "@/prototype/types";
 import {
   ChevronRight,
-  Eye,
-  EyeOff,
+  ChevronLeft,
   Loader2,
   Maximize2,
   Minimize2,
@@ -82,7 +82,6 @@ import {
   Rocket,
   Save,
   Settings2,
-  ShieldCheck,
   Square,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -105,12 +104,47 @@ export default function FlowBuilder() {
   const [ceremonyPrefill, setCeremonyPrefill] = useState<string | null>(null);
   /** An edited schema handed over from the Schemas page, claimed on arrival. */
   const [ceremonyDraft, setCeremonyDraft] = useState<{ rawAvro: string; label: string } | null>(null);
-  const [mapOpen, setMapOpen] = useState(true);
+  const mapPanelRef = useRef<ImperativePanelHandle>(null);
+  const [mapCollapsed, setMapCollapsed] = useState(false);
+  const [panelResizing, setPanelResizing] = useState(false);
+  const [wideViewport, setWideViewport] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+    return window.matchMedia("(min-width: 1280px)").matches;
+  });
   /** Fills the viewport with the SAME mounted canvas rather than opening a
    *  second one in a dialog â€” the map holds live pan/zoom/selection state in
    *  its ReactFlowProvider, and remounting it elsewhere would flicker and
    *  reset the camera. Expanding just re-parents its visual bounds via CSS. */
   const [mapExpanded, setMapExpanded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(min-width: 1280px)");
+    const update = () => setWideViewport(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  // A panel collapsed on desktop still has to become a normal-width row when
+  // the viewport changes to the stacked layout. Conversely, a mobile-collapsed
+  // map should become the desktop rail after crossing the breakpoint.
+  useEffect(() => {
+    if (!mapCollapsed || !mapPanelRef.current) return;
+    if (wideViewport) mapPanelRef.current.collapse();
+    else mapPanelRef.current.expand();
+  }, [wideViewport, mapCollapsed]);
+
+  const collapseMap = useCallback(() => {
+    setMapExpanded(false);
+    setMapCollapsed(true);
+    if (wideViewport) mapPanelRef.current?.collapse();
+  }, [wideViewport]);
+
+  const expandMap = useCallback(() => {
+    setMapCollapsed(false);
+    if (wideViewport) mapPanelRef.current?.expand();
+  }, [wideViewport]);
 
   useEffect(() => {
     if (!mapExpanded) return;
@@ -410,6 +444,38 @@ export default function FlowBuilder() {
     return getVerbBlockReason(draft, verb);
   };
 
+  const selectedBlock = draft?.blocks.find((b) => b.id === selectedId);
+  const selectedBreadcrumbs = useMemo(() => {
+    if (!draft || !selectedBlock) return [];
+
+    const blocksById = new Map(draft.blocks.map((block) => [block.id, block]));
+    const topicsById = new Map(draft.topics.map((topic) => [topic.id, topic]));
+    const path: Array<{ id: string; label: string; targetId: string }> = [];
+    const visited = new Set<string>();
+    let currentId: string | null = selectedBlock.id;
+
+    // Walk the same parent links used by the graph. Topic parents are included
+    // as the chain endpoint so a sink or Kafka reader is never shown without
+    // the topic it is attached to.
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const block = blocksById.get(currentId);
+      if (block) {
+        path.unshift({ id: block.id, label: block.name || "Untitled block", targetId: block.id });
+        currentId = block.parentId;
+        continue;
+      }
+
+      const topic = topicsById.get(currentId);
+      if (topic) {
+        path.unshift({ id: topic.id, label: topic.name, targetId: topic.id });
+      }
+      break;
+    }
+
+    return path;
+  }, [draft, selectedBlock]);
+
   // ---------------------------------------------------------------- new flow
   if (isNew) {
     return <NewFlowPanel onCreated={(id) => navigate(`/flow-builder/${id}`, { replace: true })} />;
@@ -425,7 +491,6 @@ export default function FlowBuilder() {
     );
   }
 
-  const selectedBlock = draft.blocks.find((b) => b.id === selectedId);
   const ceremonyBlock = draft.blocks.find((b) => b.id === ceremonyBlockId);
   const neverDeployed = !draft.deployedAt;
   const deployReason = verbReason("deploy");
@@ -480,19 +545,11 @@ export default function FlowBuilder() {
     <AppLayout
       title={draft.name || "Untitled flow"}
       description={draft.description || "Adapter-based flow"}
-      actions={
-        <Button variant="outline" size="sm" onClick={() => setSelectedId("flow")} title="Jump to the validation summary">
-          <ShieldCheck />
-          Validate
-          {issues.length > 0 && (
-            <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-2xs font-semibold text-destructive-foreground">
-              {issues.length}
-            </span>
-          )}
-        </Button>
-      }
+      shellClassName="xl:h-svh xl:overflow-hidden"
+      mainClassName="flex flex-col overflow-y-auto xl:overflow-hidden"
     >
-      <div className="space-y-6">
+      <div className="flex h-full min-h-0 flex-col gap-6">
+        <div className="shrink-0 space-y-3">
         {(locked || draft.drift) && (
           <div className="space-y-3">
             {locked && (
@@ -594,7 +651,7 @@ export default function FlowBuilder() {
 
             {/* This strip is the only home of the unsaved-change signal and the
                 DLQ name; demoting the verb bar must not take them with it. */}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="hidden">
               {dirty && <Badge variant="warning">Unsaved changes</Badge>}
               <Badge variant="outline">{draft.deployedAt ? "Deployed once" : "Never deployed"}</Badge>
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -617,6 +674,7 @@ export default function FlowBuilder() {
             </div>
           )}
         </Card>
+        </div>
 
         {/* ----------------------------------------- map (left) + form (right)
             Two columns, not three: the outline rail is gone. It navigated and
@@ -624,9 +682,40 @@ export default function FlowBuilder() {
             the same nodes competing for the same clicks. What it also carried,
             the way back to Flow settings, moves onto the form pane's header
             where the thing being configured is named. */}
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr),minmax(420px,0.8fr)] xl:items-start xl:gap-6 2xl:grid-cols-[minmax(0,1.55fr),minmax(520px,0.85fr)]">
-          <section className={cn("min-w-0 space-y-3", !mapExpanded && "xl:sticky xl:top-24")}>
-            <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-h-0 flex-1 xl:h-full xl:overflow-hidden">
+        <ResizablePanelGroup
+          direction="horizontal"
+          autoSaveId="flow-builder-layout"
+          className="h-full min-h-0 items-stretch max-xl:!block max-xl:!h-auto max-xl:!w-auto"
+        >
+          <ResizablePanel
+            ref={mapPanelRef}
+            collapsible
+            collapsedSize={3}
+            defaultSize={64}
+            minSize={45}
+            maxSize={75}
+            onCollapse={() => {
+              if (wideViewport) setMapCollapsed(true);
+            }}
+            onExpand={() => {
+              if (wideViewport) setMapCollapsed(false);
+            }}
+            className={cn(
+              "h-full min-h-0 min-w-0 overflow-hidden max-xl:!block max-xl:!h-auto max-xl:!w-auto",
+              !panelResizing && "transition-[flex-grow] duration-300 ease-out motion-reduce:transition-none",
+              "xl:pr-3",
+            )}
+          >
+          <div className="relative h-full min-h-0 min-w-0 max-xl:h-auto">
+          <section
+            className={cn(
+              "flex h-full min-h-0 min-w-0 flex-col gap-3 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+              !mapExpanded && "xl:sticky xl:top-24",
+              mapCollapsed && "pointer-events-none opacity-0 max-xl:h-0 max-xl:min-h-0 max-xl:overflow-hidden",
+            )}
+          >
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
               <h2 className="flex items-center gap-1.5 text-sm font-semibold">
                 Flow map
                 <InfoDot title="What the map can do">
@@ -637,15 +726,13 @@ export default function FlowBuilder() {
                 </InfoDot>
               </h2>
               <div className="flex items-center gap-1">
-                {mapOpen && (
-                  <Button variant="ghost" size="xs" onClick={() => setMapExpanded((o) => !o)}>
-                    {mapExpanded ? <Minimize2 /> : <Maximize2 />}
-                    {mapExpanded ? "Collapse" : "Expand"}
-                  </Button>
-                )}
-                <Button variant="ghost" size="xs" onClick={() => setMapOpen((o) => !o)}>
-                  {mapOpen ? <EyeOff /> : <Eye />}
-                  {mapOpen ? "Hide" : "Show"}
+                <Button variant="ghost" size="xs" onClick={() => setMapExpanded((o) => !o)}>
+                  {mapExpanded ? <Minimize2 /> : <Maximize2 />}
+                  {mapExpanded ? "Exit fullscreen" : "Expand"}
+                </Button>
+                <Button variant="ghost" size="xs" onClick={collapseMap} title="Collapse the flow map">
+                  <ChevronLeft />
+                  Collapse
                 </Button>
               </div>
             </div>
@@ -656,8 +743,7 @@ export default function FlowBuilder() {
                 pan/zoom/selection survive the toggle in both directions. */}
             <div
               className={cn(
-                "overflow-hidden rounded-xl shadow-inner transition-[height] duration-200",
-                !mapOpen && "hidden",
+                "overflow-hidden rounded-xl shadow-inner transition-[height,opacity] duration-300 ease-out motion-reduce:transition-none",
                 mapExpanded
                   // bg-muted/50 is right for an inset panel that sits ON the
                   // page background â€” it reads as a recessed canvas. The same
@@ -666,7 +752,7 @@ export default function FlowBuilder() {
                   // own gaps, doubling up with the scrim into a hazy mess. Full
                   // opacity here; the scrim does the dimming job instead.
                   ? "fixed inset-4 z-40 bg-muted shadow-2xl md:inset-6"
-                  : "h-[clamp(540px,calc(100svh-13rem),960px)] bg-muted/50",
+                  : "min-h-[360px] min-w-0 flex-1 bg-muted/50 xl:min-h-0",
               )}
             >
               <FlowMapView
@@ -687,7 +773,7 @@ export default function FlowBuilder() {
                   size="icon-sm"
                   className="material-thick absolute right-3 top-3 z-10 shadow-md"
                   onClick={() => setMapExpanded(false)}
-                  title="Collapse (Esc)"
+                  title="Exit fullscreen (Esc)"
                 >
                   <Minimize2 />
                   <span className="sr-only">Collapse</span>
@@ -701,16 +787,39 @@ export default function FlowBuilder() {
               <div className="fixed inset-0 z-30 bg-foreground/25 backdrop-blur-[2px]" onClick={() => setMapExpanded(false)} />
             )}
 
-            {!mapExpanded && <DestinationsPanel flow={draft} onSelect={setSelectedId} />}
           </section>
+          {mapCollapsed && <MapCollapseRail onExpand={expandMap} />}
+          </div>
+          </ResizablePanel>
+
+          <ResizableHandle
+            withHandle
+            onDragging={setPanelResizing}
+            aria-label="Resize flow map and configuration panel"
+            title="Drag to resize the flow map and configuration panel"
+            className="mx-1 shrink-0 cursor-col-resize self-stretch rounded-full bg-border/70 transition-colors hover:bg-primary/60 max-xl:hidden"
+          />
 
           {/* The one dominant surface on the page. The elevation is applied from
               here so the form component itself stays free of page-layout
               concerns; it lands on whatever top-level cards the form renders. */}
-          <div className="min-w-0 space-y-3 xl:sticky xl:top-24 xl:max-h-[calc(100svh-7rem)] xl:overflow-y-auto xl:pr-1">
+          <ResizablePanel
+            defaultSize={36}
+            minSize={30}
+            maxSize={mapCollapsed ? 100 : 55}
+            className={cn(
+              // On narrow screens the split becomes a vertical stack. Keep
+              // the form in a stable viewport-sized shell so changing tabs
+              // cannot resize the page around whichever section is open.
+              "h-full min-h-0 min-w-0 overflow-hidden xl:min-w-[360px] max-xl:!block max-xl:!h-[clamp(24rem,65svh,44rem)] max-xl:!w-auto",
+              !panelResizing && "transition-[flex-grow] duration-300 ease-out motion-reduce:transition-none",
+              "xl:pl-3",
+            )}
+          >
+          <div className="h-full min-h-0 min-w-0 w-full space-y-3 overflow-x-hidden max-xl:h-[clamp(24rem,65svh,44rem)] max-xl:overflow-y-auto max-xl:pr-1 xl:overflow-y-auto xl:pr-1 [scrollbar-gutter:stable]">
             {/* The form pane says what it is configuring, and holds the only
                 route back to flow-level settings now that the rail is gone. */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
               <Button
                 variant={selectedId === "flow" || selectedId === null ? "secondary" : "ghost"}
                 size="xs"
@@ -723,11 +832,32 @@ export default function FlowBuilder() {
                   </span>
                 )}
               </Button>
-              {selectedBlock && (
-                <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate font-medium text-foreground">{selectedBlock.name || "Untitled block"}</span>
-                </span>
+              {selectedBreadcrumbs.length > 0 && (
+                <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto pb-0.5">
+                  {selectedBreadcrumbs.map((item, index) => {
+                    const current = index === selectedBreadcrumbs.length - 1;
+                    return (
+                      <span key={item.id} className="inline-flex shrink-0 items-center gap-1">
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        {current ? (
+                          <span className="max-w-56 truncate text-xs font-medium text-foreground" title={item.label}>
+                            {item.label}
+                          </span>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="max-w-56 truncate px-1 text-xs text-muted-foreground hover:text-foreground"
+                            onClick={() => setSelectedId(item.targetId)}
+                            title={`Open ${item.label}`}
+                          >
+                            {item.label}
+                          </Button>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -766,10 +896,12 @@ export default function FlowBuilder() {
                   }}
                 />
               ) : (
-                <FlowSettingsForm flow={draft} locked={locked} issues={issues} onPatch={patchDraft} onSelectBlock={setSelectedId} />
+                <FlowSettingsForm flow={draft} locked={locked} onPatch={patchDraft} />
               )}
             </div>
           </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
         </div>
       </div>
 
@@ -804,6 +936,40 @@ export default function FlowBuilder() {
         />
       )}
     </AppLayout>
+  );
+}
+
+function MapCollapseRail({ onExpand }: { onExpand: () => void }) {
+  return (
+    <div className="h-full min-h-12 w-full xl:absolute xl:inset-0">
+      <Button
+        type="button"
+        variant="ghost"
+        className="hidden h-full min-h-0 w-full flex-col items-center justify-center gap-2 rounded-xl border border-border/70 bg-muted/50 px-1 text-muted-foreground shadow-inner transition-colors hover:bg-accent hover:text-foreground xl:flex"
+        onClick={onExpand}
+        title="Expand the flow map"
+        aria-label="Expand the flow map"
+      >
+        <ChevronRight className="h-4 w-4" />
+        <span
+          className="text-xs font-medium"
+          style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+        >
+          Flow map
+        </span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-border/70 bg-muted/50 text-muted-foreground shadow-inner transition-colors hover:bg-accent hover:text-foreground xl:hidden"
+        onClick={onExpand}
+        title="Show the flow map"
+        aria-label="Show the flow map"
+      >
+        <ChevronRight className="h-4 w-4" />
+        <span className="text-xs font-medium">Show flow map</span>
+      </Button>
+    </div>
   );
 }
 

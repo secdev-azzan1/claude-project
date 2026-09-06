@@ -1,43 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { kafkaConnectSyncDeleteImpact, runtimeControlsAvailable, syncConfigurationLabel, syncPrimaryAction } from "./kafkaConnectSyncUi";
+import { kafkaConnectSyncDeleteImpact, sinkVerbsAvailable } from "./kafkaConnectSyncUi";
 import type { Flow } from "./types";
 
-const sync = (overrides: Partial<Parameters<typeof syncPrimaryAction>[0]> = {}) => ({
-  remotePresent: true,
-  configurationState: "synced" as const,
-  retired: false,
-  enabled: true,
-  ...overrides,
+describe("sinkVerbsAvailable", () => {
+  it("offers only Start for a connector that does not exist on the cluster yet", () => {
+    expect(sinkVerbsAvailable("UNDEPLOYED")).toEqual(["start"]);
+  });
+
+  it("offers Pause, Stop and Restart while running", () => {
+    expect(sinkVerbsAvailable("RUNNING")).toEqual(["pause", "stop", "restart"]);
+  });
+
+  it("offers Resume, Stop and Restart while paused", () => {
+    expect(sinkVerbsAvailable("PAUSED")).toEqual(["resume", "stop", "restart"]);
+  });
+
+  it("offers Start and Restart once stopped", () => {
+    expect(sinkVerbsAvailable("STOPPED")).toEqual(["start", "restart"]);
+  });
+
+  it.each(["FAILED", "UNASSIGNED", "RESTARTING"] as const)(
+    "offers Stop and Restart in the %s state",
+    (state) => {
+      expect(sinkVerbsAvailable(state)).toEqual(["stop", "restart"]);
+    },
+  );
+
+  it("offers nothing when the cluster could not be reached (state is null)", () => {
+    // A null state means "unreachable, not UNDEPLOYED" -- offering Start here
+    // could create a duplicate of a connector that already exists but just
+    // couldn't be reached this poll.
+    expect(sinkVerbsAvailable(null)).toEqual([]);
+  });
 });
 
-describe("Kafka Connect sync configuration actions", () => {
-  it("offers Create connector only for a draft without a remote connector", () => {
-    const draft = sync({ remotePresent: false, configurationState: "draft" });
-    expect(syncPrimaryAction(draft)).toBe("create");
-    expect(syncConfigurationLabel(draft)).toBe("Draft — no connector");
-    expect(runtimeControlsAvailable(draft)).toBe(false);
-  });
-
-  it("hides the configuration action when the saved definition is synced", () => {
-    const synced = sync();
-    expect(syncPrimaryAction(synced)).toBeNull();
-    expect(syncConfigurationLabel(synced)).toBe("Synced");
-    expect(runtimeControlsAvailable(synced)).toBe(true);
-  });
-
-  it("offers Apply changes only after a saved edit is pending", () => {
-    const pending = sync({ configurationState: "changes_pending" });
-    expect(syncPrimaryAction(pending)).toBe("apply");
-    expect(syncConfigurationLabel(pending)).toBe("Changes pending");
-    expect(runtimeControlsAvailable(pending)).toBe(false);
-  });
-
-  it("does not offer actions for retired syncs", () => {
-    const retired = sync({ retired: true });
-    expect(syncPrimaryAction(retired)).toBeNull();
-    expect(runtimeControlsAvailable(retired)).toBe(false);
-  });
-
+describe("kafkaConnectSyncDeleteImpact", () => {
   it("separates deployed and undeployed flow dependents for deletion", () => {
     const impact = kafkaConnectSyncDeleteImpact(
       { id: "sync-1" },

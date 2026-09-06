@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import type { Flow } from "@/prototype/types";
@@ -122,6 +122,7 @@ function renderPage() {
   const client = queryClient();
   return render(
     <MemoryRouter>
+      <LocationProbe />
       <QueryClientProvider client={client}>
         <TooltipProvider delayDuration={0}>
           <Flows />
@@ -129,6 +130,11 @@ function renderPage() {
       </QueryClientProvider>
     </MemoryRouter>,
   );
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location-path">{location.pathname}</output>;
 }
 
 afterEach(() => {
@@ -142,7 +148,7 @@ describe("Flows", () => {
     fireEvent.click(tab);
   };
 
-  it("keeps the overview sheet closed until the explicit eye action is used", async () => {
+  it("opens the builder from the flow row while the eye opens the overview sheet", async () => {
     apiMocks.listFlows.mockResolvedValueOnce([sampleFlow]);
 
     renderPage();
@@ -150,8 +156,11 @@ describe("Flows", () => {
     await screen.findByRole("button", { name: "Overview" });
     expect(screen.queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("alpha-flow"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select alpha-flow" }));
     expect(screen.queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("alpha-flow"));
+    expect(screen.getByTestId("location-path")).toHaveTextContent("/flow-builder/flow-alpha");
 
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
     expect(await screen.findByRole("tab", { name: "Overview" })).toBeInTheDocument();

@@ -96,8 +96,12 @@ export interface FlowBlock {
    * - http:      method, path, responseFormat, recordPath, split, pagination,
    *              `proxyId?: string | null` — reference into `state.gatewayProxies`
    *              (replaced the old boolean `proxy`), lookupJoinField
-   * - jdbc:      table, columns, incremental, watermarkColumn, watermarkType,
-   *              bookmarkTieBreaker, bookmarkTieBreakerType, initialPosition
+   * - jdbc:      table (every mode); read adds columns, incremental,
+   *              watermarkColumn, watermarkType, bookmarkTieBreaker,
+   *              bookmarkTieBreakerType, initialPosition; lookup adds
+   *              lookupJoinField; write adds statementType. `columns` is a
+   *              read-side projection only — the write compiler never reads
+   *              it, so the form does not offer it on a write.
    * - kafka:     topicName, parseFormat, initialPosition
    * - kafka_kc:  sinkServiceId, `sinkConfig?: Record<string, string>`
    * - kc:        attachTopicId, initialPosition, `sinkConfig?: Record<string, string>`

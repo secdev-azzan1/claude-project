@@ -438,7 +438,14 @@ export interface ControllerServiceRuntime {
   properties: RuntimeProperty[];
 }
 
-export type ConnectRunState = "RUNNING" | "PAUSED" | "FAILED" | "UNASSIGNED" | "RESTARTING";
+export type ConnectRunState =
+  | "RUNNING"
+  | "PAUSED"
+  | "STOPPED"
+  | "FAILED"
+  | "UNASSIGNED"
+  | "RESTARTING"
+  | "UNDEPLOYED";
 
 export interface ConnectTaskRuntime {
   id: number;
@@ -461,6 +468,46 @@ export interface ConnectConnectorRuntime {
   recordsSent: number;
   recordsFailed: number;
   lastErrorTrace?: string;
+}
+
+/** One task inside a `FlowSinkStatusEntry`, as reported live by Kafka Connect. */
+export interface FlowSinkTask {
+  id: number;
+  state: string;
+  workerId: string;
+  lastErrorTrace: string | null;
+}
+
+/**
+ * Live status for one kc/kafka_kc block, from `GET
+ * /api/kafka-connect/flows/{flowId}/sink-status`. One entry per sink block in
+ * the flow, whether or not it has a sync record yet (`syncId` is null when it
+ * doesn't).
+ *
+ * `state: "UNDEPLOYED"` means the connector genuinely does not exist on the
+ * cluster. `state: null` means the cluster could not be reached at all — see
+ * `FlowSinkStatusResponse.reachable`. The two are never the same thing: only
+ * a reachable listing that positively excludes this connector is reported as
+ * UNDEPLOYED.
+ */
+export interface FlowSinkStatusEntry {
+  blockId: string;
+  blockName: string;
+  adapter: "kafka_kc" | "kc";
+  connectorName: string;
+  syncId: string | null;
+  state: ConnectRunState | null;
+  connectorClass: string;
+  tasks: FlowSinkTask[];
+  lastErrorTrace: string | null;
+}
+
+export interface FlowSinkStatusResponse {
+  ok: boolean;
+  /** False when the Kafka Connect cluster could not be reached — every sink's
+   *  `state` is null in that case, and no runtime action should be offered. */
+  reachable: boolean;
+  sinks: FlowSinkStatusEntry[];
 }
 
 export type DriftKind =

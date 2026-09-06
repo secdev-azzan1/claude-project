@@ -248,15 +248,32 @@ def _compile_write(
     reader_key, _ = ensure_json_record_services(builder)
 
     statement_type = str(block.config.get("statementType") or "INSERT").upper()
+    properties: Dict[str, Any] = {
+        "Record Reader": reader_key,
+        "Database Connection Pooling Service": cs_pool,
+        "Statement Type": statement_type,
+        "Table Name": table,
+    }
+    # PutDatabaseRecord defaults `Database Session AutoCommit` to false, i.e.
+    # setAutoCommit(false) ... commit(). Trino's Iceberg catalogs refuse that
+    # outright -- a live run against gold.api_test.posts failed every batch
+    # with "Catalog only supports writes using autocommit: gold" and landed
+    # zero rows.
+    #
+    # NiFi couples the two properties and rejects the processor at validation
+    # unless `Maximum Batch Size` is 0 whenever autocommit is on, so both move
+    # together or neither does.
+    #
+    # Only Trino needs this. postgresql/mysql keep NiFi's transactional
+    # default, where a failed batch rolls back instead of leaving behind the
+    # rows it happened to write first.
+    if str(service.config.get("dialect") or "postgresql").lower() == "trino":
+        properties["Database Session AutoCommit"] = "true"
+        properties["Maximum Batch Size"] = "0"
     builder.add_processor(
         ProcessorSpec(
             key="write", name="write", type="org.apache.nifi.processors.standard.PutDatabaseRecord",
-            properties={
-                "Record Reader": reader_key,
-                "Database Connection Pooling Service": cs_pool,
-                "Statement Type": statement_type,
-                "Table Name": table,
-            },
+            properties=properties,
             # M6: every PutDatabaseRecord relationship needs a disposition —
             # `retry` is auto-terminated (transient errors resurface via the
             # `failure` -> DLQ path on the next attempt rather than looping),
