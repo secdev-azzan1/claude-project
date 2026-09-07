@@ -148,22 +148,19 @@ describe("Flows", () => {
     fireEvent.click(tab);
   };
 
-  it("opens the builder from the flow row while the eye opens the overview sheet", async () => {
+  it("opens the builder from the flow row and keeps operations in the builder", async () => {
     apiMocks.listFlows.mockResolvedValueOnce([sampleFlow]);
 
     renderPage();
 
-    await screen.findByRole("button", { name: "Overview" });
-    expect(screen.queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
+    await screen.findByText("alpha-flow");
+    expect(screen.queryByRole("button", { name: "Overview" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "Select alpha-flow" }));
     expect(screen.queryByRole("tab", { name: "Overview" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("alpha-flow"));
     expect(screen.getByTestId("location-path")).toHaveTextContent("/flow-builder/flow-alpha");
-
-    fireEvent.click(screen.getByRole("button", { name: "Overview" }));
-    expect(await screen.findByRole("tab", { name: "Overview" })).toBeInTheDocument();
   });
 
   it("shows Clear topic in Messages and Clear DLQ in DLQ", async () => {

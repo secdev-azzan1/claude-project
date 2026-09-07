@@ -378,6 +378,41 @@ export async function saveFlow(updated: Flow): Promise<Flow> {
   return saved;
 }
 
+/**
+ * The Flow fields the SERVER owns. None of them is editable in the flow
+ * builder: `enabled` is toggled by queueing an enable/disable job, and the
+ * rest are written by the deployer. Everything the user does edit -- name,
+ * description, cron, blocks, topics, variables -- is deliberately absent.
+ */
+const SERVER_OWNED_FLOW_FIELDS = ["state", "enabled", "deployedAt", "lastRunAt", "drift"] as const;
+
+/**
+ * Copy the server's view of the lifecycle onto a local draft.
+ *
+ * The builder keeps an editable `draft` copy of the flow, and its lifecycle
+ * bar reads that draft -- so without this, a flow that starts (or stops, or
+ * finishes deploying) on the server never reaches the buttons and Stop stays
+ * disabled forever after a Start.
+ *
+ * Only SERVER_OWNED_FLOW_FIELDS are merged, which is what makes this safe to
+ * run even when the draft has unsaved edits: none of those fields can be
+ * edited here, so nothing the user typed can be clobbered. Seeing that a flow
+ * is now Running should not cost you your in-progress changes.
+ *
+ * Returns the SAME reference when nothing changed, so an idle poll does not
+ * re-render the whole builder.
+ */
+export function mergeServerLifecycle(draft: Flow, serverFlow: Flow): Flow {
+  const changed = SERVER_OWNED_FLOW_FIELDS.some((key) => draft[key] !== serverFlow[key]);
+  if (!changed) return draft;
+  const next = { ...draft };
+  for (const key of SERVER_OWNED_FLOW_FIELDS) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (next as any)[key] = serverFlow[key];
+  }
+  return next;
+}
+
 /** The block-reason contract: null = allowed, string = why not. */
 export function getVerbBlockReason(flow: Flow, verb: FlowVerb, state?: PrototypeState): string | null {
   const s = state ?? stateSnapshot();

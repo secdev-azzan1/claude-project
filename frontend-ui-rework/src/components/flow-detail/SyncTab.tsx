@@ -50,6 +50,8 @@ export interface SyncTabProps {
   queueLockReason: string | null;
   /** Opens this flow in the flow builder. */
   onEdit: () => void;
+  /** When rendered inside a block form, show only that block's sink. */
+  blockId?: string | null;
 }
 
 const VERB_ICON: Record<SinkVerb, LucideIcon> = {
@@ -90,7 +92,7 @@ interface DeleteTarget {
   name: string;
 }
 
-export function SyncTab({ flow, queueLockReason, onEdit }: SyncTabProps): JSX.Element {
+export function SyncTab({ flow, queueLockReason, onEdit, blockId = null }: SyncTabProps): JSX.Element {
   const qc = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
@@ -105,6 +107,7 @@ export function SyncTab({ flow, queueLockReason, onEdit }: SyncTabProps): JSX.El
   const flowsQuery = useQuery({ queryKey: ["flows"], queryFn: listFlows });
 
   const sinks = statusQuery.data?.sinks ?? [];
+  const visibleSinks = blockId ? sinks.filter((sink) => sink.blockId === blockId) : sinks;
   const reachable = statusQuery.data?.reachable ?? false;
   const flows = flowsQuery.data ?? [];
   // Read whatever the Runtime tab may already have fetched, but never start
@@ -157,7 +160,7 @@ export function SyncTab({ flow, queueLockReason, onEdit }: SyncTabProps): JSX.El
   });
 
   if (!hasSinkBlocks) {
-    return <EmptyState inline>No Kafka Connect sinks in this flow.</EmptyState>;
+    return <EmptyState inline>{blockId ? "This block has no Kafka Connect sink." : "No Kafka Connect sinks in this flow."}</EmptyState>;
   }
 
   const deleteImpact = deleteTarget ? kafkaConnectSyncDeleteImpact(deleteTarget, flows) : null;
@@ -191,7 +194,10 @@ export function SyncTab({ flow, queueLockReason, onEdit }: SyncTabProps): JSX.El
       )}
 
       <div className="space-y-2">
-        {sinks.map((sink) => {
+        {visibleSinks.length === 0 && statusQuery.data && (
+          <EmptyState inline>{blockId ? "No runtime sink status is available for this block." : "No sink status is available."}</EmptyState>
+        )}
+        {visibleSinks.map((sink) => {
           const runtimeBusy = runtimeAction.isPending && runtimeAction.variables?.blockId === sink.blockId;
           const refreshBusy = refreshStatus.isPending && refreshStatus.variables === sink.blockId;
           const deleteBusy = deleteSync.isPending && sink.syncId != null && deleteTarget?.id === sink.syncId;

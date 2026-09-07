@@ -1136,6 +1136,54 @@ def http_write_flow(write_forwards: str) -> Flow:
     )
 
 
+def test_http_write_record_body_sends_the_flowfile_content_untouched():
+    """bodySource "record" must emit NO render_body at all.
+
+    `InvokeHTTP` already carries "Request Body Enabled": "true", so with
+    nothing overwriting the content the record itself becomes the POST body --
+    the same thing a kafka write publishes. `render_body` used to be added
+    unconditionally, which made this mode unreachable and forced callers to
+    rebuild the record field-by-field through attributes.
+    """
+    flow = http_write_flow("original")
+    flow.blocks[0].config["bodySource"] = "record"
+    del flow.blocks[0].config["bodyTemplate"]
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    keys = [p.key for p in group.processors]
+
+    assert "render_body" not in keys
+    assert "extract_body_fields" not in keys
+    write = next(p for p in group.processors if p.key == "write")
+    assert write.properties["Request Body Enabled"] == "true"
+    # The entry tail feeds `write` directly, with nothing in between.
+    inbound = [c for c in group.connections if c.to == "write"]
+    assert len(inbound) == 1 and inbound[0].from_ != "render_body"
+
+
+def test_http_write_template_body_is_unchanged_by_the_new_switch():
+    """The FortiSIEM-style path must compile exactly as before."""
+    flow = http_write_flow("original")
+    flow.blocks[0].config["bodySource"] = "template"
+    plan = compile_flow(flow, http_svc_ctx())
+    group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")
+    keys = [p.key for p in group.processors]
+
+    assert keys.index("extract_body_fields") < keys.index("render_body") < keys.index("write")
+    render = next(p for p in group.processors if p.key == "render_body")
+    assert render.properties["Replacement Strategy"] == "Always Replace"
+    assert render.properties["Replacement Value"] == '{"title": "${title}", "severity": "${sev}"}'
+
+
+def test_http_write_record_body_refuses_pagination():
+    """Pagination advances by re-rendering the template; record mode has none."""
+    flow = http_write_flow("response")
+    flow.blocks[0].config["bodySource"] = "record"
+    flow.blocks[0].config["pagination"] = {"type": "offset", "fields": {"limitValue": "100"}}
+    with pytest.raises(CompileError, match="pagination advances by re-rendering"):
+        compile_flow(flow, http_svc_ctx())
+
+
 def test_http_write_replace_text_method_and_original_continuation():
     plan = compile_flow(http_write_flow("original"), http_svc_ctx())
     group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-write")

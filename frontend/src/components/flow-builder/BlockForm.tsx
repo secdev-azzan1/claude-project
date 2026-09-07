@@ -1189,7 +1189,8 @@ function HttpSettings({
     query.length > 0 ? `${query.length} query param${query.length === 1 ? "" : "s"}` : null,
     pagination.type && pagination.type !== "none" ? `${pagination.type} pagination` : null,
     service?.config?.proxyId ? "via gateway proxy" : null,
-    block.mode === "write" && (cfg.bodyTemplate as string) ? "body template" : null,
+    block.mode === "write" && cfg.bodySource === "record" ? "sends the record" : null,
+    block.mode === "write" && cfg.bodySource === "template" && (cfg.bodyTemplate as string) ? "body template" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1412,6 +1413,29 @@ function HttpSettings({
             {block.mode === "write" && (
               <>
                 <div className="grid gap-1.5">
+                  <Label>Request body</Label>
+                  <Select
+                    value={(cfg.bodySource as string) ?? ""}
+                    disabled={locked}
+                    onValueChange={(v) => onPatchConfig(block.id, { bodySource: v })}
+                  >
+                    <SelectTrigger className="max-w-xs">
+                      <SelectValue placeholder="Pick what to send" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="record">The record from this flow</SelectItem>
+                      <SelectItem value="template">A body template I write</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    The record is what a kafka write publishes. A template replaces it with text you write.
+                  </p>
+                </div>
+                {/* Only shown in template mode: the compiler never reads the
+                    template when the body is the record, so displaying it there
+                    would imply it has an effect it does not have. */}
+                {cfg.bodySource === "template" && (
+                <div className="grid gap-1.5">
                   <Label>Body template</Label>
                   <Textarea
                     className="font-mono text-xs"
@@ -1433,6 +1457,7 @@ function HttpSettings({
                     </p>
                   )}
                 </div>
+                )}
                 <div className="grid gap-1.5">
                   <Label>Chain continues with (R3)</Label>
                   <Select

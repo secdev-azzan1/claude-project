@@ -738,11 +738,6 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
 
   const hasAnyConnections = connections.length > 0;
   const availableTypes = TYPE_ORDER.filter((type) => !connections.some((c) => c.type === type));
-  const healthyCount = connections.filter((c) => c.health === "Healthy").length;
-  const attentionCount = connections.filter(
-    (c) => c.health === "Failed" || c.reachability === "Unreachable",
-  ).length;
-  const untestedCount = connections.filter((c) => c.health === "Not Tested").length;
 
   return (
     <div className="space-y-8">
@@ -801,35 +796,6 @@ export function PlatformConnectionsPanel({ showHeading = true }: { showHeading?:
 
       {!isLoading && (
         <>
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 px-3.5 py-3">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-muted text-primary">
-                <Plug className="h-4 w-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold">Connection board</p>
-                <p className="truncate text-xs text-muted-foreground">One saved connection per platform role.</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className="rounded-full bg-muted px-2.5 py-1 font-medium">
-                {connections.length}/{TYPE_ORDER.length} configured
-              </span>
-              <span className="rounded-full bg-success-muted px-2.5 py-1 font-medium text-success">
-                {healthyCount} healthy
-              </span>
-              {attentionCount > 0 ? (
-                <span className="rounded-full bg-warning-muted px-2.5 py-1 font-medium text-warning">
-                  {attentionCount} needs attention
-                </span>
-              ) : (
-                <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">
-                  {untestedCount} not tested
-                </span>
-              )}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {TYPE_ORDER.map((type) => {
               const meta = TYPE_META[type];

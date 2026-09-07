@@ -131,8 +131,6 @@ const PROVENANCE_META: Record<
   },
 };
 
-const PROVENANCE_ORDER: SchemaProvenance[] = ["sample_run", "uploaded", "manual"];
-
 /** "Security incident envelope" -> "security-incident-envelope-value" — a starting
  *  point for the Register dialog's subject, never forced on the user. */
 const suggestSubject = (name: string): string => {
@@ -494,7 +492,6 @@ const Schemas = () => {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 250);
   const [registrationFilter, setRegistrationFilter] = useState<RegistrationFilter>("all");
-  const [provenanceFilter, setProvenanceFilter] = useState<SchemaProvenance[]>([]);
   const [selectedId, setSelectedId] = useState("");
 
   // ─── detail state ─────────────────────────────────────────────────────
@@ -571,11 +568,6 @@ const Schemas = () => {
         if (registrationFilter === "registered" && !registered) return false;
         if (registrationFilter === "not_registered" && registered) return false;
       }
-      // Provenance is an approved-only axis: narrowing it hides templates.
-      if (provenanceFilter.length > 0) {
-        if (artifact.kind !== "approved") return false;
-        if (!provenanceFilter.includes(artifact.schema.provenance)) return false;
-      }
       if (!query) return true;
       const owner = flowLabel.get(artifact.id);
       const haystack =
@@ -590,7 +582,7 @@ const Schemas = () => {
           : [artifact.template.name, artifact.template.description ?? ""];
       return haystack.some((value) => value.toLowerCase().includes(query));
     });
-  }, [artifacts, registrationFilter, provenanceFilter, debouncedSearch, flowLabel]);
+  }, [artifacts, registrationFilter, registeredSubjectByTemplateId, debouncedSearch, flowLabel]);
 
   const selected = useMemo(
     () => artifacts.find((a) => a.id === selectedId) ?? filtered[0] ?? artifacts[0] ?? null,
@@ -1144,33 +1136,6 @@ const Schemas = () => {
                     {label}
                   </FilterChip>
                 ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Evidence</span>
-                {PROVENANCE_ORDER.map((provenance) => (
-                  <FilterChip
-                    key={provenance}
-                    active={provenanceFilter.includes(provenance)}
-                    onClick={() =>
-                      setProvenanceFilter((prev) =>
-                        prev.includes(provenance)
-                          ? prev.filter((p) => p !== provenance)
-                          : [...prev, provenance],
-                      )
-                    }
-                  >
-                    {PROVENANCE_META[provenance].short}
-                  </FilterChip>
-                ))}
-                {provenanceFilter.length > 0 && (
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onClick={() => setProvenanceFilter([])}
-                  >
-                    clear
-                  </button>
-                )}
               </div>
             </div>
           </CardHeader>

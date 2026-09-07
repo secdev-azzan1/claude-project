@@ -69,6 +69,8 @@ import {
   type ServiceForm,
 } from "@/components/service-form/ServiceFormFields";
 import { BranchesCard } from "./BranchesCard";
+import { BlockMessagesPanel } from "@/components/flow-detail/BlockMessagesPanel";
+import { SyncTab } from "@/components/flow-detail/SyncTab";
 import { hostsTransforms, isTerminal } from "@/prototype/legality";
 import {
   deriveTopicName,
@@ -100,6 +102,7 @@ import type {
   TransformRule,
 } from "@/prototype/types";
 import {
+  Activity,
   AlertCircle,
   Fingerprint,
   FlaskConical,
@@ -229,6 +232,12 @@ export function BlockForm(props: BlockFormProps) {
   const isWrite = block.mode === "write" || block.adapter === "kafka_kc";
   const isKafkaFamilyWrite = (block.adapter === "kafka" && block.mode === "write") || block.adapter === "kafka_kc";
   const hasSinkConfig = block.adapter === "kc" || block.adapter === "kafka_kc";
+  const hasTopicMessages = Boolean(
+    flow.topics.some((topic) => topic.id === block.parentId || topic.writerBlockId === block.id || topic.id === block.config.attachTopicId) ||
+      (typeof block.config.topicName === "string" && block.config.topicName.trim()) ||
+      block.adapter === "kafka" ||
+      block.adapter === "kafka_kc",
+  );
   const { data: kafkaConnectSyncs = [] } = useQuery({
     queryKey: ["kafkaConnectSyncs"],
     queryFn: listKafkaConnectSyncs,
@@ -384,11 +393,17 @@ export function BlockForm(props: BlockFormProps) {
       ...(hasSinkConfig
         ? [{ id: "sink", label: "Sink", title: "Sink configuration", group: "Destination", icon: <Settings2 className="h-3.5 w-3.5" /> }]
         : []),
+      ...(hasTopicMessages
+        ? [{ id: "messages", label: "Messages", title: "Topic messages", group: "Destination", icon: <Activity className="h-3.5 w-3.5" /> }]
+        : []),
+      ...(hasSinkConfig
+        ? [{ id: "sink-runtime", label: "Sink runtime", title: "Sink runtime", group: "Destination", icon: <Settings2 className="h-3.5 w-3.5" /> }]
+        : []),
       ...(showBranches
         ? [{ id: "branches", label: "Routing", title: "Routing", group: "Destination", icon: <Shuffle className="h-3.5 w-3.5" /> }]
         : []),
     ],
-    [issues.length, block.adapter, showTest, isWrite, nameWarning, collision, approved, hasSinkConfig, showBranches],
+    [issues.length, block.adapter, showTest, isWrite, nameWarning, collision, approved, hasSinkConfig, hasTopicMessages, showBranches],
   );
 
   // Section content is rendered one page at a time. Keep the list for the
@@ -915,6 +930,39 @@ export function BlockForm(props: BlockFormProps) {
             </Section>
           )}
 
+          {/* -------------------------------------------- topic messages */}
+          {hasTopicMessages && (
+            <Section
+              value="messages"
+              title="Messages"
+              icon={<Activity className="h-4 w-4 text-muted-foreground" />}
+              open={visibleSection === "messages"}
+              summary="latest records on this block's topic"
+              info="Read-only inspection of the Kafka topic connected to this block."
+            >
+              <BlockMessagesPanel flow={flow} block={block} />
+            </Section>
+          )}
+
+          {/* -------------------------------------------- sink runtime */}
+          {hasSinkConfig && (
+            <Section
+              value="sink-runtime"
+              title="Sink runtime"
+              icon={<Settings2 className="h-4 w-4 text-muted-foreground" />}
+              open={visibleSection === "sink-runtime"}
+              summary="live connector and task controls"
+              info="Operational status and actions for this block's Kafka Connect sink. Configuration stays in Sink setup."
+            >
+              <SyncTab
+                flow={flow}
+                blockId={block.id}
+                queueLockReason={queueLocked ? "This flow is locked while its queued operation runs." : null}
+                onEdit={() => onSelectBlock(block.id)}
+              />
+            </Section>
+          )}
+
           {/* ---------------------------------------------------------- routing */}
           {showBranches && (
             <Section
@@ -1432,7 +1480,8 @@ function HttpSettings({
     query.length > 0 ? `${query.length} query param${query.length === 1 ? "" : "s"}` : null,
     pagination.type && pagination.type !== "none" ? `${pagination.type} pagination` : null,
     service?.config?.proxyId ? "via gateway proxy" : null,
-    block.mode === "write" && (cfg.bodyTemplate as string) ? "body template" : null,
+    block.mode === "write" && cfg.bodySource === "record" ? "sends the record" : null,
+    block.mode === "write" && cfg.bodySource === "template" && (cfg.bodyTemplate as string) ? "body template" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1603,16 +1652,39 @@ function HttpSettings({
 
             {block.mode === "write" && (
               <>
-                <Field label="Body template">
-                  <Textarea
-                    className="font-mono text-xs"
-                    rows={3}
-                    value={(cfg.bodyTemplate as string) ?? ""}
+                <Field
+                  label="Request body"
+                  info="What actually gets sent. The record is what a kafka write publishes; a template replaces it with text you write."
+                >
+                  <Select
+                    value={(cfg.bodySource as string) ?? ""}
                     disabled={locked}
-                    placeholder='{"records": ${records}}'
-                    onChange={(e) => onPatchConfig(block.id, { bodyTemplate: e.target.value })}
-                  />
+                    onValueChange={(v) => onPatchConfig(block.id, { bodySource: v })}
+                  >
+                    <SelectTrigger className="max-w-xs">
+                      <SelectValue placeholder="Pick what to send" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="record">The record from this flow</SelectItem>
+                      <SelectItem value="template">A body template I write</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </Field>
+                {/* Only shown in template mode: the compiler never reads the
+                    template when the body is the record, so displaying it there
+                    would imply it has an effect it does not have. */}
+                {cfg.bodySource === "template" && (
+                  <Field label="Body template">
+                    <Textarea
+                      className="font-mono text-xs"
+                      rows={3}
+                      value={(cfg.bodyTemplate as string) ?? ""}
+                      disabled={locked}
+                      placeholder='{"records": ${records}}'
+                      onChange={(e) => onPatchConfig(block.id, { bodyTemplate: e.target.value })}
+                    />
+                  </Field>
+                )}
                 <Field label="Chain continues with" info="R3 — what the next block receives from this write.">
                   <Select
                     value={(cfg.writeForwards as string) ?? "original"}

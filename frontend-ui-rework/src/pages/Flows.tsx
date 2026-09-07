@@ -15,7 +15,6 @@ import {
   ChevronRight,
   Download,
   Eraser,
-  Eye,
   FileJson,
   Lock,
   MoreHorizontal,
@@ -83,7 +82,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -515,7 +513,7 @@ function DisclosureRow({
   );
 }
 
-function RuntimeTab({
+export function RuntimeTab({
   flow,
   services,
   connections,
@@ -1657,7 +1655,7 @@ export function FlowDetailSheet({
 
 // ─── Save as Connector dialog ───────────────────────────────────────────────
 
-function SaveConnectorDialog({
+export function SaveConnectorDialog({
   flow,
   services,
   connectors,
@@ -1988,7 +1986,6 @@ const Flows = () => {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 180);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [openId, setOpenId] = useState<string | null>(null);
   const [pendingVerbs, setPendingVerbs] = useState<Record<string, FlowVerb>>({});
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [lastFinishedJobId, setLastFinishedJobId] = useState<string | null>(null);
@@ -2110,11 +2107,6 @@ const Flows = () => {
     });
   }, [flows]);
 
-  // Close the sheet if the open flow is gone
-  useEffect(() => {
-    if (openId && !isLoading && !flows.some((f) => f.id === openId)) setOpenId(null);
-  }, [openId, flows, isLoading]);
-
   const missingRuntime = useMemo(
     () =>
       (["nifi", "kafka", "apicurio"] as const).filter(
@@ -2163,8 +2155,6 @@ const Flows = () => {
       return next;
     });
   };
-
-  const openFlow = openId ? flows.find((f) => f.id === openId) ?? null : null;
 
   const isRowControl = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
@@ -2290,7 +2280,6 @@ const Flows = () => {
           description: failures.slice(0, 3).join(" · "),
         });
       }
-      setOpenId((cur) => (cur === flow.id ? null : cur));
       setSelectedIds((prev) => {
         const next = new Set(prev);
         next.delete(flow.id);
@@ -2611,12 +2600,6 @@ const Flows = () => {
                         </TableCell>
                         <TableCell className="px-1 py-4 text-right">
                           <div className="flex justify-end gap-0.5">
-                            <GuardedIconButton
-                              label="Overview"
-                              reason={null}
-                              icon={Eye}
-                              onClick={() => setOpenId(flow.id)}
-                            />
                             {primary && (
                               <GuardedIconButton
                                 label={VERB_META[primary].label}
@@ -2708,27 +2691,6 @@ const Flows = () => {
       </Card>
 
       {/* ── Detail sheet ── */}
-      <Sheet open={!!openFlow} onOpenChange={(open) => !open && setOpenId(null)}>
-        {openFlow && (
-          <FlowDetailSheet
-            flow={openFlow}
-            services={services}
-            schemas={schemas}
-            connections={connections}
-            pendingVerb={pendingVerbs[openFlow.id]}
-            queueLockReason={flowQueueLockReason(openFlow.id)}
-            onVerb={(verb) => {
-              if (verb === "delete") openDeleteFlow(openFlow);
-              else runVerb(openFlow, verb);
-            }}
-            onToggleEnabled={(enabled) => enableMut.mutate({ flow: openFlow, enabled })}
-            enableBusy={enableMut.isPending}
-            onEdit={() => navigate(`/flow-builder/${openFlow.id}`)}
-            onSaveConnector={() => setConnectorFlow(openFlow)}
-          />
-        )}
-      </Sheet>
-
       {/* ── Delete confirmation (ownership proof) ── */}
       <AlertDialog
         open={!!deleteTarget}

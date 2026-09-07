@@ -38,6 +38,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { FlowMapView } from "@/components/flow-builder/FlowMapView";
 import { BlockForm } from "@/components/flow-builder/BlockForm";
 import { FlowSettingsForm } from "@/components/flow-builder/FlowSettingsForm";
+import { FlowOperationsDock } from "@/components/flow-detail/FlowOperationsDock";
+import { SaveConnectorDialog } from "@/pages/Flows";
 import { PreflightDialog } from "@/components/flow-builder/PreflightDialog";
 import { CeremonyDialog } from "@/components/flow-builder/CeremonyDialog";
 import { cn } from "@/lib/utils";
@@ -49,7 +51,10 @@ import {
   getFlow,
   getGatewayResources,
   getVerbBlockReason,
+  mergeServerLifecycle,
   listGatewayProxies,
+  listConnections,
+  listConnectors,
   listSchemas,
   listServices,
   isBulkJobTerminal,
@@ -77,6 +82,7 @@ import {
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  Package,
   Pause,
   Play,
   Rocket,
@@ -99,6 +105,7 @@ export default function FlowBuilder() {
   const [saving, setSaving] = useState(false);
   const [verbBusy, setVerbBusy] = useState<FlowVerb | null>(null);
   const [enabledBusy, setEnabledBusy] = useState(false);
+  const [connectorOpen, setConnectorOpen] = useState(false);
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [ceremonyBlockId, setCeremonyBlockId] = useState<string | null>(null);
   const [ceremonyPrefill, setCeremonyPrefill] = useState<string | null>(null);
@@ -111,11 +118,19 @@ export default function FlowBuilder() {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
     return window.matchMedia("(min-width: 1280px)").matches;
   });
+  const operationsPanelRef = useRef<ImperativePanelHandle>(null);
   /** Fills the viewport with the SAME mounted canvas rather than opening a
    *  second one in a dialog â€” the map holds live pan/zoom/selection state in
    *  its ReactFlowProvider, and remounting it elsewhere would flicker and
    *  reset the camera. Expanding just re-parents its visual bounds via CSS. */
   const [mapExpanded, setMapExpanded] = useState(false);
+  const showOperations = draft?.state === "Running";
+
+  useEffect(() => {
+    if (!operationsPanelRef.current) return;
+    if (showOperations) operationsPanelRef.current.expand();
+    else operationsPanelRef.current.collapse();
+  }, [draft?.id, showOperations]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -155,30 +170,67 @@ export default function FlowBuilder() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mapExpanded]);
 
-  const { data: serverFlow, isLoading } = useQuery({
-    queryKey: ["flow", flowId],
-    queryFn: () => getFlow(flowId!),
-    enabled: !isNew,
-  });
-  const { data: services = [] } = useQuery({ queryKey: ["services"], queryFn: listServices });
-  const { data: schemas = [] } = useQuery({ queryKey: ["schemas"], queryFn: listSchemas });
-  // `validateFlow`'s gateway param defaults to a localStorage-backed reader
-  // when omitted (a leftover of the retired mock store) â€” fetched here and
-  // passed explicitly so this page never touches it.
-  const { data: gatewayProxies = [] } = useQuery({ queryKey: ["gateway-proxies"], queryFn: listGatewayProxies });
-  const { data: gatewayResources } = useQuery({ queryKey: ["gateway"], queryFn: getGatewayResources });
+  // Fetched BEFORE the flow itself: the flow query's poll rate below keys off
+  // whether this flow currently has a queued operation, and deriving that from
+  // `flowId` (rather than from `draft`) keeps it free of a circular dependency
+  // on the very query it is throttling.
   const { data: operationQueue = [] } = useQuery({
     queryKey: ["flowOperationQueue"],
     queryFn: getBulkQueue,
     enabled: !isNew,
     refetchInterval: 1200,
   });
+  const flowOperationPending = useMemo(
+    () =>
+      !!flowId &&
+      operationQueue
+        .filter((job) => !isBulkJobTerminal(job))
+        .some((job) =>
+          job.items.some(
+            (item) => (item.status === "pending" || item.status === "running") && item.flowId === flowId,
+          ),
+        ),
+    [operationQueue, flowId],
+  );
+
+  const { data: serverFlow, isLoading } = useQuery({
+    queryKey: ["flow", flowId],
+    queryFn: () => getFlow(flowId!),
+    enabled: !isNew,
+    // Lifecycle verbs are queued, so the flow's state lands on the server
+    // some time after the click. Without polling, nothing on this page ever
+    // learns that a flow started and the lifecycle buttons stay stale.
+    // Fast while an operation is actually in flight (that is when the user is
+    // watching the buttons), relaxed otherwise so an idle builder tab is not
+    // refetching a flow document every couple of seconds.
+    refetchInterval: flowOperationPending ? 1500 : 10000,
+  });
+  const { data: services = [] } = useQuery({ queryKey: ["services"], queryFn: listServices });
+  const { data: schemas = [] } = useQuery({ queryKey: ["schemas"], queryFn: listSchemas });
+  const { data: connections = [] } = useQuery({ queryKey: ["connections"], queryFn: listConnections });
+  const { data: connectors = [] } = useQuery({ queryKey: ["connectors"], queryFn: listConnectors });
+  // `validateFlow`'s gateway param defaults to a localStorage-backed reader
+  // when omitted (a leftover of the retired mock store) â€” fetched here and
+  // passed explicitly so this page never touches it.
+  const { data: gatewayProxies = [] } = useQuery({ queryKey: ["gateway-proxies"], queryFn: listGatewayProxies });
+  const { data: gatewayResources } = useQuery({ queryKey: ["gateway"], queryFn: getGatewayResources });
 
   useEffect(() => {
-    if (serverFlow && (!draft || draft.id !== serverFlow.id)) {
+    if (!serverFlow) return;
+    if (!draft || draft.id !== serverFlow.id) {
+      // A different flow (or the first load): adopt it wholesale.
       setDraft(serverFlow);
       setDirty(false);
+      return;
     }
+    // Same flow, already loaded. Lifecycle verbs are QUEUED, so the flow's
+    // state changes on the server well after the click returns -- without
+    // this the draft stays frozen at whatever the state was when the page
+    // opened, and the buttons never catch up (Stop stayed disabled forever
+    // after a Start). Only server-owned fields are merged, so this is safe
+    // even mid-edit; `mergeServerLifecycle` returns the same reference when
+    // nothing changed, so an idle poll costs no render.
+    setDraft((current) => (current ? mergeServerLifecycle(current, serverFlow) : current));
   }, [serverFlow, draft]);
 
   // Deep link from the Schemas browser: ?ceremony=<blockId>[&prefill=<templateId>].
@@ -420,6 +472,10 @@ export default function FlowBuilder() {
       }
       await startBulkJob(verb, [draft.id]);
       queryClient.invalidateQueries({ queryKey: ["flows"] });
+      // This page reads ["flow", id], not the list -- invalidating only
+      // ["flows"] left the builder showing pre-verb state. The save path
+      // already invalidates both; this one was missed.
+      queryClient.invalidateQueries({ queryKey: ["flow", draft.id] });
       toast.info(`Queued ${verb.replace("_", " ")} â€” ${draft.name}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed");
@@ -617,6 +673,13 @@ export default function FlowBuilder() {
                 })}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  disabled={queueLocked}
+                  onClick={() => setConnectorOpen(true)}
+                >
+                  <Package className="mr-2 h-3.5 w-3.5" /> Save as Connector
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
                   disabled={queueLocked || enabledBusy}
                   onClick={() => {
                     if (queueLocked) return;
@@ -683,6 +746,16 @@ export default function FlowBuilder() {
             the way back to Flow settings, moves onto the form pane's header
             where the thing being configured is named. */}
         <div className="min-h-0 flex-1 xl:h-full xl:overflow-hidden">
+        <ResizablePanelGroup
+          direction="vertical"
+          autoSaveId="flow-builder-operations-layout"
+          className="h-full min-h-0 max-xl:!block max-xl:!h-auto max-xl:!w-auto"
+        >
+          <ResizablePanel
+            defaultSize={72}
+            minSize={45}
+            className="min-h-0 max-xl:!block max-xl:!h-auto max-xl:!w-auto"
+          >
         <ResizablePanelGroup
           direction="horizontal"
           autoSaveId="flow-builder-layout"
@@ -902,8 +975,47 @@ export default function FlowBuilder() {
           </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+          </ResizablePanel>
+          {showOperations && (
+            <ResizableHandle
+              withHandle
+              aria-label="Resize flow workspace and operations"
+              title="Drag to resize the flow workspace and operations"
+              className="my-1 shrink-0 cursor-row-resize rounded-full bg-border/70 transition-colors hover:bg-primary/60 max-xl:hidden"
+            />
+          )}
+          <ResizablePanel
+            ref={operationsPanelRef}
+            defaultSize={28}
+            minSize={showOperations ? 12 : 0}
+            collapsible
+            collapsedSize={0}
+            className={cn(
+              "min-h-0 max-xl:!block max-xl:!h-[min(30rem,68svh)] max-xl:!w-auto max-xl:!pt-4",
+              !showOperations && "hidden",
+            )}
+          >
+            {showOperations && (
+              <FlowOperationsDock
+                flow={draft}
+                services={services}
+                schemas={schemas}
+                connections={connections}
+                onEdit={() => setSelectedId("flow")}
+                onSelectBlock={setSelectedId}
+              />
+            )}
+          </ResizablePanel>
+        </ResizablePanelGroup>
         </div>
       </div>
+
+      <SaveConnectorDialog
+        flow={connectorOpen ? draft : null}
+        services={services}
+        connectors={connectors}
+        onClose={() => setConnectorOpen(false)}
+      />
 
       <PreflightDialog flow={draft} open={preflightOpen} onOpenChange={setPreflightOpen} onDeploy={() => void execVerb("deploy")} deploying={verbBusy === "deploy"} />
 

@@ -1132,6 +1132,11 @@ def _compile_write(
         raise CompileError(f"http write block {block.id!r} has invalid method {method!r} (POST/PUT/PATCH only)")
     path = _normalize_path(str(block.config.get("path", "")), service)
     body_template = str(block.config.get("bodyTemplate", "") or "")
+    # What the request body IS -- see the `render_body` call site below.
+    # No default: `validation.py` refuses to deploy a write that has not
+    # chosen, because an absent value silently meaning one or the other is
+    # exactly the trap this setting exists to remove.
+    body_source = str(block.config.get("bodySource", "") or "").strip().lower()
     write_forwards = str(block.config.get("writeForwards", "original") or "original")
     pagination = block.config.get("pagination") or {"type": "none", "fields": {}}
     ptype = pagination.get("type", "none")
@@ -1158,6 +1163,18 @@ def _compile_write(
             f"{write_forwards!r} — pagination needs the parsed response to decide whether to continue, "
             "so writeForwards must be \"response\""
         )
+    if ptype != "none" and body_source == "record":
+        # Pagination advances by splicing counters INTO the body template
+        # (`_auto_fill_pagination_body`) and looping back to `render_body` to
+        # re-render it. "record" mode has neither, so the loop would re-POST
+        # the same record forever. `validation.py` rejects this combination
+        # before deploy; this backstop keeps a hand-made config from silently
+        # compiling into an API-hammering loop.
+        raise CompileError(
+            f"http write block {block.id!r} configures {ptype!r} pagination with bodySource "
+            "\"record\" — pagination advances by re-rendering the body template, so it needs "
+            "bodySource \"template\""
+        )
     if ptype in ("offset", "page"):
         body_template = _auto_fill_pagination_body(body_template, ptype=ptype, fields=pagination.get("fields") or {})
 
@@ -1177,17 +1194,37 @@ def _compile_write(
     if service.config.get("authMode") == "session_token":
         source = _build_session_login(builder, service=service, add_param=add_param, source_key="init")
 
-    fields = _el_field_refs(body_template)
-    if fields:
-        source = _extract_fields(builder, key="extract_body_fields", fields=fields, source=source)
+    # `bodySource` decides whether the record survives to the request body.
+    #
+    # `InvokeHTTP` below already carries "Request Body Enabled": "true", which
+    # means "send the FlowFile content as the body". So in "record" mode there
+    # is simply nothing to do -- the content flows straight through and the
+    # POST carries the record, exactly the way a kafka write publishes it.
+    #
+    # "template" mode inserts a ReplaceText whose "Always Replace" strategy
+    # OVERWRITES that content with `body_template`. That is right for the
+    # FortiSIEM-style writes this mode was built for, where the body is a
+    # search query and the incoming record is irrelevant -- but it is why
+    # sending a record used to require one `extract` transform per field to
+    # copy values out to attributes, plus a template to copy them back in.
+    #
+    # `render_body` was previously added unconditionally, so "record" mode was
+    # unreachable and a blank template silently produced an empty POST body.
+    if body_source == "record":
+        body_tail = source
+    else:
+        fields = _el_field_refs(body_template)
+        if fields:
+            source = _extract_fields(builder, key="extract_body_fields", fields=fields, source=source)
 
-    builder.add_processor(
-        ProcessorSpec(key="render_body", name="render_body", type="org.apache.nifi.processors.standard.ReplaceText",
-                      properties={"Replacement Strategy": "Always Replace", "Replacement Value": body_template,
-                                  "Evaluation Mode": "Entire text", "Character Set": "UTF-8"})
-    )
-    builder.link(source[0], "render_body", [source[1]])
-    builder.to_dlq("render_body", "failure")
+        builder.add_processor(
+            ProcessorSpec(key="render_body", name="render_body", type="org.apache.nifi.processors.standard.ReplaceText",
+                          properties={"Replacement Strategy": "Always Replace", "Replacement Value": body_template,
+                                      "Evaluation Mode": "Entire text", "Character Set": "UTF-8"})
+        )
+        builder.link(source[0], "render_body", [source[1]])
+        builder.to_dlq("render_body", "failure")
+        body_tail = ("render_body", "success")
 
     base_expr = _base_url_expr(block=block, service=service, ctx=ctx, add_param=add_param)
     # Pagination counters ride in the QUERY STRING as well as the body.
@@ -1223,7 +1260,8 @@ def _compile_write(
         ProcessorSpec(key="write", name="write", type="org.apache.nifi.processors.standard.InvokeHTTP",
                       properties=invoke_props, autoTerminate=["No Retry", "Retry", unused_relationship])
     )
-    builder.link("render_body", "write", ["success"])
+    # In "record" mode this is the entry tail itself -- there is no render_body.
+    builder.link(body_tail[0], "write", [body_tail[1]])
     builder.to_dlq("write", "Failure")
 
     if write_forwards == "response":

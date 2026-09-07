@@ -625,6 +625,67 @@ def test_import_smoke():
     import services.adapter.naming  # noqa: F401
     import services.adapter.validation  # noqa: F401
 
+def _http_write_flow(write_config: dict) -> tuple:
+    """An http read root feeding an http write, for the bodySource rules."""
+    http_svc = AppService(id="svc-http", type="http", name="API", retired=False, health="Healthy")
+    root = FlowBlock(id="b-r", adapter="http", mode="read", name="Read", parentId=None,
+                     serviceId="svc-http", config={"method": "GET", "path": "/posts"}, transforms=[])
+    write = FlowBlock(id="b-w", adapter="http", mode="write", name="Send", parentId="b-r",
+                      serviceId="svc-http", entity="post",
+                      config={"method": "POST", "path": "/sink", **write_config}, transforms=[])
+    f = Flow(id="f-bs", name="Body Source Flow", state="Draft", enabled=True, cron="0 12 * * *",
+             blocks=[root, write], topics=[], variables=[], servicePins={}, createdAt="", updatedAt="")
+    return f, [http_svc]
+
+
+def test_http_write_without_body_source_is_rejected():
+    """No default: an absent bodySource is what silently POSTed empty bodies."""
+    f, svcs = _http_write_flow({"bodyTemplate": '{"a":"b"}'})
+    issues = validation.validate_flow(f, svcs, [])
+    assert any("Pick what to send as the request body" in i.message for i in issues), [i.message for i in issues]
+
+
+def test_http_write_template_mode_requires_a_non_empty_template():
+    """The silent-empty-POST trap, now a loud error."""
+    f, svcs = _http_write_flow({"bodySource": "template", "bodyTemplate": "   "})
+    issues = validation.validate_flow(f, svcs, [])
+    assert any("body template is required" in i.message for i in issues), [i.message for i in issues]
+
+
+def test_http_write_record_mode_needs_no_template():
+    """Record mode is complete on its own -- no template, no extract transforms."""
+    f, svcs = _http_write_flow({"bodySource": "record"})
+    issues = validation.validate_flow(f, svcs, [])
+    assert issues == [], [i.message for i in issues]
+
+
+def test_http_write_record_mode_ignores_a_leftover_template():
+    """A template that is never rendered must not be reported as unresolved.
+
+    Switching a block to record mode leaves the old text in config; asking the
+    user to fix placeholders the compiler never reads would be nonsense.
+    """
+    f, svcs = _http_write_flow({"bodySource": "record", "bodyTemplate": '{"t":"${nope}"}'})
+    issues = validation.validate_flow(f, svcs, [])
+    assert not any("Unresolved" in i.message for i in issues), [i.message for i in issues]
+
+
+def test_http_write_template_mode_still_reports_unresolved_placeholders():
+    """The existing guard must survive: template mode still needs its extracts."""
+    f, svcs = _http_write_flow({"bodySource": "template", "bodyTemplate": '{"t":"${nope}"}'})
+    issues = validation.validate_flow(f, svcs, [])
+    assert any("Unresolved" in i.message and "nope" in i.message for i in issues), [i.message for i in issues]
+
+
+def test_http_write_record_mode_rejects_pagination():
+    f, svcs = _http_write_flow({
+        "bodySource": "record", "writeForwards": "response",
+        "pagination": {"type": "offset", "fields": {"limitValue": "100"}},
+    })
+    issues = validation.validate_flow(f, svcs, [])
+    assert any("needs a body template to carry the page counters" in i.message for i in issues), [i.message for i in issues]
+
+
 def test_http_full_url_in_path_rejected():
     """Backend mirror of frontend httpPathIssue(): a full URL typed into the
     http path field compiles to base+url concatenation and an invalid

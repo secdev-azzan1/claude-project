@@ -107,8 +107,17 @@ def _is_write(block: FlowBlock) -> bool:
 _PLACEHOLDER_RE = re.compile(r"\$\{([a-zA-Z0-9_.-]+)\}")
 
 
-def _unresolved_placeholders(flow: Flow, block: FlowBlock) -> List[str]:
-    text = json.dumps(block.config or {}, default=str)
+def _unresolved_placeholders(flow: Flow, block: FlowBlock, *, ignore_config_keys: tuple = ()) -> List[str]:
+    """`ignore_config_keys` skips config entries that cannot reach the flow.
+
+    An http write with `bodySource: "record"` never renders `bodyTemplate`, so
+    a template left over from a previous edit must not be reported as an
+    unresolved reference -- the user would be asked to fix text the compiler
+    does not read. Every other config key still counts, because `path` and
+    `query` placeholders are evaluated in both body modes.
+    """
+    config = {k: v for k, v in (block.config or {}).items() if k not in ignore_config_keys}
+    text = json.dumps(config, default=str)
     found = _PLACEHOLDER_RE.findall(text)
     if not found:
         return []
@@ -225,6 +234,11 @@ def _pagination_refusals(block: FlowBlock) -> List[str]:
         issues.append("HTTP write pagination supports page or offset counters, not cursor or next URL.")
     if block.mode == "write" and str((block.config or {}).get("writeForwards") or "original") != "response":
         issues.append('HTTP write pagination requires "Continue with" to be the response.')
+    if block.mode == "write" and str((block.config or {}).get("bodySource") or "").strip().lower() == "record":
+        # Pagination advances by splicing counters into the body template and
+        # re-rendering it each iteration; sending the record verbatim leaves
+        # nothing to advance, so the same page would be re-POSTed forever.
+        issues.append("HTTP write pagination needs a body template to carry the page counters.")
 
     max_pages = fields.get("maxPages")
     has_max_pages = max_pages is not None and bool(str(max_pages).strip())
@@ -417,7 +431,22 @@ def validate_block(
             # base URL; a full URL here compiles to base+url concatenation and
             # an invalid InvokeHTTP target (user-reported live failure).
             at("HTTP path must be a path (the service provides the base URL) — got a full URL.")
-        missing = _unresolved_placeholders(flow, block)
+        # What the request body IS. Deliberately has no default: an absent
+        # value used to mean "overwrite the record with the template", so a
+        # blank template silently POSTed an empty body while every counter
+        # still read as success. Making the choice explicit turns that case
+        # into the loud error below.
+        body_source = str((block.config or {}).get("bodySource") or "").strip().lower()
+        if block.mode == "write":
+            if not body_source:
+                at("Pick what to send as the request body.")
+            elif body_source not in ("record", "template"):
+                at('Request body must be either the record or a body template.')
+            elif body_source == "template" and not str((block.config or {}).get("bodyTemplate") or "").strip():
+                at("A body template is required when the request body is a template.")
+        # A template that is never rendered cannot carry an unresolved reference.
+        ignore = ("bodyTemplate",) if (block.mode == "write" and body_source == "record") else ()
+        missing = _unresolved_placeholders(flow, block, ignore_config_keys=ignore)
         if missing:
             at(f"Unresolved ${{...}} values: {', '.join(missing)} — extract them upstream or define a flow variable.")
         for refusal in gateway_refusals(block, gateway, services):

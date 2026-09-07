@@ -95,7 +95,11 @@ export interface FlowBlock {
    * grep, never trust tsc, when renaming one):
    * - http:      method, path, responseFormat, recordPath, split, pagination,
    *              `proxyId?: string | null` — reference into `state.gatewayProxies`
-   *              (replaced the old boolean `proxy`), lookupJoinField
+   *              (replaced the old boolean `proxy`), lookupJoinField;
+   *              write adds writeForwards and `bodySource: "record" | "template"`
+   *              (REQUIRED on a write, no default — "record" sends the FlowFile
+   *              content like a kafka write, "template" replaces it with
+   *              `bodyTemplate`, which is then also required)
    * - jdbc:      table (every mode); read adds columns, incremental,
    *              watermarkColumn, watermarkType, bookmarkTieBreaker,
    *              bookmarkTieBreakerType, initialPosition; lookup adds
