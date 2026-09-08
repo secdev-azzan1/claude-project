@@ -9,13 +9,14 @@ seeded connection's `health` starts out accurate instead of the default
 "Not Tested".
 
 A type with missing required env vars is skipped outright -- there is no
-hardcoded fallback endpoint anywhere in this module (unlike the legacy
-`server.py: seed_default_connections()`, which does default to hardcoded
-devtunnels URLs; this v2 seed is deliberately honest instead: no env, no
-connection).
+hardcoded fallback endpoint anywhere in this module: no env, no connection.
+
+Not called automatically on startup -- boot must never auto-create or
+live-test connections on its own. Available here for deliberate, manual
+invocation only.
 
 Live-testing runs in a fixed order (nifi, kafka, apicurio, kafka_connect,
-redis, apisix) -- the same TYPE_ORDER frontend/src/pages/Connections.tsx
+redis, apisix) -- the same TYPE_ORDER frontend-ui-rework/src/pages/Connections.tsx
 renders in -- so that redis's "verified indirectly through NiFi" probe (see
 routers/v2/connections.py's `run_connection_test`) sees a freshly tested
 NiFi health value whenever NiFi was also seeded, rather than racing it.

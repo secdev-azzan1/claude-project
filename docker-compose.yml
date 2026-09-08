@@ -48,7 +48,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend-ui-rework
       args:
         VITE_BACKEND_URL: ""
     container_name: nif-abstractor-frontend

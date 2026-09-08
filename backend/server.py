@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 import logging
-import uuid
 from datetime import datetime
 from pymongo import ASCENDING
 import asyncio
@@ -34,7 +33,6 @@ from routers.v2 import flows as v2_flows
 from routers.v2 import dashboard as v2_dashboard
 from routers.v2 import audit as v2_audit
 from routers.v2 import schema_inference as v2_schema_inference
-from services.adapter.seed import seed_v2_connections
 
 # Configure logging
 logging.basicConfig(
@@ -164,93 +162,13 @@ async def root():
     return {"message": "NIF Abstractor API", "version": "1.0.0"}
 
 
-async def seed_default_connections():
-    """Seed default connections on first startup if none exist, then test them."""
+async def seed_default_settings():
+    """Seed the platform settings document on first startup if none exists.
+
+    Deliberately does not touch connections: no default connection should
+    ever be created or live-tested automatically on boot.
+    """
     db = database.get_db()
-    count = await db.connections.count_documents({})
-    if count > 0:
-        logger.info(f"Connections already seeded ({count} found). Skipping.")
-        return
-
-    now = datetime.utcnow()
-    nifi_url = os.environ.get('NIFI_URL', 'https://f4bj6zvj-8443.inc1.devtunnels.ms')
-    nifi_username = os.environ.get('NIFI_USERNAME', 'admin')
-    nifi_password = os.environ.get('NIFI_PASSWORD', '')
-    kafka_bootstrap = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'f4bj6zvj-9092.inc1.devtunnels.ms:9092')
-    apicurio_url = os.environ.get('APICURIO_URL', 'https://f4bj6zvj-8084.inc1.devtunnels.ms')
-
-    # ── Test each connection now so they start as Healthy ──────────────────
-    from services.nifi_client import test_nifi_connection
-    from services.kafka_client import test_kafka_connection
-    from services.apicurio_client import test_apicurio_connection
-
-    logger.info("Testing connections during seed...")
-
-    nifi_result = await test_nifi_connection(nifi_url, auth_type="BASIC",
-                                             username=nifi_username, password=nifi_password)
-    nifi_health = "Healthy" if nifi_result.get("ok") else "Failed"
-    logger.info(f"NiFi seed test: {nifi_health} — {nifi_result.get('message') or nifi_result.get('error')}")
-
-    kafka_result = await test_kafka_connection(kafka_bootstrap)
-    kafka_health = "Healthy" if kafka_result.get("ok") else "Failed"
-    logger.info(f"Kafka seed test: {kafka_health} — {kafka_result.get('message') or kafka_result.get('error')}")
-
-    apicurio_result = await test_apicurio_connection(apicurio_url)
-    apicurio_health = "Healthy" if apicurio_result.get("ok") else "Failed"
-    logger.info(f"Apicurio seed test: {apicurio_health} — {apicurio_result.get('message') or apicurio_result.get('error')}")
-
-    tested_at = datetime.utcnow()
-
-    default_connections = [
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Apache NiFi",
-            "type": "nifi",
-            "description": "NiFi cluster API for flow deployment",
-            "endpoint": nifi_url,
-            "auth_type": "BASIC",
-            "username": nifi_username,
-            "password": nifi_password,
-            "health": nifi_health,
-            "last_tested": tested_at,
-            "created_at": now,
-            "updated_at": tested_at,
-            "is_active": True,
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Kafka",
-            "type": "kafka",
-            "description": "Bootstrap broker cluster",
-            "endpoint": kafka_bootstrap,
-            "kafka_connection_mode": "native",
-            "security_protocol": "PLAINTEXT",
-            "health": kafka_health,
-            "last_tested": tested_at,
-            "created_at": now,
-            "updated_at": tested_at,
-            "is_active": True,
-        },
-        {
-            "id": str(uuid.uuid4()),
-            "name": "Apicurio Schema Registry",
-            "type": "apicurio",
-            "description": "Avro schema registry for NiFi flows",
-            "endpoint": apicurio_url,
-            "auth_type": "NONE",
-            "group_id": "nif-platform",
-            "health": apicurio_health,
-            "last_tested": tested_at,
-            "created_at": now,
-            "updated_at": tested_at,
-            "is_active": True,
-        },
-    ]
-
-    await db.connections.insert_many(default_connections)
-    logger.info(f"Seeded 3 connections — NiFi: {nifi_health}, Kafka: {kafka_health}, Apicurio: {apicurio_health}")
-
-    # Seed default settings
     from models.settings import PlatformSettings
     settings_count = await db.settings.count_documents({})
     if settings_count == 0:
@@ -259,12 +177,6 @@ async def seed_default_connections():
         doc["id"] = "platform"
         await db.settings.insert_one(doc)
         logger.info("Seeded default platform settings.")
-
-    # Seed initial audit event
-    from models.audit import AuditEvent
-    event = AuditEvent(action="Platform initialized", object_type="System", target="NIF Abstractor", status="Success",
-                       details=f"Default connections seeded — NiFi: {nifi_health}, Kafka: {kafka_health}, Apicurio: {apicurio_health}")
-    await db.audit_events.insert_one(event.dict())
 
 
 async def ensure_indexes():
@@ -339,12 +251,7 @@ async def startup():
     logger.info("Database connection initialized.")
     asyncio.create_task(recover_runtime_state_background())
     asyncio.create_task(ensure_indexes())
-    await seed_default_connections()
-    try:
-        await seed_v2_connections(database.get_db())
-        logger.info("v2 connections seeded/verified.")
-    except Exception as exc:
-        logger.warning("v2 connection seeding did not complete: %s", exc)
+    await seed_default_settings()
     logger.info("NIF Abstractor API started successfully.")
 
 

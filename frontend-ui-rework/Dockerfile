@@ -1,10 +1,14 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
 ARG VITE_BACKEND_URL=""
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 
+# node:20-alpine's bundled npm (10.8.2) has a known bug ("Exit handler never
+# called!") that can silently corrupt `npm ci` -- the step exits 0 but
+# node_modules/.bin is left incomplete (e.g. missing vite). Node 22's bundled
+# npm doesn't have it.
 COPY package*.json ./
 RUN npm ci
 
