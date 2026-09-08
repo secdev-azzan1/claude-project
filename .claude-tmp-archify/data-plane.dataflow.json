@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Data Plane — Runtime Data Flow",
+    "output": "data-plane.html",
+    "viewBox": [1180, 760],
+    "quality_profile": "showcase"
+  },
+  "stages": [
+    { "label": "External source/sink" },
+    { "label": "Gateway" },
+    { "label": "Engine" },
+    { "label": "Registry" },
+    { "label": "Sink + destination" }
+  ],
+  "nodes": [
+    { "id": "externalApis", "type": "external", "label": "External APIs", "sublabel": "customer APIs", "stage": 0, "row": 0 },
+    { "id": "kafka", "type": "messagebus", "label": "Kafka", "sublabel": "message broker", "stage": 0, "row": 1 },
+    { "id": "database", "type": "database", "label": "Database", "sublabel": "JDBC source/sink", "stage": 0, "row": 2 },
+    { "id": "apisix", "type": "security", "label": "APISIX", "sublabel": "egress gateway", "stage": 1, "row": 0 },
+    { "id": "nifi", "type": "backend", "label": "NiFi", "sublabel": "ingestion engine", "stage": 2, "row": 0 },
+    { "id": "redis", "type": "database", "label": "Redis", "sublabel": "dedup + bookmarks", "stage": 2, "row": 1 },
+    { "id": "apicurio", "type": "backend", "label": "Apicurio", "sublabel": "Avro schema registry", "stage": 3, "row": 0 },
+    { "id": "kafkaConnect", "type": "backend", "label": "Kafka Connect", "sublabel": "Iceberg sink connector", "stage": 4, "row": 0 },
+    { "id": "iceberg", "type": "database", "label": "Iceberg tables", "sublabel": "S3 + REST catalog", "stage": 4, "row": 1 }
+  ],
+  "flows": [
+    { "from": "externalApis", "to": "apisix", "label": "inbound", "classification": "HTTPS", "variant": "default", "route": "straight", "labelDy": -40 },
+    { "from": "apisix", "to": "externalApis", "label": "outbound", "classification": "HTTPS", "variant": "default", "route": "straight", "labelDy": 40 },
+    { "from": "apisix", "to": "nifi", "label": "read", "variant": "emphasis", "route": "straight", "labelDy": -40 },
+    { "from": "nifi", "to": "apisix", "label": "write", "variant": "emphasis", "route": "straight", "labelDy": 25 },
+    { "from": "nifi", "to": "redis", "label": "dedup + bookmarks", "variant": "default", "route": "vertical-channel" },
+    { "from": "kafka", "to": "nifi", "label": "read", "variant": "emphasis", "route": "auto", "via": [[420, 271], [420, 140], [474, 140]] },
+    { "from": "nifi", "to": "kafka", "label": "write", "variant": "emphasis", "route": "auto", "via": [[474, 176], [450, 176], [450, 271]] },
+    { "from": "database", "to": "nifi", "label": "read / write", "variant": "emphasis", "route": "auto", "via": [[435, 385], [435, 150], [474, 150]] },
+    { "from": "nifi", "to": "apicurio", "label": "encode", "classification": "kafka_kc only", "variant": "default", "route": "straight" },
+    { "from": "apicurio", "to": "kafkaConnect", "label": "decode", "variant": "default", "route": "straight" },
+    { "from": "kafka", "to": "kafkaConnect", "label": "consumes", "classification": "kafka_kc topic only", "variant": "emphasis", "route": "auto", "via": [[20, 271], [20, 620], [904, 620], [904, 220]] },
+    { "from": "kafkaConnect", "to": "iceberg", "label": "writes table data", "variant": "emphasis", "route": "vertical-channel" }
+  ],
+  "cards": [
+    { "dot": "amber", "title": "Three ways in, three ways out", "items": ["In: HTTP (via APISIX), Kafka (direct), JDBC (direct) — chosen per flow", "Out: HTTP (via APISIX), Kafka, JDBC — also chosen per flow", "Kafka and JDBC never route through APISIX — only HTTP blocks do"] },
+    { "dot": "cyan", "title": "Two Kafka write paths", "items": ["Plain \"kafka\" blocks: JSON, no schema, stop at Kafka", "\"kafka_kc\" blocks: Avro, schema-gated, continue on to Kafka Connect and Iceberg", "The choice is made when the flow is designed, not by the compiler"] },
+    { "dot": "emerald", "title": "What each side-service touches", "items": ["APISIX only ever talks to NiFi — never to Kafka, JDBC, Apicurio, Redis, or Kafka Connect", "Apicurio talks to NiFi (encode) and Kafka Connect (decode) — never to Kafka's broker", "Redis is NiFi's own cache — a leaf node, shared with nothing else"] }
+  ]
+}

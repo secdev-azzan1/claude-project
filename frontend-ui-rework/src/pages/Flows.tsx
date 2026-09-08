@@ -38,7 +38,9 @@ import {
 
 import { AppLayout } from "@/components/AppLayout";
 import { AdapterChip } from "@/components/AdapterChip";
+import { DlqRecordRows } from "@/components/flow-detail/DlqRecordRows";
 import { SyncTab } from "@/components/flow-detail/SyncTab";
+import { TopicMessageRows } from "@/components/flow-detail/TopicMessageRows";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -1491,34 +1493,7 @@ export function FlowDetailSheet({
               No dead-lettered records.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[80px]">Time</TableHead>
-                    <TableHead className="w-[140px]">Block</TableHead>
-                    <TableHead className="w-[170px]">Error class</TableHead>
-                    <TableHead>Payload preview</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {dlq.map((rec) => (
-                    <TableRow key={rec.id}>
-                      <TableCell className="py-2 text-xs text-muted-foreground">{timeAgo(rec.ts)}</TableCell>
-                      <TableCell className="py-2 text-xs">{rec.blockName}</TableCell>
-                      <TableCell className="py-2">
-                        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{rec.errorClass}</code>
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <div className="max-w-[260px] truncate font-mono text-xs text-muted-foreground" title={rec.payloadPreview}>
-                          {rec.payloadPreview}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DlqRecordRows records={dlq} />
           )}
         </TabsContent>
 
@@ -1568,24 +1543,7 @@ export function FlowDetailSheet({
                   No messages readable on <code>{msgTopic}</code>.
                 </div>
               ) : (
-                <div className="space-y-1.5">
-                  {messages.map((m) => (
-                    <div key={m.offset} className="rounded-md border p-2 font-mono text-xs">
-                      <div className="flex flex-wrap gap-x-3 text-muted-foreground">
-                        <span>offset {m.offset}</span>
-                        <span>{timeAgo(m.ts)}</span>
-                        <span>key {m.key ?? "—"}</span>
-                      </div>
-                      <div className="mt-1 break-all">
-                        {m.value !== null ? (
-                          m.value
-                        ) : (
-                          <span className="font-sans italic text-muted-foreground">binary payload ({m.bytes} bytes)</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <TopicMessageRows messages={messages} />
               )}
             </>
           )}

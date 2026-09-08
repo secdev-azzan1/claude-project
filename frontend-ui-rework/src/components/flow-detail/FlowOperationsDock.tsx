@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Activity, Download, Eraser, Fingerprint, RefreshCw } from "lucide-react";
 
 import { AdapterChip } from "@/components/AdapterChip";
+import { DlqRecordRows } from "@/components/flow-detail/DlqRecordRows";
 import { RuntimeTab } from "@/pages/Flows";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -182,7 +183,7 @@ function DlqPanel({ flow }: { flow: Flow }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-muted-foreground">One DLQ per flow: <code className="text-foreground">{dlqName(flow.name)}</code> · no automated replay.</p><div className="flex items-center gap-2"><Button size="sm" variant="outline" disabled={records.length === 0} onClick={() => downloadJson(`${dlqName(flow.name)}.json`, records)}><Download className="mr-1.5 h-3.5 w-3.5" /> Download</Button><Button size="sm" variant="outline" className="text-destructive hover:text-destructive" disabled={clearMutation.isPending} onClick={() => setClearOpen(true)}><Eraser className="mr-1.5 h-3.5 w-3.5" /> Clear DLQ</Button></div></div>
-      {dlqQuery.isLoading ? <div className="p-6 text-center text-sm text-muted-foreground">Loading DLQ records…</div> : records.length === 0 ? <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">No dead-lettered records.</div> : <div className="overflow-x-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Block</TableHead><TableHead>Error class</TableHead><TableHead>Payload preview</TableHead></TableRow></TableHeader><TableBody>{records.map((record) => <TableRow key={record.id}><TableCell className="py-2 text-xs text-muted-foreground">{timeAgo(record.ts)}</TableCell><TableCell className="py-2 text-xs">{record.blockName}</TableCell><TableCell className="py-2"><code className="rounded bg-muted px-1.5 py-0.5 text-xs">{record.errorClass}</code></TableCell><TableCell className="py-2"><div className="max-w-[360px] truncate font-mono text-xs text-muted-foreground" title={record.payloadPreview}>{record.payloadPreview}</div></TableCell></TableRow>)}</TableBody></Table></div>}
+      {dlqQuery.isLoading ? <div className="p-6 text-center text-sm text-muted-foreground">Loading DLQ records…</div> : records.length === 0 ? <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">No dead-lettered records.</div> : <DlqRecordRows records={records} />}
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Clear all retained DLQ messages?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. The action is audited.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={clearMutation.isPending} onClick={() => clearMutation.mutate()}>Clear DLQ</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );

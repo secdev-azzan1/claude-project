@@ -17,7 +17,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { getTopicMessages, clearFlowTopic } from "@/prototype/api";
 import { deriveTopicName } from "@/prototype/naming";
-import { timeAgo } from "@/lib/api";
+import { TopicMessageRows } from "@/components/flow-detail/TopicMessageRows";
 import type { Flow, FlowBlock } from "@/prototype/types";
 
 function topicForBlock(flow: Flow, block: FlowBlock): string | null {
@@ -99,22 +99,7 @@ export function BlockMessagesPanel({ flow, block }: { flow: Flow; block: FlowBlo
           No messages readable on <code>{topic}</code>.
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {messages.map((message) => (
-            <div key={message.offset} className="rounded-md border p-2 font-mono text-xs">
-              <div className="flex flex-wrap gap-x-3 text-muted-foreground">
-                <span>offset {message.offset}</span>
-                <span>{timeAgo(message.ts)}</span>
-                <span>key {message.key ?? "—"}</span>
-              </div>
-              <div className="mt-1 break-all">
-                {message.value !== null ? message.value : (
-                  <span className="font-sans italic text-muted-foreground">binary payload ({message.bytes} bytes)</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        <TopicMessageRows messages={messages} />
       )}
 
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
