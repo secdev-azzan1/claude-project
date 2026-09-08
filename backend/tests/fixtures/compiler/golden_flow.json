@@ -117,7 +117,8 @@
               "No Retry",
               "Retry",
               "Original"
-            ]
+            ],
+            "concurrency": "pinned"
           },
           {
             "key": "split",
@@ -175,7 +176,8 @@
             },
             "autoTerminate": [
               "unmatched"
-            ]
+            ],
+            "concurrency": "max"
           },
           {
             "key": "t1__add_field",
@@ -187,7 +189,8 @@
               "Replacement Value Strategy": "literal-value",
               "/source": "rapid7"
             },
-            "autoTerminate": []
+            "autoTerminate": [],
+            "concurrency": "max"
           },
           {
             "key": "dlq__meta",
@@ -395,7 +398,8 @@
               "/ingest_id": "${uuid}",
               "/ingest_ts": "${now():toNumber()}"
             },
-            "autoTerminate": []
+            "autoTerminate": [],
+            "concurrency": "max"
           },
           {
             "key": "dedupe__hash",
@@ -407,7 +411,8 @@
               "SRC": "golden_flow__b-sink",
               "IDENTITY_FIELDS": "id"
             },
-            "autoTerminate": []
+            "autoTerminate": [],
+            "concurrency": "max"
           },
           {
             "key": "dedupe__detect",
@@ -421,7 +426,8 @@
             },
             "autoTerminate": [
               "duplicate"
-            ]
+            ],
+            "concurrency": "pinned"
           },
           {
             "key": "publish",
@@ -445,7 +451,8 @@
             },
             "autoTerminate": [
               "success"
-            ]
+            ],
+            "concurrency": "max"
           },
           {
             "key": "dlq__meta",

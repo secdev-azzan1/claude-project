@@ -38,7 +38,15 @@ from models.adapter import FlowBlock
 from services.adapter.naming import derive_topic_name
 
 from .dlq import ensure_kafka_connection_cs
-from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, TopicSpec, ensure_json_record_services
+from .ir import (
+    CONCURRENCY_MAX,
+    CONCURRENCY_PINNED,
+    CompileError,
+    ControllerServiceSpec,
+    ProcessorSpec,
+    TopicSpec,
+    ensure_json_record_services,
+)
 from .jdbc_bookmarks import BookmarkSource, attach_bookmark_commit
 from .transforms import Tail
 
@@ -47,6 +55,11 @@ if TYPE_CHECKING:  # pragma: no cover
     from .ir import BlockBuilder, CompileContext
 
 _CONSUME_KAFKA_TYPE = "org.apache.nifi.kafka.processors.ConsumeKafka"
+
+# Mirrors the partition count `kafka_client.ensure_topic_exists` creates topics
+# with. Kept as a named constant so the reason for the ConsumeKafka cap below
+# is greppable from both sides.
+_KAFKA_TOPIC_PARTITIONS = 6
 
 
 def compile_entry(block: FlowBlock, *, is_root: bool) -> Tail:
@@ -183,7 +196,21 @@ def compile_publish(
     tail_key, tail_rel = tail
     builder.add_processor(
         ProcessorSpec(key="publish", name="publish", type="org.apache.nifi.kafka.processors.PublishKafka",
-                      properties=props, autoTerminate=[] if bookmark_source else ["success"])
+                      properties=props, autoTerminate=[] if bookmark_source else ["success"],
+                      # The same `bookmark_source` branch the autoTerminate above
+                      # turns on: when this publish feeds the incremental commit
+                      # chain it is part of a strictly one-batch-at-a-time
+                      # sequence, and a second concurrent batch could commit an
+                      # OLDER watermark after a newer one -- silent replay or
+                      # skipped rows. As a plain sink it parallelises safely.
+                      concurrency=CONCURRENCY_PINNED if bookmark_source else CONCURRENCY_MAX,
+                      # NOTE: several producer threads against one topic can
+                      # interleave, so per-partition order stops matching the
+                      # order records arrived. Nothing in the platform promises
+                      # that ordering, and the flow-level switch is deliberately
+                      # not a per-processor dial -- but it is the one behaviour
+                      # change a reader of this line should know about.
+                      )
     )
     builder.link(tail_key, "publish", [tail_rel] if tail_rel else [])
     builder.to_dlq("publish", "failure")
@@ -240,6 +267,12 @@ def _compile_read_terminal(
     builder.add_processor(
         ProcessorSpec(
             key="consume", name="consume", type=_CONSUME_KAFKA_TYPE,
+            # More consumer threads than the topic has partitions just idle --
+            # Kafka assigns at most one consumer per partition within a group.
+            # Topics are created with 6 partitions (kafka_client.py), so that is
+            # the useful ceiling no matter what the flow asks for.
+            concurrency=CONCURRENCY_MAX,
+            concurrencyCap=_KAFKA_TOPIC_PARTITIONS,
             properties={
                 "Kafka Connection Service": cs_key,
                 "Group ID": f"{flow_token}__{block.id}",

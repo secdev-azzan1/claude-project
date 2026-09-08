@@ -158,6 +158,40 @@ export function FlowSettingsForm({ flow, locked, issues, onPatch, onSelectBlock 
           </CardContent>
         )}
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Throughput</CardTitle>
+          <CardDescription>
+            How hard this flow may run. At deploy, every step that can safely work on several
+            records at once is raised together, while triggers, paging loops and anything that
+            tracks its position stay at one.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-1.5">
+            <Label>Concurrency</Label>
+            <Select
+              value={flow.concurrency ?? "low"}
+              disabled={locked}
+              onValueChange={(v) => onPatch({ concurrency: v as Flow["concurrency"] })}
+            >
+              <SelectTrigger className="w-72">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low — one record at a time</SelectItem>
+                <SelectItem value="high">High — parallel wherever it is safe</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              High sets every safe step to 10 at once. It pays off when a flow makes one API or
+              database call per record — that is where records queue up. All flows share one NiFi
+              thread pool, so putting several on High makes them compete for threads.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

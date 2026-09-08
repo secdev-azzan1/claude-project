@@ -58,7 +58,14 @@ from models.adapter import AppService, FlowBlock
 from services.adapter.validation import block_proxy_id
 from services.adapter.naming import tokenize
 
-from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, ensure_json_record_services
+from .ir import (
+    CONCURRENCY_MAX,
+    CONCURRENCY_PINNED,
+    CompileError,
+    ControllerServiceSpec,
+    ProcessorSpec,
+    ensure_json_record_services,
+)
 from .transforms import Tail, cron_or_period
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -616,7 +623,20 @@ def compile_read(
                     api_key_query_handled=key_value_query_param is not None)
     builder.add_processor(
         ProcessorSpec(key="fetch", name="fetch", type="org.apache.nifi.processors.standard.InvokeHTTP",
-                      properties=invoke_props, autoTerminate=list(_INVOKE_HTTP_AUTOTERMINATE))
+                      properties=invoke_props, autoTerminate=list(_INVOKE_HTTP_AUTOTERMINATE),
+                      # A CHILD read is the N+1 fan-out: one HTTP call per parent
+                      # record, purely I/O-bound, nothing order-dependent. This is
+                      # the single biggest throughput win in the whole compiler --
+                      # the reference ingest flow raised exactly this processor
+                      # (`get_asset_detail__fetch`) and left its sibling list fetch
+                      # at 1.
+                      #
+                      # A ROOT read is the opposite: one FlowFile per run, and if
+                      # paginated the loop is strictly sequential (page N+1 needs
+                      # page N's cursor). Raising it would buy nothing and would
+                      # fire concurrent requests at the source API.
+                      concurrency=(CONCURRENCY_PINNED if (is_root or ptype != "none")
+                                   else CONCURRENCY_MAX))
     )
     builder.link(fetch_source[0], "fetch", [fetch_source[1]])
     builder.to_dlq("fetch", "Failure")
@@ -1258,7 +1278,11 @@ def _compile_write(
     unused_relationship = "Response" if write_forwards != "response" else "Original"
     builder.add_processor(
         ProcessorSpec(key="write", name="write", type="org.apache.nifi.processors.standard.InvokeHTTP",
-                      properties=invoke_props, autoTerminate=["No Retry", "Retry", unused_relationship])
+                      properties=invoke_props, autoTerminate=["No Retry", "Retry", unused_relationship],
+                      # One POST per record when unpaginated -- parallelises freely.
+                      # WITH pagination the loop is sequential and re-renders the
+                      # body from counters each iteration, so it must stay at 1.
+                      concurrency=(CONCURRENCY_PINNED if ptype != "none" else CONCURRENCY_MAX))
     )
     # In "record" mode this is the entry tail itself -- there is no render_body.
     builder.link(body_tail[0], "write", [body_tail[1]])
@@ -1339,7 +1363,10 @@ def _compile_lookup(
 
     builder.add_processor(
         ProcessorSpec(key="lookup_fetch", name="lookup_fetch", type="org.apache.nifi.processors.standard.InvokeHTTP",
-                      properties=invoke_props, autoTerminate=["No Retry", "Retry", "Original"])
+                      properties=invoke_props, autoTerminate=["No Retry", "Retry", "Original"],
+                      # One enrichment call per record, order-independent -- the
+                      # same N+1 shape as a child read.
+                      concurrency=CONCURRENCY_MAX)
     )
     builder.link(source[0], "lookup_fetch", [source[1]] if source[1] else [])
     builder.to_dlq("lookup_fetch", "Failure")

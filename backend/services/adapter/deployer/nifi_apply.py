@@ -55,7 +55,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from services import nifi_flow_manager
 from services.nifi_client import get_nifi_root_process_group_id, nifi_api_request
-from services.adapter.compiler.ir import BlockGroup, DeploymentPlan, ParameterContextSpec
+from services.adapter.compiler.ir import BlockGroup, DeploymentPlan, ParameterContextSpec, concurrency_for
 
 logger = logging.getLogger(__name__)
 
@@ -455,13 +455,19 @@ async def _create_processor(
     url: str, auth: Dict[str, Any], pg_id: str, proc_type: str, name: str, properties: Dict[str, Any], *,
     auto_terminate: List[str], scheduling_strategy: str, scheduling_period: str,
     execution_node: Optional[str], penalty: Optional[str], sensitive_dynamic_property_names: List[str],
-    x: float, y: float,
+    concurrent_tasks: int, x: float, y: float,
 ) -> Optional[str]:
     config: Dict[str, Any] = {
         "properties": properties,
         "schedulingStrategy": scheduling_strategy,
         "schedulingPeriod": scheduling_period,
         "autoTerminatedRelationships": list(auto_terminate),
+        # How many FlowFiles this processor may work on at once. Always sent
+        # explicitly, including the 1 case, so a deployed flow states its own
+        # concurrency rather than inheriting whatever NiFi's default happens
+        # to be -- and so flipping a flow from high back to low actually
+        # lowers the processors on the next deploy.
+        "concurrentlySchedulableTaskCount": concurrent_tasks,
     }
     if execution_node:
         config["executionNode"] = execution_node
@@ -496,6 +502,7 @@ async def _apply_processors(url: str, auth: Dict[str, Any], gid: str, group: Blo
             execution_node=("PRIMARY" if proc.runOnPrimary else None),
             penalty=proc.penalty,
             sensitive_dynamic_property_names=dyn_sensitive,
+            concurrent_tasks=concurrency_for(proc.concurrency, plan.concurrency, cap=proc.concurrencyCap),
             x=200.0, y=float(i * 150),
         )
         if not pid:

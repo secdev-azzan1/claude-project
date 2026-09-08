@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 from models.adapter import FlowBlock, TransformRule
 
 from .ir import (
+    CONCURRENCY_MAX,
+    CONCURRENCY_PINNED,
     CompileError,
     ControllerServiceSpec,
     ProcessorSpec,
@@ -276,6 +278,9 @@ def compile_cleanup(
                 name=key,
                 type="org.apache.nifi.processors.standard.RemoveRecordField",
                 properties=props,
+                # Stateless per-FlowFile record/attribute work, always downstream of a
+                # split -- nothing shared between FlowFiles, nothing order-dependent.
+                concurrency=CONCURRENCY_MAX,
             )
         )
         tail_key, tail_rel = working
@@ -295,6 +300,9 @@ def compile_cleanup(
                 name=key,
                 type="org.apache.nifi.processors.attributes.UpdateAttribute",
                 properties={"Delete Attributes Expression": expression},
+                # Stateless per-FlowFile record/attribute work, always downstream of a
+                # split -- nothing shared between FlowFiles, nothing order-dependent.
+                concurrency=CONCURRENCY_MAX,
             )
         )
         tail_key, tail_rel = working
@@ -329,7 +337,11 @@ def _compile_extract(builder: "BlockBuilder", *, idx: int, rule: TransformRule, 
     tail_key, tail_rel = tail
     builder.add_processor(
         ProcessorSpec(key=key, name=key, type="org.apache.nifi.processors.standard.EvaluateJsonPath",
-                       properties=props, autoTerminate=["unmatched"])
+                       properties=props, autoTerminate=["unmatched"],
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
+        )
     )
     builder.link(tail_key, key, [tail_rel])
     builder.to_dlq(key, "failure")
@@ -341,7 +353,11 @@ def _compile_extract(builder: "BlockBuilder", *, idx: int, rule: TransformRule, 
     builder.add_processor(
         ProcessorSpec(key=default_key, name=default_key,
                        type="org.apache.nifi.processors.attributes.UpdateAttribute",
-                       properties={attribute: default_el})
+                       properties={attribute: default_el},
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
+        )
     )
     # UpdateAttribute has no failure relationship — nothing to DLQ here.
     builder.link(key, default_key, ["matched"])
@@ -355,7 +371,11 @@ def _compile_update_record(builder: "BlockBuilder", *, idx: int, kind: str, tail
              "Replacement Value Strategy": "literal-value", **field_props}
     tail_key, tail_rel = tail
     builder.add_processor(
-        ProcessorSpec(key=key, name=key, type="org.apache.nifi.processors.standard.UpdateRecord", properties=props)
+        ProcessorSpec(key=key, name=key, type="org.apache.nifi.processors.standard.UpdateRecord", properties=props,
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
+        )
     )
     builder.link(tail_key, key, [tail_rel])
     builder.to_dlq(key, "failure")
@@ -386,6 +406,9 @@ def _compile_rename(builder: "BlockBuilder", *, idx: int, rule: TransformRule, t
             key=copy_key, name=copy_key, type="org.apache.nifi.processors.standard.UpdateRecord",
             properties={"Record Reader": reader_key, "Record Writer": writer_key,
                         "Replacement Value Strategy": "record-path-value", to_field: from_field},
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link(tail_key, copy_key, [tail_rel])
@@ -395,6 +418,9 @@ def _compile_rename(builder: "BlockBuilder", *, idx: int, rule: TransformRule, t
         ProcessorSpec(
             key=drop_key, name=drop_key, type="org.apache.nifi.processors.standard.RemoveRecordField",
             properties={"Record Reader": reader_key, "Record Writer": writer_key, "field_to_remove_1": from_field},
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link(copy_key, drop_key, ["success"])
@@ -445,6 +471,9 @@ def _compile_coerce(builder: "BlockBuilder", *, idx: int, rule: TransformRule, t
                 "Replacement Value Strategy": "literal-value",
                 field_path: _coerce_el(target_type),
             },
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link(tail_key, key, [tail_rel])
@@ -461,6 +490,9 @@ def _compile_remove_field(builder: "BlockBuilder", *, idx: int, rule: TransformR
         ProcessorSpec(
             key=key, name=key, type="org.apache.nifi.processors.standard.RemoveRecordField",
             properties={"Record Reader": reader_key, "Record Writer": writer_key, "field_to_remove_1": field_path},
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link(tail_key, key, [tail_rel])
@@ -577,6 +609,9 @@ def _compile_dedup(
         ProcessorSpec(
             key=hash_key, name=hash_key, type="org.apache.nifi.processors.groovyx.ExecuteGroovyScript",
             properties=hash_properties,
+            # Stateless per-FlowFile record/attribute work, always downstream of a
+            # split -- nothing shared between FlowFiles, nothing order-dependent.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link(tail_key, hash_key, [tail_rel])
@@ -592,6 +627,11 @@ def _compile_dedup(
                 "Distributed Cache Service": redis_cache_key,
             },
             autoTerminate=["duplicate"],
+            # DetectDuplicate is the one processor here with shared state.
+            # putIfAbsent against the cache is atomic so this is PROBABLY safe to
+            # raise, but catching duplicates is its entire purpose -- pinned until
+            # there is evidence, not on assumption.
+            concurrency=CONCURRENCY_PINNED,
         )
     )
     builder.link(hash_key, detect_key, ["success"])

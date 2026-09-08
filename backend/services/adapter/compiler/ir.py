@@ -51,6 +51,68 @@ class ParameterContextSpec:
     parameters: List[ParameterSpec] = field(default_factory=list)
 
 
+# ------------------------------------------------------- concurrency tiers
+#
+# How many FlowFiles a processor may work on at once, expressed as INTENT
+# rather than a number. The flow carries a "low"/"high" mode; each processor
+# declares which tier it belongs to; `concurrency_for()` combines the two.
+#
+# Two facts drive the whole scheme:
+#
+#   1. Concurrency only helps where MANY FlowFiles arrive. Before a split --
+#      the trigger, `init`, a root `fetch`, a pagination loop -- exactly one
+#      FlowFile is in flight per run, so raising it there buys nothing. After
+#      a split, or on a child block ("a non-root read block receives one
+#      flowfile per parent record", blocks_http.py), there are N.
+#   2. Some processors are ORDER- or STATE-sensitive and are wrong at any
+#      value above 1, no matter how much work is queued in front of them.
+#
+# The reference ingest flow supplied by the customer is the empirical check:
+# of its 102 processors exactly 2 were raised -- both per-record InvokeHTTP
+# detail fetches -- while every trigger, every PublishKafka, every
+# DetectDuplicate and every paginated list fetch stayed at 1.
+# There are exactly TWO answers, never a sliding scale: a processor is either
+# safe to parallelise or it is not. Everything safe gets the same number, so
+# "high" means one thing everywhere and there is no per-processor tuning to
+# reason about.
+CONCURRENCY_PINNED = "pinned"  # always 1 -- correctness, never negotiable
+CONCURRENCY_MAX = "max"        # gets CONCURRENCY_HIGH_VALUE when the flow is high
+
+# The single value every non-pinned processor takes on "high".
+#
+# NOTE for whoever tunes this: NiFi's timer-driven thread pool is shared by the
+# WHOLE instance and defaults to 10 on a single node. At 10 per processor a
+# single busy flow can occupy the entire pool, so processors contend for
+# threads instead of running in parallel and triggers can be starved. Raising
+# NiFi's `Maximum Timer Driven Thread Count` to match is what turns this number
+# into real throughput.
+CONCURRENCY_HIGH_VALUE = 10
+
+
+def concurrency_for(tier: Optional[str], mode: Optional[str], *, cap: Optional[int] = None) -> int:
+    """Resolve a processor's concurrent-task count from its tier and the flow's mode.
+
+    `mode` is the flow's `concurrency` field: "high", or "low"/None (which is
+    today's behaviour and the default for every pre-existing flow, so a
+    redeploy cannot silently change how anything runs).
+
+    `cap` bounds a tier that has an external ceiling -- ConsumeKafka gains
+    nothing above the topic's partition count.
+
+    An UNTAGGED processor resolves to 1, deliberately. The failure modes are
+    not symmetric: forgetting to tag something that could have run in
+    parallel costs a little throughput, while forgetting to pin something
+    order-sensitive corrupts data (two concurrent bookmark commits can land
+    an older watermark after a newer one). So the default is the safe one,
+    and every raise is opt-in at a site that states why.
+    """
+    if str(mode or "low").lower() != "high":
+        return 1
+    if tier != CONCURRENCY_MAX:
+        return 1
+    return min(CONCURRENCY_HIGH_VALUE, cap) if cap is not None else CONCURRENCY_HIGH_VALUE
+
+
 @dataclass
 class ProcessorSpec:
     key: str
@@ -63,6 +125,12 @@ class ProcessorSpec:
     autoTerminate: List[str] = field(default_factory=list)
     penalty: Optional[str] = None
     runOnPrimary: Optional[bool] = None
+    # Which concurrency tier this processor belongs to (see above). Left as
+    # None it resolves to 1 -- raising a processor is opt-in, so a site that
+    # was never considered cannot be silently parallelised.
+    concurrency: Optional[str] = None
+    # Hard upper bound regardless of tier or mode (ConsumeKafka vs partitions).
+    concurrencyCap: Optional[int] = None
 
 
 @dataclass
@@ -156,6 +224,11 @@ class DeploymentPlan:
     topics: List[TopicSpec] = field(default_factory=list)
     connectors: List[ConnectorSpec] = field(default_factory=list)
     scopeMap: Dict[str, ScopeMapEntry] = field(default_factory=dict)
+    # The flow's "low"/"high" concurrency mode. The plan carries the INTENT,
+    # not resolved numbers -- the deployer combines this with each
+    # ProcessorSpec's own tier via `concurrency_for`, so the tier rules live
+    # in exactly one place and a plan stays readable.
+    concurrency: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -229,6 +302,10 @@ def _processor_to_dict(p: ProcessorSpec) -> Dict[str, Any]:
         d["penalty"] = p.penalty
     if p.runOnPrimary is not None:
         d["runOnPrimary"] = p.runOnPrimary
+    if p.concurrency is not None:
+        d["concurrency"] = p.concurrency
+    if p.concurrencyCap is not None:
+        d["concurrencyCap"] = p.concurrencyCap
     return d
 
 

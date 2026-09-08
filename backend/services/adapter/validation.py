@@ -576,6 +576,10 @@ def validate_flow(
 
     if not flow.name.strip():
         flow_level("Name the flow — the name is the first half of every derived name.")
+    # Absent is legal and means "low" — every flow built before this setting
+    # existed has no value, and a redeploy must not change how it runs.
+    if flow.concurrency is not None and str(flow.concurrency).lower() not in ("low", "high"):
+        flow_level("Concurrency must be either low or high.")
     if len(flow.blocks) == 0 and len(flow.topics) == 0:
         flow_level("The flow is empty — add a root block.")
     if flow_has_trigger(flow):

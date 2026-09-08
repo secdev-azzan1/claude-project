@@ -151,6 +151,15 @@ class Flow(BaseModel):
     state: FlowState = "Draft"
     enabled: bool = False
     cron: Optional[str] = None
+    # How hard this flow is allowed to run: "high" lets each generated
+    # processor take the concurrency that makes sense FOR THAT PROCESSOR
+    # (resolved by `compiler/ir.py::concurrency_for`), "low" pins everything
+    # to one task at a time.
+    #
+    # Absent means "low", which is what every flow built before this field
+    # existed effectively was -- so a redeploy of an existing flow cannot
+    # silently change how it runs.
+    concurrency: Optional[Literal["low", "high"]] = None
     blocks: List[FlowBlock] = Field(default_factory=list)
     topics: List[FlowTopic] = Field(default_factory=list)
     variables: List[FlowVariable] = Field(default_factory=list)

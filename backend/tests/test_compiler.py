@@ -1136,6 +1136,90 @@ def http_write_flow(write_forwards: str) -> Flow:
     )
 
 
+def _concurrency_map(flow, ctx):
+    """{processor key -> resolved concurrent tasks} for every group in a plan."""
+    from services.adapter.compiler.ir import concurrency_for
+
+    plan = compile_flow(flow, ctx)
+    out = {}
+    for group in plan.rootGroup.childGroups:
+        for p in group.processors:
+            out[p.key] = concurrency_for(p.concurrency, plan.concurrency, cap=p.concurrencyCap)
+    return out
+
+
+def test_concurrency_low_pins_every_processor_to_one():
+    """Low is today's behaviour, and the default for every pre-existing flow."""
+    flow = jdbc_flow()
+    flow.concurrency = "low"
+    assert set(_concurrency_map(flow, jdbc_ctx()).values()) == {1}
+
+    flow.concurrency = None  # absent must mean low, never high
+    assert set(_concurrency_map(flow, jdbc_ctx()).values()) == {1}
+
+
+def test_concurrency_high_never_raises_the_bookmark_chain():
+    """The strongest correctness case.
+
+    The commit is a PutDistributedMapCache with `Cache Update Strategy:
+    replace`, so two concurrent batches can land an OLDER watermark after a
+    newer one -- silent replay or skipped rows. Every processor in that chain
+    must read 1 even on high.
+    """
+    flow = jdbc_flow()
+    flow.concurrency = "high"
+    conc = _concurrency_map(flow, jdbc_ctx())
+
+    chain = [k for k in conc if k.startswith("bookmark_") or "bookmark" in k or k == "query"]
+    assert chain, "expected the incremental bookmark chain in this fixture"
+    for key in chain:
+        assert conc[key] == 1, f"{key} must stay at 1 on high, got {conc[key]}"
+
+
+def test_concurrency_high_never_raises_the_trigger():
+    flow = jdbc_flow()
+    flow.concurrency = "high"
+    conc = _concurrency_map(flow, jdbc_ctx())
+    assert conc["trigger"] == 1
+
+
+def test_concurrency_high_uses_one_value_for_every_raisable_processor():
+    """There is no sliding scale: raisable means CONCURRENCY_HIGH_VALUE, full stop."""
+    from services.adapter.compiler.ir import CONCURRENCY_HIGH_VALUE
+
+    flow = jdbc_flow()
+    flow.concurrency = "high"
+    conc = _concurrency_map(flow, jdbc_ctx())
+
+    assert conc["write"] == CONCURRENCY_HIGH_VALUE  # PutDatabaseRecord
+    # Every processor is either the single high value or pinned at 1 -- nothing
+    # in between, so "high" means the same thing everywhere.
+    assert set(conc.values()) <= {1, CONCURRENCY_HIGH_VALUE}
+
+
+def test_concurrency_child_http_fetch_is_raised_but_a_root_fetch_is_not():
+    """The N+1 fan-out is the whole point; a root read sees one FlowFile a run.
+
+    Mirrors the reference ingest flow, which raised `get_asset_detail__fetch`
+    to 8 and left `list_assets__fetch` at 1.
+    """
+    from services.adapter.compiler.ir import concurrency_for
+
+    flow = golden_flow()  # root http read, paginated
+    flow.concurrency = "high"
+    plan = compile_flow(flow, golden_ctx())
+    root_group = next(g for g in plan.rootGroup.childGroups if g.blockId == "b-read")
+    fetch = next(p for p in root_group.processors if p.key == "fetch")
+    assert concurrency_for(fetch.concurrency, plan.concurrency, cap=fetch.concurrencyCap) == 1
+
+
+def test_concurrency_unknown_processor_defaults_to_one():
+    """Fail-safe: a site nobody tagged must not be silently parallelised."""
+    from services.adapter.compiler.ir import concurrency_for
+
+    assert concurrency_for(None, "high") == 1
+
+
 def test_http_write_record_body_sends_the_flowfile_content_untouched():
     """bodySource "record" must emit NO render_body at all.
 

@@ -137,6 +137,15 @@ export interface Flow {
   enabled: boolean;
   /** Cron (5-field, UTC). null = no trigger (topic-rooted, kc-only flows). */
   cron: string | null;
+  /**
+   * How hard this flow may run. "high" lets each generated processor take the
+   * concurrency that makes sense FOR THAT PROCESSOR (resolved by the backend's
+   * compiler/ir.py::concurrency_for); "low" pins everything to one at a time.
+   *
+   * Absent means "low" — every flow built before this field existed effectively
+   * was low, so a redeploy cannot silently change how it runs.
+   */
+  concurrency?: "low" | "high" | null;
   blocks: FlowBlock[];
   topics: FlowTopic[];
   variables: FlowVariable[];

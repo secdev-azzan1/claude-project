@@ -26,7 +26,16 @@ from services.adapter.naming import derive_topic_name, tokenize
 
 from . import connectors
 from .dlq import ensure_kafka_connection_cs
-from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, TopicSpec, apicurio_ccompat_url, ensure_json_record_services
+from .ir import (
+    CONCURRENCY_MAX,
+    CONCURRENCY_PINNED,
+    CompileError,
+    ControllerServiceSpec,
+    ProcessorSpec,
+    TopicSpec,
+    apicurio_ccompat_url,
+    ensure_json_record_services,
+)
 from .jdbc_bookmarks import BookmarkSource, attach_bookmark_commit
 from .transforms import Tail
 
@@ -48,6 +57,9 @@ def compile_envelope(builder: "BlockBuilder", *, is_root: bool) -> Tail:
                 "/ingest_id": "${uuid}",
                 "/ingest_ts": "${now():toNumber()}",
             },
+            # Stamps two fields onto each record independently -- no shared
+            # state, no ordering requirement.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link("inputPort", "envelope", [])
@@ -103,6 +115,10 @@ def compile_publish(
                     "max.request.size": "1 MB",
                 },
                 autoTerminate=["success"],
+                # A plain sink on this branch -- nothing downstream depends on
+                # publish order. See blocks_kafka.py's publish for the
+                # per-partition ordering note.
+                concurrency=CONCURRENCY_MAX,
             )
         )
         builder.link(tail_key, "publish", [tail_rel] if tail_rel else [])
@@ -177,6 +193,11 @@ def compile_publish(
                 "max.request.size": "1 MB",
             },
             autoTerminate=[] if bookmark_source else ["success"],
+            # Same rule as the plain kafka write: when this publish feeds the
+            # incremental commit chain it is part of a one-batch-at-a-time
+            # sequence and a second concurrent batch could commit an older
+            # watermark after a newer one.
+            concurrency=CONCURRENCY_PINNED if bookmark_source else CONCURRENCY_MAX,
         )
     )
     builder.link(tail_key, "publish", [tail_rel])

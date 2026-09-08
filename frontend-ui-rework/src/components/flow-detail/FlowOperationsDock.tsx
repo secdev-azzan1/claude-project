@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { clearDedupCache, clearFlowTopic, getDlq, getMetrics } from "@/prototype/api";
 import { dlqName, deriveTopicName } from "@/prototype/naming";
@@ -33,6 +33,12 @@ export interface FlowOperationsDockProps {
   connections: PlatformConnection[];
   onEdit: () => void;
   onSelectBlock?: (blockId: string) => void;
+}
+
+export type FlowOperationsTab = "overview" | "metrics" | "dlq" | "runtime";
+
+export interface FlowOperationsViewProps extends Pick<FlowOperationsDockProps, "flow" | "services" | "schemas" | "connections" | "onEdit" | "onSelectBlock"> {
+  activeTab: FlowOperationsTab;
 }
 
 function downloadJson(filename: string, value: unknown) {
@@ -182,6 +188,22 @@ function DlqPanel({ flow }: { flow: Flow }) {
   );
 }
 
+/**
+ * Operational content without the old bottom-dock chrome. FlowBuilder owns the
+ * active view now, so this component can live inside the fixed right-hand pane
+ * while the graph stays mounted on the left.
+ */
+export function FlowOperationsView({ activeTab, flow, services, schemas, connections, onEdit, onSelectBlock }: FlowOperationsViewProps): JSX.Element {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-gutter:stable]">
+      {activeTab === "overview" && <div className="mt-3"><OverviewPanel flow={flow} schemas={schemas} onSelectBlock={onSelectBlock} /></div>}
+      {activeTab === "metrics" && <div className="mt-3"><MetricsPanel flow={flow} /></div>}
+      {activeTab === "dlq" && <div className="mt-3"><DlqPanel flow={flow} /></div>}
+      {activeTab === "runtime" && <div className="mt-3"><RuntimeTab flow={flow} services={services} connections={connections} onEdit={onEdit} /></div>}
+    </div>
+  );
+}
+
 export function FlowOperationsDock({ flow, services, schemas, connections, onEdit, onSelectBlock }: FlowOperationsDockProps): JSX.Element {
   const [tab, setTab] = useState("overview");
   useEffect(() => { setTab("overview"); }, [flow.id]);
@@ -194,12 +216,15 @@ export function FlowOperationsDock({ flow, services, schemas, connections, onEdi
       </div>
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
         <TabsList className="mx-3 mt-2 shrink-0 justify-start overflow-x-auto"><TabsTrigger value="overview">Overview</TabsTrigger><TabsTrigger value="metrics">Metrics</TabsTrigger><TabsTrigger value="dlq">DLQ</TabsTrigger><TabsTrigger value="runtime">Runtime</TabsTrigger></TabsList>
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 [scrollbar-gutter:stable]">
-          <TabsContent value="overview" className="mt-3"><OverviewPanel flow={flow} schemas={schemas} onSelectBlock={onSelectBlock} /></TabsContent>
-          <TabsContent value="metrics" className="mt-3"><MetricsPanel flow={flow} /></TabsContent>
-          <TabsContent value="dlq" className="mt-3"><DlqPanel flow={flow} /></TabsContent>
-          <TabsContent value="runtime" className="mt-3"><RuntimeTab flow={flow} services={services} connections={connections} onEdit={onEdit} /></TabsContent>
-        </div>
+        <FlowOperationsView
+          activeTab={tab as FlowOperationsTab}
+          flow={flow}
+          services={services}
+          schemas={schemas}
+          connections={connections}
+          onEdit={onEdit}
+          onSelectBlock={onSelectBlock}
+        />
       </Tabs>
     </div>
   );

@@ -363,6 +363,8 @@ export interface FlowMapViewProps {
   onAdd: (parentNodeId: string | null, entry: AddMenuEntry) => void;
   onReparent: (blockId: string, newParentId: string) => void;
   onDelete: (blockId: string) => void;
+  /** A breadcrumb-driven request to bring one graph node into view. */
+  focusRequest?: { id: string; nonce: number } | null;
   /**
    * True while the page has expanded this same mounted canvas to fill the
    * viewport (see FlowBuilder.tsx). The map re-fits when this flips either way
@@ -408,9 +410,10 @@ function FlowMapViewInner({
   onAdd,
   onReparent,
   onDelete,
+  focusRequest,
   expanded,
 }: FlowMapViewProps) {
-  const { fitView } = useReactFlow();
+  const { fitView, getInternalNode, getViewport, setCenter } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const connectFromRef = useRef<string | null>(null);
   const [dropMenu, setDropMenu] = useState<DropMenuState | null>(null);
@@ -568,6 +571,46 @@ function FlowMapViewInner({
     const timer = window.setTimeout(() => fitView(FIT_VIEW_OPTIONS), 0);
     return () => window.clearTimeout(timer);
   }, [fitKey, nodesInitialized, fitView]);
+
+  // Breadcrumb navigation changes the right-hand form selection, but it also
+  // needs to move the canvas to the same node. Keep this request separate from
+  // selectedId so ordinary node clicks do not unexpectedly recenter the graph.
+  const focusedRequest = useRef<number | null>(null);
+  useEffect(() => {
+    if (!focusRequest || focusedRequest.current === focusRequest.nonce) return;
+
+    let frame = 0;
+    let attempts = 0;
+    const focusNode = () => {
+      // A breadcrumb can be clicked while another node's form is causing a
+      // render. Query React Flow's internal node so we use its absolute,
+      // measured graph coordinates. Do not wait for every node in a large flow
+      // to report initialized; this one mounted node is all the camera needs.
+      const node = getInternalNode(focusRequest.id);
+      const width = node?.measured.width;
+      const height = node?.measured.height;
+      if (!node || width == null || height == null) {
+        if (attempts++ < 4) frame = window.requestAnimationFrame(focusNode);
+        return;
+      }
+
+      const { zoom } = getViewport();
+      const focusZoom = Math.min(Math.max(zoom, 0.8), ZOOM_CEILING);
+
+      focusedRequest.current = focusRequest.nonce;
+      void setCenter(
+        node.internals.positionAbsolute.x + width / 2,
+        node.internals.positionAbsolute.y + height / 2,
+        {
+        zoom: focusZoom,
+        duration: 350,
+        },
+      );
+    };
+
+    frame = window.requestAnimationFrame(focusNode);
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusRequest, getInternalNode, getViewport, setCenter]);
 
   // Expand/collapse resizes the SAME mounted canvas (see FlowMapView's
   // `expanded` doc comment) rather than remounting it, so the fit-once guard

@@ -102,6 +102,7 @@ def compile_flow(flow: Flow, ctx: CompileContext) -> DeploymentPlan:
         topics=topics,
         connectors=connectors_out,
         scopeMap=scope_map,
+        concurrency=flow.concurrency,
     )
 
 

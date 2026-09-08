@@ -18,7 +18,14 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from models.adapter import AppService, FlowBlock
 
-from .ir import CompileError, ControllerServiceSpec, ProcessorSpec, ensure_json_record_services
+from .ir import (
+    CONCURRENCY_MAX,
+    CONCURRENCY_PINNED,
+    CompileError,
+    ControllerServiceSpec,
+    ProcessorSpec,
+    ensure_json_record_services,
+)
 from .jdbc_bookmarks import add_incremental_source
 from ..jdbc import trino_jdbc_url, trino_table_parts
 from .transforms import Tail, cron_or_period
@@ -201,7 +208,11 @@ def _compile_read(
         props["Columns to Return"] = ", ".join(columns)
     builder.add_processor(
         ProcessorSpec(key="query", name="query", type="org.apache.nifi.processors.standard.QueryDatabaseTableRecord",
-                      properties=props, schedulingPeriod=period, schedulingStrategy=strategy, runOnPrimary=True)
+                      properties=props, schedulingPeriod=period, schedulingStrategy=strategy, runOnPrimary=True,
+                      # A source that keeps its own NiFi-managed cursor state.
+                      # Concurrent tasks would issue overlapping queries against
+                      # that one cursor and duplicate rows.
+                      concurrency=CONCURRENCY_PINNED)
     )
     # NO DLQ edge here (review C3): QueryDatabaseTableRecord is a source
     # processor with exactly one relationship, `success` — there is no
@@ -279,6 +290,10 @@ def _compile_write(
             # `failure` -> DLQ path on the next attempt rather than looping),
             # `failure` goes to the DLQ below, `success` is the tail.
             autoTerminate=["retry"],
+            # One insert per record against a database we own. Trino already
+            # runs autocommit here, so parallel writes do not share a
+            # transaction that could roll each other back.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link("inputPort", "write", [])
@@ -345,6 +360,8 @@ def _compile_lookup(
                 "Routing Strategy": "Route to Success",
                 join_field: f"/{join_field}",
             },
+            # One enrichment query per record, order-independent.
+            concurrency=CONCURRENCY_MAX,
         )
     )
     builder.link("inputPort", "lookup", [])

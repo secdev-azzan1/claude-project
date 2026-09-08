@@ -38,7 +38,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { FlowMapView } from "@/components/flow-builder/FlowMapView";
 import { BlockForm } from "@/components/flow-builder/BlockForm";
 import { FlowSettingsForm } from "@/components/flow-builder/FlowSettingsForm";
-import { FlowOperationsDock } from "@/components/flow-detail/FlowOperationsDock";
+import { FlowOperationsView, type FlowOperationsTab } from "@/components/flow-detail/FlowOperationsDock";
 import { SaveConnectorDialog } from "@/pages/Flows";
 import { PreflightDialog } from "@/components/flow-builder/PreflightDialog";
 import { CeremonyDialog } from "@/components/flow-builder/CeremonyDialog";
@@ -102,6 +102,9 @@ export default function FlowBuilder() {
   const [draft, setDraft] = useState<Flow | null>(null);
   const [dirty, setDirty] = useState(false);
   const [selectedId, setSelectedId] = useState<string>("flow");
+  const [rightView, setRightView] = useState<"configuration" | FlowOperationsTab>("configuration");
+  const focusSequence = useRef(0);
+  const [focusRequest, setFocusRequest] = useState<{ id: string; nonce: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [verbBusy, setVerbBusy] = useState<FlowVerb | null>(null);
   const [enabledBusy, setEnabledBusy] = useState(false);
@@ -118,7 +121,6 @@ export default function FlowBuilder() {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
     return window.matchMedia("(min-width: 1280px)").matches;
   });
-  const operationsPanelRef = useRef<ImperativePanelHandle>(null);
   /** Fills the viewport with the SAME mounted canvas rather than opening a
    *  second one in a dialog â€” the map holds live pan/zoom/selection state in
    *  its ReactFlowProvider, and remounting it elsewhere would flicker and
@@ -127,10 +129,12 @@ export default function FlowBuilder() {
   const showOperations = draft?.state === "Running";
 
   useEffect(() => {
-    if (!operationsPanelRef.current) return;
-    if (showOperations) operationsPanelRef.current.expand();
-    else operationsPanelRef.current.collapse();
-  }, [draft?.id, showOperations]);
+    if (!showOperations && rightView !== "configuration") setRightView("configuration");
+  }, [showOperations, rightView]);
+
+  useEffect(() => {
+    setRightView("configuration");
+  }, [draft?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
@@ -160,6 +164,17 @@ export default function FlowBuilder() {
     setMapCollapsed(false);
     if (wideViewport) mapPanelRef.current?.expand();
   }, [wideViewport]);
+
+  const selectConfiguration = useCallback((id: string) => {
+    setSelectedId(id);
+    setRightView("configuration");
+  }, []);
+
+  const selectAndFocus = useCallback((id: string) => {
+    focusSequence.current += 1;
+    selectConfiguration(id);
+    setFocusRequest({ id, nonce: focusSequence.current });
+  }, [selectConfiguration]);
 
   useEffect(() => {
     if (!mapExpanded) return;
@@ -606,20 +621,12 @@ export default function FlowBuilder() {
     >
       <div className="flex h-full min-h-0 flex-col gap-6">
         <div className="shrink-0 space-y-3">
-        {(locked || draft.drift) && (
+        {draft.drift && (
           <div className="space-y-3">
-            {locked && (
-              <Alert>
-                <AlertTitle>Read-only â€” {draft.state}</AlertTitle>
-                <AlertDescription>{lockReason}</AlertDescription>
-              </Alert>
-            )}
-            {draft.drift && (
-              <Alert variant="destructive">
-                <AlertTitle>Drift detected</AlertTitle>
-                <AlertDescription>{draft.drift}</AlertDescription>
-              </Alert>
-            )}
+            <Alert variant="destructive">
+              <AlertTitle>Drift detected</AlertTitle>
+              <AlertDescription>{draft.drift}</AlertDescription>
+            </Alert>
           </div>
         )}
 
@@ -712,6 +719,31 @@ export default function FlowBuilder() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <div className="ml-auto flex min-w-0 max-w-full items-center gap-1 overflow-x-auto whitespace-nowrap pl-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <Button
+                variant={rightView === "configuration" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setRightView("configuration")}
+              >
+                <Settings2 /> Adapter configuration
+              </Button>
+              {showOperations && (
+                <>
+                  {(["overview", "metrics", "dlq", "runtime"] as const).map((view) => (
+                    <Button
+                      key={view}
+                      variant={rightView === view ? "secondary" : "ghost"}
+                      size="sm"
+                      className="capitalize"
+                      onClick={() => setRightView(view)}
+                    >
+                      {view === "dlq" ? "DLQ" : view}
+                    </Button>
+                  ))}
+                </>
+              )}
+            </div>
+
             {/* This strip is the only home of the unsaved-change signal and the
                 DLQ name; demoting the verb bar must not take them with it. */}
             <div className="hidden">
@@ -746,16 +778,6 @@ export default function FlowBuilder() {
             the way back to Flow settings, moves onto the form pane's header
             where the thing being configured is named. */}
         <div className="min-h-0 flex-1 xl:h-full xl:overflow-hidden">
-        <ResizablePanelGroup
-          direction="vertical"
-          autoSaveId="flow-builder-operations-layout"
-          className="h-full min-h-0 max-xl:!block max-xl:!h-auto max-xl:!w-auto"
-        >
-          <ResizablePanel
-            defaultSize={72}
-            minSize={45}
-            className="min-h-0 max-xl:!block max-xl:!h-auto max-xl:!w-auto"
-          >
         <ResizablePanelGroup
           direction="horizontal"
           autoSaveId="flow-builder-layout"
@@ -834,7 +856,8 @@ export default function FlowBuilder() {
                 issuesByNode={issuesByNode}
                 locked={locked}
                 lockReason={lockReason}
-                onSelect={setSelectedId}
+                onSelect={selectConfiguration}
+                focusRequest={focusRequest}
                 onAdd={handleAdd}
                 onReparent={handleReparent}
                 onDelete={handleDeleteBlock}
@@ -889,14 +912,16 @@ export default function FlowBuilder() {
               "xl:pl-3",
             )}
           >
-          <div className="h-full min-h-0 min-w-0 w-full space-y-3 overflow-x-hidden max-xl:h-[clamp(24rem,65svh,44rem)] max-xl:overflow-y-auto max-xl:pr-1 xl:overflow-y-auto xl:pr-1 [scrollbar-gutter:stable]">
-            {/* The form pane says what it is configuring, and holds the only
-                route back to flow-level settings now that the rail is gone. */}
-            <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
+          <div className="h-full min-h-0 min-w-0 w-full overflow-hidden">
+            {rightView === "configuration" ? (
+              <div className="h-full min-h-0 min-w-0 space-y-3 overflow-x-hidden max-xl:h-[clamp(24rem,65svh,44rem)] max-xl:overflow-y-auto max-xl:pr-1 xl:overflow-y-auto xl:pr-1 [scrollbar-gutter:stable]">
+                {/* The form pane says what it is configuring, and holds the only
+                    route back to flow-level settings now that the rail is gone. */}
+                <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
               <Button
                 variant={selectedId === "flow" || selectedId === null ? "secondary" : "ghost"}
                 size="xs"
-                onClick={() => setSelectedId("flow")}
+                  onClick={() => selectConfiguration("flow")}
               >
                 <Settings2 /> Flow settings
                 {flowIssues.length > 0 && (
@@ -912,29 +937,26 @@ export default function FlowBuilder() {
                     return (
                       <span key={item.id} className="inline-flex shrink-0 items-center gap-1">
                         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        {current ? (
-                          <span className="max-w-56 truncate text-xs font-medium text-foreground" title={item.label}>
-                            {item.label}
-                          </span>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            className="max-w-56 truncate px-1 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={() => setSelectedId(item.targetId)}
-                            title={`Open ${item.label}`}
-                          >
-                            {item.label}
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className={cn(
+                            "max-w-56 truncate px-1 text-xs hover:text-foreground",
+                            current ? "font-medium text-foreground" : "text-muted-foreground",
+                          )}
+                          onClick={() => selectAndFocus(item.targetId)}
+                          title={`Focus ${item.label} on the graph`}
+                        >
+                          {item.label}
+                        </Button>
                       </span>
                     );
                   })}
                 </div>
               )}
-            </div>
+                </div>
 
-            <div className="[&>.bg-card]:!shadow-md [&>div>.bg-card]:!shadow-md">
+                <div className="[&>.bg-card]:!shadow-md [&>div>.bg-card]:!shadow-md">
               {selectedBlock ? (
                 <BlockForm
                   flow={draft}
@@ -948,7 +970,7 @@ export default function FlowBuilder() {
                   onPatchConfig={patchConfig}
                   onDeleteBlock={handleDeleteBlock}
                   onSetBranch={handleSetBranch}
-                  onSelectBlock={setSelectedId}
+                  onSelectBlock={selectAndFocus}
                   onOpenCeremony={(id) => {
                     setCeremonyPrefill(null);
                     setCeremonyBlockId(id);
@@ -960,7 +982,7 @@ export default function FlowBuilder() {
                   flow={draft}
                   topicId={selectedId}
                   locked={locked}
-                  onSelect={setSelectedId}
+                  onSelect={selectConfiguration}
                   onRename={(topicId, name) => {
                     setDraft((d) =>
                       d ? { ...d, topics: d.topics.map((t) => (t.id === topicId ? { ...t, name } : t)) } : d,
@@ -971,40 +993,29 @@ export default function FlowBuilder() {
               ) : (
                 <FlowSettingsForm flow={draft} locked={locked} onPatch={patchDraft} />
               )}
-            </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-card/60 shadow-sm">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2">
+                  <div>
+                    <div className="text-sm font-semibold">Flow operations</div>
+                    <div className="text-xs text-muted-foreground">Live operational views for this deployed flow</div>
+                  </div>
+                  <StatusBadge status={draft.state} />
+                </div>
+                <FlowOperationsView
+                  activeTab={rightView as FlowOperationsTab}
+                  flow={draft}
+                  services={services}
+                  schemas={schemas}
+                  connections={connections}
+                  onEdit={() => selectConfiguration("flow")}
+                  onSelectBlock={selectAndFocus}
+                />
+              </div>
+            )}
           </div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-          </ResizablePanel>
-          {showOperations && (
-            <ResizableHandle
-              withHandle
-              aria-label="Resize flow workspace and operations"
-              title="Drag to resize the flow workspace and operations"
-              className="my-1 shrink-0 cursor-row-resize rounded-full bg-border/70 transition-colors hover:bg-primary/60 max-xl:hidden"
-            />
-          )}
-          <ResizablePanel
-            ref={operationsPanelRef}
-            defaultSize={28}
-            minSize={showOperations ? 12 : 0}
-            collapsible
-            collapsedSize={0}
-            className={cn(
-              "min-h-0 max-xl:!block max-xl:!h-[min(30rem,68svh)] max-xl:!w-auto max-xl:!pt-4",
-              !showOperations && "hidden",
-            )}
-          >
-            {showOperations && (
-              <FlowOperationsDock
-                flow={draft}
-                services={services}
-                schemas={schemas}
-                connections={connections}
-                onEdit={() => setSelectedId("flow")}
-                onSelectBlock={setSelectedId}
-              />
-            )}
           </ResizablePanel>
         </ResizablePanelGroup>
         </div>
