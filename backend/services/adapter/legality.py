@@ -102,10 +102,17 @@ def hosts_transforms(flow: Flow, block: FlowBlock) -> bool:
 
 
 def hosts_test(block: FlowBlock) -> bool:
-    """Whether a block gets the Test section (ported from BlockForm.tsx's
-    `hostsTest`, the sole place it's defined on the frontend -- it is not in
-    legality.ts, but the task brief lists it alongside the R1-R8 predicates
-    since it is the same kind of "what may this block do" placement fact).
+    """Whether a block CONCEPTUALLY has a Test surface at all -- i.e. the
+    coarse "is this a write" gate `test_block` raises `BlockNotTestRunnable`
+    (422) on. This intentionally stays broader than the frontend's own
+    `hostsTest` (BlockForm.tsx), which additionally only shows a Test button
+    for what's actually implemented (http · read) -- everything this
+    function admits but the frontend hides (jdbc read/lookup, http lookup,
+    kafka read) still exists conceptually and correctly falls through to
+    `test_block`'s narrower `BlockTestUnsupported` (501) check instead. Keep
+    it this way rather than narrowing it to match: the frontend's job is to
+    not show a button that 501s, this function's job is "no write is
+    test-run, whatever the adapter."
 
     No write is test-run, whatever the adapter: jdbc commits rows, http POSTs
     to the destination, kafka and kafka+connect publish. Reads and lookups

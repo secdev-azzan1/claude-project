@@ -181,14 +181,22 @@ export function buildConfig(type: ServiceType, f: ServiceForm): Record<string, u
   switch (type) {
     case "http": {
       const cfg: Record<string, unknown> = { baseUrl: f.baseUrl.trim(), authMode: f.authMode };
-      if (f.authMode === "basic") cfg.username = f.username.trim();
+      if (f.authMode === "basic") {
+        cfg.username = f.username.trim();
+        if (f.password.trim()) cfg.password = f.password.trim();
+      }
+      if (f.authMode === "bearer") {
+        if (f.token.trim()) cfg.token = f.token.trim();
+      }
       if (f.authMode === "api_key") {
         cfg.keyName = f.keyName.trim();
         cfg.keyLocation = f.keyLocation;
+        if (f.keyValue.trim()) cfg.keyValue = f.keyValue.trim();
       }
       if (f.authMode === "oauth2") {
         cfg.tokenUrl = f.tokenUrl.trim();
         cfg.clientId = f.clientId.trim();
+        if (f.clientSecret.trim()) cfg.clientSecret = f.clientSecret.trim();
       }
       if (f.authMode === "session_token") {
         cfg.loginPath = f.loginPath.trim();
@@ -436,7 +444,10 @@ export function ServiceFormFields({ type, form, onChange, editing }: ServiceForm
                         <SelectItem value="basic">Basic</SelectItem>
                         <SelectItem value="bearer">Bearer</SelectItem>
                         <SelectItem value="api_key">API key</SelectItem>
-                        <SelectItem value="oauth2">OAuth2</SelectItem>
+                        {/* OAuth2 removed from the picker for new services. The
+                            fields below still render for any service already
+                            saved with authMode "oauth2" (edit path), so
+                            existing data stays viewable/editable. */}
                         <SelectItem value="session_token">Session token</SelectItem>
                       </SelectContent>
                     </Select>

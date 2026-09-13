@@ -398,7 +398,12 @@ def validate_block(
     if not block.name.strip():
         at("Block needs a name.")
 
-    needs_service = block.adapter in ("http", "jdbc", "kafka_kc", "kc")
+    # kafka_kc/kc deliberately excluded: since the sinkConfig migration, a
+    # Kafka Connect sink block carries its own complete connector config
+    # (host, credentials, everything) in block.config.sinkConfig -- it no
+    # longer reads a bound service at compile time (see connectors.py). A
+    # serviceId requirement here was stale and refused deployable flows.
+    needs_service = block.adapter in ("http", "jdbc")
     if needs_service and not block.serviceId:
         at("Select a service — hosts and credentials always come from a saved service.")
     if block.serviceId:
@@ -718,14 +723,26 @@ def deploy_preflight(
             used_service_ids.append(b.serviceId)
     used_services = [s for sid in used_service_ids for s in services if s.id == sid]
     failing = [s for s in used_services if s.health == "Failed"]
+    # Advisory, not a gate: `health` comes from the service's Test button,
+    # which always calls `baseUrl` directly and never through a configured
+    # gateway proxy (routers/v2/services.py has no proxy awareness at all).
+    # A service that is only reachable via its proxy -- the exact case the
+    # APISIX gateway feature exists for -- shows "Failed" here forever even
+    # though the deployed NiFi flow reaches it fine through the proxy. Keep
+    # surfacing it (so a genuinely dead service is still visible pre-deploy)
+    # but stop refusing to deploy over it.
     checks.append(
         PreflightCheck(
             label="Bound services reachable",
-            ok=len(failing) == 0,
+            ok=True,
             detail=(
                 "No services bound."
                 if len(used_services) == 0
-                else (f"{len(used_services)} service(s) — none failing." if len(failing) == 0 else f"Failing: {', '.join(s.name for s in failing)}.")
+                else (
+                    f"{len(used_services)} service(s) — none failing."
+                    if len(failing) == 0
+                    else f"Failing: {', '.join(s.name for s in failing)} — not blocking deploy (health check bypasses any configured proxy)."
+                )
             ),
         )
     )

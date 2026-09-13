@@ -63,18 +63,24 @@ export function TestPanel({
   const method = ((block.config.method as string) ?? "GET").toUpperCase();
   const isMutating = block.adapter === "http" && MUTATING.includes(method);
 
-  // What the probe will actually hit, resolved the same way the run would:
-  // the bound service's base URL plus the block's path. Shown in the confirm
-  // because "a POST" is not a warning — "a POST at this URL" is.
-  const target = (() => {
-    const base = typeof service?.config?.baseUrl === "string" ? service.config.baseUrl.replace(/\/+$/, "") : "";
-    const path = ((block.config.path as string) ?? "").trim();
-    if (!base && !path) return "the endpoint this block is bound to";
-    return `${base}${path.startsWith("/") || !path ? path : `/${path}`}`;
-  })();
   // Egress is the service's, not the block's — a probe leaves the same way the
   // deployed flow will.
   const proxied = !!blockProxyId(block, service ? [service] : []);
+
+  // What the probe will actually hit, resolved the same way the run would.
+  // When a proxy is bound, the compiler drops the service's base URL
+  // entirely and calls the gateway instead — the block's path is expected to
+  // carry the full path in that case (compiler-spec's `_base_url_expr`).
+  // Concatenating base URL + path here regardless of proxying doubled the
+  // path (e.g. baseUrl already ending in `/api/1.4` plus a path that also
+  // starts with `/api/1.4`), showing a URL nothing actually requests.
+  const target = (() => {
+    const path = ((block.config.path as string) ?? "").trim();
+    if (proxied) return path || "the endpoint this block is bound to (via gateway proxy)";
+    const base = typeof service?.config?.baseUrl === "string" ? service.config.baseUrl.replace(/\/+$/, "") : "";
+    if (!base && !path) return "the endpoint this block is bound to";
+    return `${base}${path.startsWith("/") || !path ? path : `/${path}`}`;
+  })();
 
   const reallyRun = async () => {
     setTesting(true);

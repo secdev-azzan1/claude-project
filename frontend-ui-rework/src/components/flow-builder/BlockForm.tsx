@@ -162,16 +162,14 @@ function formatDedupWindow(hours: number): string {
  * chips, the extraction shortcuts and pagination's Detect. kc has no probe
  * surface at all.
  */
+// The backend probe (`runtime.py::test_block`) only implements http · read —
+// everything else 501s ("arrives with its compiler support"). This used to
+// be wider (any http/jdbc non-write, any kafka read), which showed a live
+// Test button for jdbc read/lookup, http lookup, and kafka read that failed
+// server-side the moment it was clicked. Keep the two in sync: only claim a
+// Test surface for what the backend actually runs.
 function hostsTest(block: FlowBlock): boolean {
-  switch (block.adapter) {
-    case "http":
-    case "jdbc":
-      return block.mode !== "write"; // read · lookup
-    case "kafka":
-      return block.mode === "read";
-    default:
-      return false; // kafka_kc (governed terminal write), kc (no test surface)
-  }
+  return block.adapter === "http" && block.mode === "read";
 }
 
 /**
@@ -181,11 +179,14 @@ function hostsTest(block: FlowBlock): boolean {
  */
 function noTestReason(block: FlowBlock): string | null {
   if (hostsTest(block) || block.adapter === "kc") return null;
-  if (block.adapter === "jdbc")
-    return "Writes are not test-run — a test would commit rows. Field mapping is validated against the table's metadata instead.";
-  if (block.adapter === "http")
-    return "Writes are not test-run — a probe would POST real data to the destination. If this block forwards the parsed response, describe it by hand: there is no sampled response to explore, and pagination has to be set manually.";
-  return "Nothing to sample: this block publishes, it never returns records.";
+  if (block.mode === "write" || block.adapter === "kafka_kc") {
+    if (block.adapter === "jdbc")
+      return "Writes are not test-run — a test would commit rows. Field mapping is validated against the table's metadata instead.";
+    if (block.adapter === "http")
+      return "Writes are not test-run — a probe would POST real data to the destination. If this block forwards the parsed response, describe it by hand: there is no sampled response to explore, and pagination has to be set manually.";
+    return "Nothing to sample: this block publishes, it never returns records.";
+  }
+  return "Testing has not been implemented yet for this adapter/mode — only HTTP · read is test-runnable right now.";
 }
 
 export interface BlockFormProps {
@@ -207,6 +208,11 @@ export interface BlockFormProps {
    *  builder has nothing server-side to probe. Resolves with the saved flow
    *  (a no-op save if nothing changed); rejects with the save's own error. */
   onEnsureSaved: () => Promise<Flow>;
+  /** This block's in-progress "Set up here" private-service draft, lifted to
+   *  the page so it survives deselecting/reselecting this block (BlockForm
+   *  itself unmounts on that round trip; a local useState here would not). */
+  serviceDraft?: { mode?: "existing" | "manual"; form?: ServiceForm };
+  onServiceDraftChange: (patch: { mode?: "existing" | "manual"; form?: ServiceForm }) => void;
 }
 
 export function BlockForm(props: BlockFormProps) {
@@ -224,6 +230,8 @@ export function BlockForm(props: BlockFormProps) {
     onOpenCeremony,
     onSelectBlock,
     onEnsureSaved,
+    serviceDraft,
+    onServiceDraftChange,
   } = props;
   // kc's "Save is live" exception: kc blocks stay editable while deployed.
   const locked = flowLocked && (queueLocked || block.adapter !== "kc");
@@ -410,9 +418,21 @@ export function BlockForm(props: BlockFormProps) {
   // selector and for the existing section call sites.
   const [activeSection, setActiveSection] = useState("identity");
 
+  // `sectionItems` is a new array on every recompute, including when only an
+  // `attention` flag inside an existing entry flips (e.g. the Identity tab's
+  // issue count changing as the user types/pastes into ANY field, on ANY
+  // tab). Keying the reset effect off the array reference itself jumped the
+  // user back to Identity on the first few keystrokes of unrelated fields.
+  // Key off the actual set of section ids instead, and only reset when the
+  // active section is no longer one of them (or the block itself changed) --
+  // an attention-flag flip with the same ids present is not a reason to move
+  // the user off whatever tab they're on.
+  const sectionIds = sectionItems.map((item) => item.id).join("|");
+
   useEffect(() => {
-    setActiveSection(sectionItems[0]?.id ?? "identity");
-  }, [block.id, sectionItems]);
+    setActiveSection((prev) => (sectionItems.some((item) => item.id === prev) ? prev : sectionItems[0]?.id ?? "identity"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [block.id, sectionIds]);
 
   const activeSectionItem = sectionItems.find((item) => item.id === activeSection) ?? sectionItems[0];
   const visibleSection = activeSectionItem?.id ?? "identity";
@@ -595,9 +615,10 @@ export function BlockForm(props: BlockFormProps) {
                   services={eligibleServices}
                   selected={selectedService}
                   locked={locked}
-                  blockId={block.id}
                   blockName={block.name}
                   onSelect={(id) => onPatchBlock(block.id, { serviceId: id })}
+                  draft={serviceDraft}
+                  onDraftChange={onServiceDraftChange}
                 />
               )}
             </FieldGroup>
@@ -1234,9 +1255,10 @@ function ServiceSelector({
   services,
   selected,
   locked,
-  blockId,
   blockName,
   onSelect,
+  draft: draftCache,
+  onDraftChange,
 }: {
   label: string;
   /** When set, a "no service" choice with this label is offered (maps to null). */
@@ -1245,13 +1267,13 @@ function ServiceSelector({
   services: AppService[];
   selected: AppService | undefined;
   locked: boolean;
-  /** Identifies the owning block — local mode/draft state is keyed by it so
-   *  switching the selected block (props change, no remount) cannot leak one
-   *  block's in-progress draft into another's picker. */
-  blockId: string;
   /** Seeds the generated name for a fresh "Set up here" draft. */
   blockName: string;
   onSelect: (id: string | null) => void;
+  /** In-progress "Set up here" mode/form, lifted to the page (survives this
+   *  component unmounting when the block is deselected and reselected). */
+  draft?: { mode?: ServiceMode; form?: ServiceForm };
+  onDraftChange: (patch: { mode?: ServiceMode; form?: ServiceForm }) => void;
 }) {
   const queryClient = useQueryClient();
   const type = serviceType as AppService["type"];
@@ -1264,9 +1286,8 @@ function ServiceSelector({
   // service, in which case that service's own manual configuration is what
   // the user came here to see.
   const defaultMode: ServiceMode = selected?.private ? "manual" : "existing";
-  const [modeState, setModeState] = useState<{ key: string; mode: ServiceMode } | null>(null);
-  const mode = modeState?.key === blockId ? modeState.mode : defaultMode;
-  const setMode = (next: ServiceMode) => setModeState({ key: blockId, mode: next });
+  const mode = draftCache?.mode ?? defaultMode;
+  const setMode = (next: ServiceMode) => onDraftChange({ mode: next });
 
   // The same form the Application Services page uses — credentials included.
   // Sending someone to another page to type a password they already have in
@@ -1274,9 +1295,8 @@ function ServiceSelector({
   // up changed, only where it can be typed.
   const draftDefault = (): ServiceForm =>
     selected?.private ? formFromService(selected) : { ...emptyForm(), name: `${blockName || "Block"} (manual)` };
-  const [draftState, setDraftState] = useState<{ key: string; form: ServiceForm } | null>(null);
-  const draft = draftState?.key === blockId ? draftState.form : draftDefault();
-  const setDraft = (next: ServiceForm) => setDraftState({ key: blockId, form: next });
+  const draft = draftCache?.form ?? draftDefault();
+  const setDraft = (next: ServiceForm) => onDraftChange({ form: next });
 
   // Editing the block's own private service updates it in place (same id —
   // saveService bumps the revision); anything else, including a fresh draft
@@ -1307,7 +1327,7 @@ function ServiceSelector({
     onSuccess: (svc) => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
       onSelect(svc.id);
-      setDraftState({ key: blockId, form: formFromService(svc) });
+      onDraftChange({ form: formFromService(svc) });
       toast.success(
         `Private service "${svc.name}" saved${svc.hasSecret ? " with its credentials" : ""} — it lives on the service, never on the block`,
       );
@@ -1448,10 +1468,29 @@ function HttpSettings({
   // "Set up here" private one) — never typed into the block. Path is only
   // ever what's appended to it, and this is what the field's context line
   // and the resolved preview key off.
+  //
+  // EXCEPT when the service routes through a gateway proxy: the compiler's
+  // `_base_url_expr` drops the base URL entirely at request time and calls
+  // the gateway instead, so the path is expected to carry the FULL path —
+  // including whatever version prefix would normally live in the base URL
+  // (e.g. "/api/1.4/..."). Stripping the full base URL from a pasted full
+  // URL in that case throws away that prefix; strip just the origin
+  // (scheme+host) instead, so what's left is still the complete path the
+  // proxy needs.
   const baseUrl = typeof service?.config?.baseUrl === "string" ? service.config.baseUrl : undefined;
+  const proxiedService = !!service?.config?.proxyId;
+  const baseOrigin = (() => {
+    if (!baseUrl) return undefined;
+    try {
+      return new URL(baseUrl).origin;
+    } catch {
+      return undefined;
+    }
+  })();
+  const stripPrefix = proxiedService ? baseOrigin : baseUrl;
   const pathValue = (cfg.path as string) ?? "";
   const pathHasScheme = /^https?:\/\//i.test(pathValue);
-  const pathStartsWithBase = !!baseUrl && pathValue.startsWith(baseUrl);
+  const pathStartsWithBase = !!stripPrefix && pathValue.startsWith(stripPrefix);
   // A full URL that doesn't match the bound service's base gets a destructive
   // hint instead of a silent auto-strip — stripping a base we can't identify
   // as the right one would guess at the user's intent.
@@ -1459,17 +1498,22 @@ function HttpSettings({
 
   /**
    * Shared by both the OpenAPI combobox and the plain path Input: if what
-   * came in starts with http(s):// AND matches the bound service's base URL,
-   * the base got typed/pasted where only the path belongs (the reported
-   * confusion — "aren't we already giving the url in the application
-   * services?"). Auto-strip it rather than reject it; anything else is left
-   * alone and flagged inline (and by validateBlock's httpPathIssue) instead.
+   * came in starts with http(s):// AND matches the bound service's base URL
+   * (or, when proxied, just its origin), the base got typed/pasted where
+   * only the path belongs (the reported confusion — "aren't we already
+   * giving the url in the application services?"). Auto-strip it rather
+   * than reject it; anything else is left alone and flagged inline (and by
+   * validateBlock's httpPathIssue) instead.
    */
   const resolvePathInput = (raw: string): string => {
-    if (baseUrl && /^https?:\/\//i.test(raw) && raw.startsWith(baseUrl)) {
-      let stripped = raw.slice(baseUrl.length);
+    if (stripPrefix && /^https?:\/\//i.test(raw) && raw.startsWith(stripPrefix)) {
+      let stripped = raw.slice(stripPrefix.length);
       if (!stripped.startsWith("/")) stripped = `/${stripped}`;
-      toast.success("Base URL comes from the service — kept just the path.");
+      toast.success(
+        proxiedService
+          ? "This service routes through a gateway proxy — kept the full path."
+          : "Base URL comes from the service — kept just the path.",
+      );
       return stripped;
     }
     return raw;
@@ -1518,7 +1562,12 @@ function HttpSettings({
           // the url in the application services?" — without spending two
           // permanent lines on it.
           info={
-            baseUrl ? (
+            proxiedService ? (
+              <>
+                This service routes through a gateway proxy — the base URL is not used at request time, so this path must
+                be the FULL path (including any version prefix normally in the base URL, e.g. "/api/1.4/...").
+              </>
+            ) : baseUrl ? (
               <>
                 Appended to the base URL from service "{service?.name}". Enter only the path — pasting a full URL that
                 matches the base will have the base stripped automatically.
@@ -1528,7 +1577,9 @@ function HttpSettings({
             )
           }
           hint={
-            baseUrl ? (
+            proxiedService ? (
+              <span className="font-mono">→ (via gateway proxy) {pathValue}</span>
+            ) : baseUrl ? (
               <span className="font-mono">
                 → {baseUrl}
                 {pathValue}

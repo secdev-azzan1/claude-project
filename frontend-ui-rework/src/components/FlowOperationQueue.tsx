@@ -84,6 +84,23 @@ export function FlowOperationQueue() {
     });
   };
 
+  const isTerminalEntry = ({ job, item }: QueueEntry) =>
+    ["succeeded", "failed", "cancelled", "skipped"].includes(item.status) || isBulkJobTerminal(job);
+  const terminalCount = visibleItems.filter(isTerminalEntry).length;
+
+  const dismissAll = () => {
+    setDismissedIds((previous) => {
+      const next = new Set(previous);
+      visibleItems.filter(isTerminalEntry).forEach(({ job, item }) => next.add(`${job.id}:${item.id}`));
+      try {
+        window.localStorage.setItem("flowOperationQueue.dismissed", JSON.stringify([...next]));
+      } catch {
+        // Dismissal still works for this session if storage is unavailable.
+      }
+      return next;
+    });
+  };
+
   if (visibleItems.length === 0) return null;
 
   return (
@@ -104,6 +121,16 @@ export function FlowOperationQueue() {
             <span className="ml-auto text-xs font-normal text-muted-foreground">
               {visibleItems.filter(({ item }) => item.status === "running" || item.status === "pending").length} active
             </span>
+            {terminalCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 shrink-0 px-2 text-xs"
+                onClick={dismissAll}
+              >
+                Clear all
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

@@ -75,6 +75,7 @@ import { validateFlow } from "@/prototype/validation";
 import type { AddMenuEntry } from "@/prototype/legality";
 import { dlqName, tokenize } from "@/prototype/naming";
 import type { BranchCondition, Flow, FlowBlock } from "@/prototype/types";
+import type { ServiceForm } from "@/components/service-form/ServiceFormFields";
 import {
   ChevronRight,
   ChevronLeft,
@@ -102,6 +103,24 @@ export default function FlowBuilder() {
   const [draft, setDraft] = useState<Flow | null>(null);
   const [dirty, setDirty] = useState(false);
   const [selectedId, setSelectedId] = useState<string>("flow");
+  // An in-progress "Set up here" private-service draft (ServiceSelector, in
+  // BlockForm) used to live in that component's own useState, keyed by block
+  // id. That survives switching tabs within the same block's config panel
+  // (Section content is only ever CSS-hidden, never unmounted) but NOT
+  // deselecting the block and reselecting it -- BlockForm itself is behind a
+  // `selectedBlock ? <BlockForm/> : ...` conditional, so that round trip
+  // unmounts and remounts it, wiping the draft (confirmed live: typed
+  // values survived an Identity<->Adapter/Transforms tab switch but were
+  // gone after clicking away to the canvas and back). Lifting it here, keyed
+  // by block id, survives block deselection for as long as this flow stays
+  // open, closing that gap without persisting anything to the server.
+  const [serviceDrafts, setServiceDrafts] = useState<Record<string, { mode?: "existing" | "manual"; form?: ServiceForm }>>({});
+  const patchServiceDraft = useCallback(
+    (blockId: string, patch: { mode?: "existing" | "manual"; form?: ServiceForm }) => {
+      setServiceDrafts((prev) => ({ ...prev, [blockId]: { ...prev[blockId], ...patch } }));
+    },
+    [],
+  );
   const [rightView, setRightView] = useState<"configuration" | FlowOperationsTab>("configuration");
   const focusSequence = useRef(0);
   const [focusRequest, setFocusRequest] = useState<{ id: string; nonce: number } | null>(null);
@@ -847,7 +866,18 @@ export default function FlowBuilder() {
                   // own gaps, doubling up with the scrim into a hazy mess. Full
                   // opacity here; the scrim does the dimming job instead.
                   ? "fixed inset-4 z-40 bg-muted shadow-2xl md:inset-6"
-                  : "min-h-[360px] min-w-0 flex-1 bg-muted/50 xl:min-h-0",
+                  // Below `xl` the panel group collapses to `!h-auto` (R.
+                  // see the ResizablePanel classes above), so `flex-1`/
+                  // `min-h-[360px]` alone leave this box's real height
+                  // entirely up to its content -- and FlowMapView's own
+                  // `h-full` root resolves that against an indefinite
+                  // ancestor, which browsers treat as `auto`. The canvas
+                  // could end up rendering (and running `fitView`/panning)
+                  // against a near-zero box, which read as "can't see or
+                  // scroll the graph" on short/small screens. Force a real,
+                  // definite height here so xyflow always has an actual
+                  // viewport to lay out and pan within.
+                  : "min-h-[360px] min-w-0 flex-1 bg-muted/50 xl:min-h-0 max-xl:!h-[clamp(18rem,42svh,30rem)]",
               )}
             >
               <FlowMapView
@@ -976,6 +1006,8 @@ export default function FlowBuilder() {
                     setCeremonyBlockId(id);
                   }}
                   onEnsureSaved={ensureSaved}
+                  serviceDraft={serviceDrafts[selectedBlock.id]}
+                  onServiceDraftChange={(patch) => patchServiceDraft(selectedBlock.id, patch)}
                 />
               ) : draft.topics.some((t) => t.id === selectedId) ? (
                 <TopicDetails

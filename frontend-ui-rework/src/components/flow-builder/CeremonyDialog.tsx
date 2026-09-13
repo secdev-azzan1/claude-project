@@ -653,6 +653,25 @@ export function CeremonyDialog({
 
         {step === 2 && (
           <div className="min-w-0 space-y-3 py-2">
+            <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+              <p className="text-sm font-medium">{fieldCount} field{fieldCount === 1 ? "" : "s"} defined</p>
+              <Button
+                onClick={() => setStep(3)}
+                disabled={fieldCount === 0 || !!buffer.rawError || samplesFail}
+                title={
+                  buffer.rawError
+                    ? "The raw Avro JSON does not parse."
+                    : fieldCount === 0
+                      ? "A schema needs at least one field."
+                      : samplesFail
+                        ? sampleCheck?.summary
+                        : undefined
+                }
+                className="shrink-0"
+              >
+                Continue to Approve
+              </Button>
+            </div>
             {prefillDraft && (
               <Alert>
                 <PenLine className="h-4 w-4" />
@@ -738,24 +757,9 @@ export function CeremonyDialog({
               <code className="font-mono">{namespace}</code> — both derived from the entity and the governed topic, and
               re-applied at approval.
             </p>
-            <div className="flex justify-between">
+            <div className="flex justify-start">
               <Button variant="outline" onClick={() => setStep(1)}>
                 Back
-              </Button>
-              <Button
-                onClick={() => setStep(3)}
-                disabled={fieldCount === 0 || !!buffer.rawError || samplesFail}
-                title={
-                  buffer.rawError
-                    ? "The raw Avro JSON does not parse."
-                    : fieldCount === 0
-                      ? "A schema needs at least one field."
-                      : samplesFail
-                        ? sampleCheck?.summary
-                        : undefined
-                }
-              >
-                Continue to Approve
               </Button>
             </div>
           </div>
@@ -763,9 +767,18 @@ export function CeremonyDialog({
 
         {step === 3 && (
           <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 p-3">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4 text-success" /> Ready to approve
+              </p>
+              <Button onClick={approve} disabled={approving} className="gap-1.5 shrink-0">
+                {approving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Approve & register
+              </Button>
+            </div>
             <div className="rounded-md border p-3 text-sm">
               <p className="flex items-center gap-2 font-medium">
-                <CheckCircle2 className="h-4 w-4 text-success" /> Ready to approve
+                <CheckCircle2 className="h-4 w-4 text-success" /> Details
               </p>
               <dl className="mt-2 grid grid-cols-[140px,1fr] gap-y-1 text-xs">
                 <dt className="text-muted-foreground">Subject</dt>
@@ -814,13 +827,9 @@ export function CeremonyDialog({
               Approve registers the schema in the active registry. If registration fails, the approval fails with it. The flow
               stays undeployable until this succeeds.
             </p>
-            <div className="flex justify-between">
+            <div className="flex justify-start">
               <Button variant="outline" onClick={() => setStep(2)}>
                 Back
-              </Button>
-              <Button onClick={approve} disabled={approving} className="gap-1.5">
-                {approving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Approve & register
               </Button>
             </div>
           </div>

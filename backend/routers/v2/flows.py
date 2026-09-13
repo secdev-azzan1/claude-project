@@ -433,16 +433,18 @@ async def save_flow_v2(flow_in: Flow, db: AsyncIOMotorDatabase = Depends(get_db)
         else:
             block.config["sinkConfig"] = merge_preserving_secrets(sink_config, existing_sink_config)
 
-    services = await _load_services(db)
-    schemas = await _load_schemas(db)
-    gateway = await _load_gateway(db)
-
+    # Flow-level completeness issues (no cron set, no write/sink yet, unnamed,
+    # ...) are "still drafting" states, same as block-level completeness --
+    # they must NOT block a save, only a deploy (`deploy_preflight`'s own
+    # "Configuration valid" check re-runs the full `validate_flow` and refuses
+    # deploy on all of these). Only genuine structural illegality
+    # (`validate_placement`'s R1-R8 tree-shape rules) and dangling/misused
+    # references (`_flow_sync_link_issues`) can corrupt the stored document
+    # itself, so those two alone still gate save.
     placement_violations = validate_placement(flow_in)
-    flow_level_issues = [i for i in validate_flow(flow_in, services, schemas, gateway) if i.blockId is None]
     sync_link_issues = await _flow_sync_link_issues(db, flow_in)
-    if placement_violations or flow_level_issues or sync_link_issues:
+    if placement_violations or sync_link_issues:
         issues = [{"blockId": v.blockId, "where": None, "message": v.message} for v in placement_violations]
-        issues += [_issue_dict(i) for i in flow_level_issues]
         issues += sync_link_issues
         raise HTTPException(status_code=422, detail={"issues": issues})
 

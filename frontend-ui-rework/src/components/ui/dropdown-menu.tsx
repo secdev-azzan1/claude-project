@@ -22,8 +22,11 @@ const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 const menuItemBase =
   "relative flex cursor-default select-none gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0";
 
+// `max-h`/`overflow-y-auto` use Radix's own collision-aware available-height
+// CSS var so a long menu (e.g. the adapter picker) scrolls internally
+// instead of rendering taller than a short viewport with nothing to move it.
 const menuSurface =
-  "z-50 min-w-[9rem] overflow-hidden rounded-xl border border-border/60 bg-popover p-1.5 text-popover-foreground shadow-xl material-thick data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out";
+  "z-50 min-w-[9rem] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden rounded-xl border border-border/60 bg-popover p-1.5 text-popover-foreground shadow-xl material-thick data-[state=open]:animate-overlay-in data-[state=closed]:animate-overlay-out";
 
 const DropdownMenuSubTrigger = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,

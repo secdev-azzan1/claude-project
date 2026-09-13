@@ -119,6 +119,14 @@ const SERVICE_TYPE_META: Record<
 };
 
 const TYPE_ORDER: ServiceType[] = ["http", "database", "external_kafka", "sink_destination"];
+// Creation only. "sink_destination" is retired from the picker entirely
+// (existing ones, if any, still show up in the grouped list above via
+// TYPE_ORDER — this only controls what a NEW service can be). "external_kafka"
+// stays visible but disabled in the picker below rather than removed.
+const CREATABLE_TYPE_ORDER: ServiceType[] = ["http", "database", "external_kafka"];
+const DISABLED_TYPES: Partial<Record<ServiceType, string>> = {
+  external_kafka: "External Kafka receivers are disabled for now.",
+};
 
 function configSummary(svc: AppService): { label: string; value: string }[] {
   const c = svc.config;
@@ -408,23 +416,28 @@ export default function AppServices() {
             <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
               <Label>Service type</Label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {TYPE_ORDER.map((type) => {
+                {CREATABLE_TYPE_ORDER.map((type) => {
                   const meta = SERVICE_TYPE_META[type];
                   const Icon = meta.icon;
                   const selected = formType === type;
+                  const disabledReason = DISABLED_TYPES[type];
                   return (
                     <button
                       key={type}
                       type="button"
+                      disabled={!!disabledReason}
+                      title={disabledReason}
                       onClick={() => setFormType(type)}
-                      className={`min-h-[6.5rem] rounded-xl border p-4 text-left transition hover:bg-muted/50 ${
-                        selected ? "border-primary bg-primary-muted" : ""
+                      className={`min-h-[6.5rem] rounded-xl border p-4 text-left transition ${
+                        disabledReason
+                          ? "cursor-not-allowed opacity-45"
+                          : `hover:bg-muted/50 ${selected ? "border-primary bg-primary-muted" : ""}`
                       }`}
                     >
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Icon className="h-4 w-4" /> {meta.label}
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{meta.blurb}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{disabledReason ?? meta.blurb}</p>
                     </button>
                   );
                 })}
